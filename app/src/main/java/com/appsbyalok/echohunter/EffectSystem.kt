@@ -1,7 +1,9 @@
 package com.appsbyalok.echohunter
 
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Typeface
 import kotlin.math.cos
 import kotlin.math.sin
@@ -10,11 +12,17 @@ import kotlin.random.Random
 // Handles purely visual features like particles, player trails, and floating text
 class EffectSystem {
     private val p = Paint().apply { isAntiAlias = true; style = Paint.Style.FILL }
+    private val pGlow = Paint().apply { isAntiAlias = true; style = Paint.Style.STROKE }
     private val pText = Paint().apply {
         isAntiAlias = true
         typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
     }
+    private val path = Path()
 
+    // Pre-calculate 2 * PI to save CPU cycles inside loops
+    companion object {
+        private const val TWO_PI = 6.2831855f
+    }
     // Particles Data (Zero Allocation arrays)
     private val pn = 40
     private val pxA = FloatArray(pn); private val pyA = FloatArray(pn)
@@ -47,14 +55,15 @@ class EffectSystem {
         for (i in 0 until pn) {
             if (pLife[i] <= 0) {
                 pxA[i] = x; pyA[i] = y
-                val angle = Random.nextDouble() * Math.PI * 2
-                val speed = scale * 0.5f + Random.nextDouble() * (scale * 1.0f)
-                pvxA[i] = (cos(angle) * speed).toFloat()
-                pvyA[i] = (sin(angle) * speed).toFloat()
+                // Use Float directly instead of Double to avoid conversion overhead
+                val angle = Random.nextFloat() * TWO_PI
+                val speed = scale * 0.5f + Random.nextFloat() * (scale * 1.0f)
+                pvxA[i] = cos(angle) * speed
+                pvyA[i] = sin(angle) * speed
                 pLife[i] = 1f
                 if (colorMode == 1) pLife[i] = 2f
                 if (colorMode == 2) pLife[i] = 3f
-                if (Random.nextDouble() > 0.8) break
+                if (Random.nextFloat() > 0.8f) break
             }
         }
     }
@@ -116,15 +125,54 @@ class EffectSystem {
     }
 
     fun drawFloatingTexts(c: Canvas, scale: Float) {
+        pText.textSize = scale * 0.04f
+        val offset = scale * 0.005f // Offset for manual shadow
+
         for (i in 0 until ftn) {
             if (ftLife[i] > 0f) {
+                val currentAlpha = (ftLife[i] * 255).toInt()
+
+                // DANGER REMOVED: setShadowLayer is incredibly slow on Android GPU.
+                // We draw the text twice instead (manual drop shadow). It is MUCH faster.
+
+                // 1. Draw shadow (black, slightly offset)
+                pText.color = Color.BLACK
+                pText.alpha = currentAlpha / 2 // Half opacity for shadow
+                c.drawText(ftStr[i], ftX[i] + offset, ftY[i] + offset, pText)
+
+                // 2. Draw actual text
                 pText.color = ftColor[i]
-                pText.textSize = scale * 0.04f
-                pText.alpha = (ftLife[i] * 255).toInt()
-                pText.setShadowLayer(5f, 0f, 0f, ftColor[i])
+                pText.alpha = currentAlpha
                 c.drawText(ftStr[i], ftX[i], ftY[i], pText)
-                pText.clearShadowLayer()
             }
         }
+    }
+
+    fun drawLightning(c: Canvas, startX: Float, startY: Float, scale: Float) {
+        pGlow.color = GameColors.OVERCLOCK
+        pGlow.strokeWidth = scale * 0.003f
+
+        path.reset() // <--- RESET ONLY ONCE HERE
+
+        val branches = Random.nextInt(2, 5)
+        repeat(branches) {
+            var currX = startX
+            var currY = startY
+            var angle = Random.nextFloat() * TWO_PI
+
+            // We just moveTo to start a new disconnected branch within the same path
+            path.moveTo(currX, currY)
+
+            val segments = Random.nextInt(3, 6)
+            repeat(segments) {
+                currX += cos(angle) * scale * 0.04f
+                currY += sin(angle) * scale * 0.04f
+                angle += (Random.nextFloat() - 0.5f) * 2f // Jagged turn
+                path.lineTo(currX, currY)
+            }
+        }
+
+        // <--- DRAW ONCE HERE. This sends 1 command to the GPU instead of up to 4 commands.
+        c.drawPath(path, pGlow)
     }
 }

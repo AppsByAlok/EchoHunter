@@ -1,14 +1,15 @@
 package com.appsbyalok.echohunter
 
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
+import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
 
-// Handles Logic & Rendering for AI (Enemies, Bosses, Powerups)
+// Handles Logic & Rendering for AI
 class EnemySystem {
     private val p = Paint().apply { isAntiAlias = true }
     private val pText = Paint().apply {
@@ -17,7 +18,8 @@ class EnemySystem {
         textAlign = Paint.Align.CENTER
     }
 
-    // Normal Enemies Array
+    private val entityPath = android.graphics.Path()
+
     val n = 25
     val ex = FloatArray(n)
     val ey = FloatArray(n)
@@ -26,7 +28,6 @@ class EnemySystem {
     val vis = FloatArray(n)
     val type = IntArray(n)
 
-    // Powerups Array
     val pwn = 4
     val pwX = FloatArray(pwn)
     val pwY = FloatArray(pwn)
@@ -48,25 +49,17 @@ class EnemySystem {
 
         while (!safeSpawn && attempts < 10) {
             attempts++
-            if (gs.gameMode == 2) {
-                ex[i] = gs.cameraX + width + Random.nextFloat() * (width * 0.5f)
-                ey[i] = Random.nextFloat() * height
-            } else {
-                if (Random.nextBoolean()) {
-                    ex[i] = gs.cameraX + Random.nextFloat() * width
-                    ey[i] = if (Random.nextBoolean()) -scale * 0.1f else height + scale * 0.1f
-                } else {
-                    ex[i] =
-                        gs.cameraX + if (Random.nextBoolean()) -scale * 0.1f else width + scale * 0.1f
-                    ey[i] = Random.nextFloat() * height
-                }
-            }
+
+            // Strategy Pattern gets dynamic spawn positions based on the current mode
+            val spawnPos = gs.modeStrategy.getEnemySpawnPosition(gs, width, height, scale)
+            ex[i] = spawnPos.first
+            ey[i] = spawnPos.second
+
             val dx = ex[i] - gs.px
             val dy = ey[i] - gs.py
             val dToPlayerSq = dx * dx + dy * dy
             val safeDistanceSq = (scale * 0.35f) * (scale * 0.35f)
 
-            // Allow override if timeSinceStart > 0 to not block spawning mid-game
             if (dToPlayerSq > safeDistanceSq || gs.timeSinceStart == 0f) safeSpawn = true
         }
 
@@ -88,17 +81,16 @@ class EnemySystem {
         evx[i] = (Random.nextFloat() - 0.5f) * sp * 2f
         evy[i] = (Random.nextFloat() - 0.5f) * sp * 2f
 
-        val diffHunterMult = if (gs.difficulty == 0) 0.005 else 0.015
-        val hunterProbability =
-            if (gs.score < 10) 0.0 else min(0.65, (gs.score - 10) * diffHunterMult)
+        val diffHunterMult = if (gs.difficulty == 0) 0.005f else 0.015f
+        val hunterProbability = if (gs.score < 10) 0.0f else min(0.65f, (gs.score - 10) * diffHunterMult)
 
         if (isSwarm) {
             type[i] = 1
         } else if (gs.gameMode == 2) {
-            if (Random.nextDouble() < hunterProbability) type[i] = 1
-            else type[i] = if (Random.nextDouble() > 0.7) 2 else 0
+            if (Random.nextFloat() < hunterProbability) type[i] = 1
+            else type[i] = if (Random.nextFloat() > 0.7f) 2 else 0
         } else {
-            type[i] = if (Random.nextDouble() < hunterProbability) 1 else 0
+            type[i] = if (Random.nextFloat() < hunterProbability) 1 else 0
         }
         vis[i] = 0f
     }
@@ -116,71 +108,50 @@ class EnemySystem {
         val hitDistSq = (scale * 0.045f) * (scale * 0.045f)
 
         for (i in 0 until n) {
-
-            // --- Distance BEFORE movement (for chasing) ---
-            val edx = gs.px - ex[i]
-            val edy = gs.py - ey[i]
-            val d2 = edx * edx + edy * edy
-
-            // --- Hunter AI ---
-            if (type[i] == 1 && d2 > 0f) {
-                val eDist = sqrt(d2)
-                val chaseSpeed = scale * (
-                        if (gs.isOverclocked) -0.5f
-                        else if (gs.difficulty == 0) 0.3f
-                        else 0.4f
-                        )
-
-                evx[i] = (evx[i] * 0.95f) + ((edx / eDist) * chaseSpeed * 0.05f)
-                evy[i] = (evy[i] * 0.95f) + ((edy / eDist) * chaseSpeed * 0.05f)
-            }
-
-            // --- Apply movement ---
+            // FIXED: Move physics update to the top of the loop
             ex[i] += evx[i] * dt
             ey[i] += evy[i] * dt
 
-            // CAMERA-AWARE RESPAWN
+            // FIXED: Math boundary bounce
+            if (ey[i] < 0 && evy[i] < 0) evy[i] = -evy[i]
+            if (ey[i] > height && evy[i] > 0) evy[i] = -evy[i]
 
-            // 1. Firewall priority
             if (gs.gameMode == 2 && ex[i] < gs.firewallWorldX) {
                 spawn(i, gs, width, height)
                 vis[i] = 0f
                 continue
             }
 
-            // 2. Left side cleanup
             if (ex[i] < gs.cameraX - width) {
                 spawn(i, gs, width, height)
                 vis[i] = 0f
                 continue
             }
 
-            // 3. Right side cleanup
             if (ex[i] > gs.cameraX + width * 2f) {
                 spawn(i, gs, width, height)
                 vis[i] = 0f
                 continue
             }
 
-            // VERTICAL BOUNDS
-            if (ey[i] < 0) evy[i] = kotlin.math.abs(evy[i])
-            if (ey[i] > height) evy[i] = -kotlin.math.abs(evy[i])
+            // FIXED: Only calculate distance to player ONCE per loop
+            val dx = gs.px - ex[i]
+            val dy = gs.py - ey[i]
+            val d2 = dx * dx + dy * dy
 
-            //  Distance AFTER movement
-            val ndx = gs.px - ex[i]
-            val ndy = gs.py - ey[i]
-            val nd2 = ndx * ndx + ndy * ndy
-
-            // --- Proximity flags ---
             if (type[i] == 1) {
-                if (nd2 < hitDistSq * 15f) gs.isEnemyNear = true
-                if (nd2 < hitDistSq * 4f) gs.isEnemyVeryNear = true
+                if (d2 > 0f) {
+                    val eDist = sqrt(d2)
+                    val chaseSpeed = scale * (if (gs.isOverclocked) -0.5f else if (gs.difficulty == 0) 0.3f else 0.4f)
+                    evx[i] = (evx[i] * 0.95f) + ((dx / eDist) * chaseSpeed * 0.05f)
+                    evy[i] = (evy[i] * 0.95f) + ((dy / eDist) * chaseSpeed * 0.05f)
+                }
+
+                if (d2 < hitDistSq * 15f) gs.isEnemyNear = true
+                if (d2 < hitDistSq * 4f) gs.isEnemyVeryNear = true
             }
 
-            //  Visibility logic
-            if ((gs.pulse && nd2 in gs.innerRSq..gs.outerRSq) ||
-                nd2 < gs.passiveAuraRadiusSq
-            ) {
+            if ((gs.pulse && d2 in gs.innerRSq..gs.outerRSq) || d2 < gs.passiveAuraRadiusSq) {
                 vis[i] = 1f
             }
 
@@ -196,27 +167,57 @@ class EnemySystem {
         val bDistSq = bdx * bdx + bdy * bdy
         val bDist = sqrt(bDistSq)
 
-        val bSpeed =
-            scale * (if (gs.bossType == 3 || gs.bossType == 4) 0.6f else 0.3f) * (if (gs.difficulty == 0) 0.7f else 1.0f)
+        val bSpeed = scale * (if (gs.bossType == 3 || gs.bossType == 4) 0.6f else 0.3f) * (if (gs.difficulty == 0) 0.7f else 1.0f)
 
         if (bDist > 0f) {
-            gs.bossX += (bdx / bDist) * bSpeed * dt
-            gs.bossY += (bdy / bDist) * bSpeed * dt
+            var vx = (bdx / bDist) * bSpeed
+            var vy = (bdy / bDist) * bSpeed
+
+            when (gs.bossType) {
+                1 -> vy += sin(gs.timeSinceStart * 4f) * scale * 0.4f
+                2 -> {
+                    if (gs.timeSinceStart % 2.5f < 0.2f) { vx *= 4.5f; vy *= 4.5f }
+                }
+                3 -> {
+                    vx += (Random.nextFloat() - 0.5f) * scale * 0.8f
+                    vy += (Random.nextFloat() - 0.5f) * scale * 0.8f
+                }
+                4 -> {
+                    vy += kotlin.math.cos(gs.timeSinceStart * 5f) * scale * 0.6f
+                    vx += sin(gs.timeSinceStart * 3f) * scale * 0.3f
+                }
+            }
+
+            gs.bossX += vx * dt
+            gs.bossY += vy * dt
         }
 
-        if ((gs.bossType == 2 || gs.bossType == 4) && Random.nextDouble() < 0.01) {
+        // Boss Visibility dimming in Hard Mode
+        if (gs.difficulty == 1) {
+            if ((gs.pulse && bDistSq in gs.innerRSq..gs.outerRSq) || bDistSq < gs.passiveAuraRadiusSq) {
+                gs.bossVis = 1.0f
+            }
+            gs.bossVis *= gs.fadeMultiplier
+            if (gs.bossVis < 0.05f) gs.bossVis = 0.05f // Minimum 5% visible (Shadow effect)
+        } else {
+            gs.bossVis = 1.0f // Always visible on Easy
+        }
+
+        // FIXED: Frame rate independent EMP probability
+        if ((gs.bossType == 2 || gs.bossType == 4) && Random.nextFloat() < 0.6f * dt) {
             gs.empFlashTimer = 1.0f
             EchoAudioManager.playSound(android.media.ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
-            StoryProtocol.showIngameMessage("SYSTEM EMP DETECTED", 1f)
+            StoryProtocol.showIngameMessage(R.string.msg_emp_detected, 1f)
         }
+
         val screenBx = gs.bossX - gs.cameraX
         if (screenBx < -scale * 0.4f) gs.bossX = gs.cameraX - scale * 0.4f
         if (screenBx > width + scale * 0.4f) gs.bossX = gs.cameraX + width + scale * 0.4f
     }
 
     fun updatePowerups(dt: Float, gs: GameState, width: Float, height: Float) {
-        val puDropRate = if (gs.difficulty == 0) 0.004 else 0.002
-        if (Random.nextDouble() < puDropRate * dt * 60 && gs.score > 15 && !gs.bossActive) {
+        val puDropRate = if (gs.difficulty == 0) 0.004f else 0.002f
+        if (Random.nextFloat() < puDropRate * dt * 60f && gs.score > 15 && !gs.bossActive) {
             for (i in 0 until pwn) {
                 if (!pwActive[i]) {
                     pwX[i] = gs.cameraX + width * 0.2f + Random.nextFloat() * width * 0.8f
@@ -232,6 +233,7 @@ class EnemySystem {
 
     fun drawEntities(c: Canvas, gs: GameState, width: Float, scale: Float) {
         val entityRadius = scale * 0.03f
+        val baseVisProgression = max(0f, 0.20f - (gs.timeSinceStart * 0.002f))
 
         // 1. Draw Powerups
         for (i in 0 until pwn) {
@@ -240,18 +242,22 @@ class EnemySystem {
                 val dy = pwY[i] - gs.py
                 val d2 = dx * dx + dy * dy
 
-                if ((gs.pulse && d2 in gs.innerRSq..gs.outerRSq) || d2 < gs.passiveAuraRadiusSq) pwVis[i] =
-                    1f
+                if ((gs.pulse && d2 in gs.innerRSq..gs.outerRSq) || d2 < gs.passiveAuraRadiusSq) pwVis[i] = 1f
                 pwVis[i] *= gs.fadeMultiplier
+
                 val screenPwX = pwX[i] - gs.cameraX
 
                 if (screenPwX < -scale || screenPwX > width + scale) pwActive[i] = false
 
-                if (pwVis[i] > 0.02f) {
+                val effectivePwVis = max(0.15f, pwVis[i])
+
+                if (effectivePwVis > 0.02f) {
                     p.style = Paint.Style.STROKE; p.strokeWidth = scale * 0.005f
-                    p.color = ((pwVis[i] * 255).toInt() shl 24) or (when (pwType[i]) {
+                    // FIXED: Bitwise color blending
+                    p.color = ((effectivePwVis * 255).toInt() shl 24) or (when (pwType[i]) {
                         0 -> GameColors.HP; 1 -> GameColors.CLARITY; else -> GameColors.SHIELD
                     } and 0xFFFFFF)
+
                     c.drawCircle(screenPwX, pwY[i], entityRadius * 0.8f, p)
 
                     pText.color = GameColors.BG
@@ -264,57 +270,43 @@ class EnemySystem {
         // 2. Draw Normal Enemies
         for (i in 0 until n) {
             val screenEx = ex[i] - gs.cameraX
-            if (vis[i] > 0.02f || gs.bossActive) {
-                val a = (vis[i] * 255).toInt()
+            val effectiveVis = max(baseVisProgression, vis[i])
+
+            if (effectiveVis > 0.02f) {
+                val a = (effectiveVis * 255).toInt()
                 val entitySize = entityRadius * (if (type[i] == 2) 1.2f else 0.8f)
 
                 p.style = Paint.Style.FILL
 
                 when (type[i]) {
                     1 -> {
-                        // HUNTER: Red, Jagged/Glitchy Square
                         p.color = (a shl 24) or (GameColors.RED and 0xFFFFFF)
-                        c.drawRect(
-                            screenEx - entitySize,
-                            ey[i] - entitySize,
-                            screenEx + entitySize,
-                            ey[i] + entitySize,
-                            p
-                        )
-                        p.color = GameColors.BG
-                        c.drawRect(
-                            screenEx - entitySize / 2,
-                            ey[i] - entitySize / 2,
-                            screenEx + entitySize / 2,
-                            ey[i] + entitySize / 2,
-                            p
-                        )
+                        c.drawRect(screenEx - entitySize, ey[i] - entitySize, screenEx + entitySize, ey[i] + entitySize, p)
+                        p.color = (a shl 24) or (GameColors.BG and 0xFFFFFF) // Match alpha for inner rect too
+                        c.drawRect(screenEx - entitySize / 2f, ey[i] - entitySize / 2f, screenEx + entitySize / 2f, ey[i] + entitySize / 2f, p)
                     }
-
                     2 -> {
-                        // MEMORY/COOLANT: Blue Glowing Diamond
                         p.color = (a shl 24) or (GameColors.COOLANT and 0xFFFFFF)
-                        val path = android.graphics.Path()
-                        path.moveTo(screenEx, ey[i] - entitySize)
-                        path.lineTo(screenEx + entitySize, ey[i])
-                        path.lineTo(screenEx, ey[i] + entitySize)
-                        path.lineTo(screenEx - entitySize, ey[i])
-                        path.close()
-                        c.drawPath(path, p)
-                        p.color = GameColors.CLARITY
+                        entityPath.reset()
+                        entityPath.moveTo(screenEx, ey[i] - entitySize)
+                        entityPath.lineTo(screenEx + entitySize, ey[i])
+                        entityPath.lineTo(screenEx, ey[i] + entitySize)
+                        entityPath.lineTo(screenEx - entitySize, ey[i])
+                        entityPath.close()
+                        c.drawPath(entityPath, p)
+                        p.color = (a shl 24) or (GameColors.CLARITY and 0xFFFFFF)
                         c.drawCircle(screenEx, ey[i], entityRadius * 0.3f, p)
                     }
-
                     else -> {
-                        // YELLOW DATA: Small Diamond
                         p.color = (a shl 24) or (GameColors.YELLOW and 0xFFFFFF)
-                        val path = android.graphics.Path()
-                        path.moveTo(screenEx, ey[i] - entitySize)
-                        path.lineTo(screenEx + entitySize, ey[i])
-                        path.lineTo(screenEx, ey[i] + entitySize)
-                        path.lineTo(screenEx - entitySize, ey[i])
-                        path.close()
-                        c.drawPath(path, p)
+                        // FIXED: Reusing the already allocated path to stop GC panic
+                        entityPath.reset()
+                        entityPath.moveTo(screenEx, ey[i] - entitySize)
+                        entityPath.lineTo(screenEx + entitySize, ey[i])
+                        entityPath.lineTo(screenEx, ey[i] + entitySize)
+                        entityPath.lineTo(screenEx - entitySize, ey[i])
+                        entityPath.close()
+                        c.drawPath(entityPath, p)
                     }
                 }
             }
@@ -322,51 +314,26 @@ class EnemySystem {
 
         // 3. Draw Boss
         if (gs.bossActive) {
-            val bdx = gs.px - gs.bossX
-            val bdy = gs.py - gs.bossY
-            val bDistSq = bdx * bdx + bdy * bdy
-
             val bossRadius = scale * 0.08f
-            val isBossRevealed =
-                (gs.pulse && bDistSq in gs.innerRSq..gs.outerRSq) || gs.bossIframe > 0f || bDistSq < gs.passiveAuraRadiusSq
-            val bAlpha = if (isBossRevealed) 255 else 100
             val screenBx = gs.bossX - gs.cameraX
+            val bossAlpha = (gs.bossVis * 255).toInt()
 
             p.style = Paint.Style.FILL
-            p.color = Color.argb(
-                bAlpha,
-                Color.red(GameColors.BOSS),
-                Color.green(GameColors.BOSS),
-                Color.blue(GameColors.BOSS)
-            )
-            c.drawCircle(
-                screenBx,
-                gs.bossY,
-                bossRadius + kotlin.math.sin(gs.timeSinceStart * 15f) * 10f,
-                p
-            )
 
-            p.color = if (gs.bossIframe > 0f) GameColors.CLARITY else GameColors.RED
+            // FIXED: Scaled radius bounce and bitwise colors
+            val pulseOffset = sin(gs.timeSinceStart * 15f) * (scale * 0.015f)
+            p.color = (bossAlpha shl 24) or (GameColors.BOSS and 0xFFFFFF)
+            c.drawCircle(screenBx, gs.bossY, bossRadius + pulseOffset, p)
+
+            p.color = if (gs.bossIframe > 0f) (bossAlpha shl 24) or 0xFFFFFF else (bossAlpha shl 24) or (GameColors.RED and 0xFFFFFF)
             c.drawCircle(screenBx, gs.bossY, bossRadius * 0.5f, p)
 
-            p.color = GameColors.RED
-            c.drawRect(
-                screenBx - bossRadius,
-                gs.bossY - bossRadius - scale * 0.02f,
-                screenBx + bossRadius,
-                gs.bossY - bossRadius - scale * 0.01f,
-                p
-            )
+            p.color = (bossAlpha shl 24) or (GameColors.RED and 0xFFFFFF)
+            c.drawRect(screenBx - bossRadius, gs.bossY - bossRadius - scale * 0.02f, screenBx + bossRadius, gs.bossY - bossRadius - scale * 0.01f, p)
 
-            p.color = GameColors.HP
+            p.color = (bossAlpha shl 24) or (GameColors.HP and 0xFFFFFF)
             val hpWidth = (bossRadius * 2f) * (gs.bossHp.toFloat() / gs.bossMaxHp)
-            c.drawRect(
-                screenBx - bossRadius,
-                gs.bossY - bossRadius - scale * 0.02f,
-                screenBx - bossRadius + hpWidth,
-                gs.bossY - bossRadius - scale * 0.01f,
-                p
-            )
+            c.drawRect(screenBx - bossRadius, gs.bossY - bossRadius - scale * 0.02f, screenBx - bossRadius + hpWidth, gs.bossY - bossRadius - scale * 0.01f, p)
         }
     }
 }
