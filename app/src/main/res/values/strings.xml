@@ -1,0 +1,125 @@
+<resources>
+    <string name="app_name">Echo Hunter</string>
+
+    <!-- Menu Titles -->
+    <string name="menu_endless">ENDLESS WAVES</string>
+    <string name="menu_story">STORY: CLEANUP</string>
+    <string name="menu_firewall">FIREWALL BREACH</string>
+
+    <string name="menu_sub_endless">Survive infinite waves. Boss every 5 waves.</string>
+    <string name="menu_sub_story">Hunt 5 Mutating Sector Guardians.</string>
+    <string name="menu_sub_firewall">Treadmill Escape. Dodge gates.</string>
+
+    <!-- UI Elements -->
+    <string name="ui_data">DATA: %1$d TB</string>
+    <string name="ui_banked">BANKED: %1$d TB</string>
+    <string name="ui_core_signal">CORE SIGNAL: %1$dm</string>
+    <string name="ui_vis">VIS</string>
+    <string name="ui_ovr">OVR</string>
+    <string name="ui_combo">COMBO x%1$d</string>
+    <string name="ui_combo_broken">COMBO BROKEN</string>
+    <string name="ui_overclock_ready">OVERCLOCK READY!</string>
+    <string name="ui_tap_continue">TAP BOTTOM HALF TO CONTINUE</string>
+    <string name="ui_mode_easy">[ MODE: EASY ]</string>
+    <string name="ui_mode_hard">[ MODE: HARD ]</string>
+    <string name="ui_help_btn">HELP [?]</string>
+    <string name="ui_title_echo">ECHO</string>
+    <string name="ui_title_hunter">HUNTER</string>
+    <string name="ui_title_system">SYSTEM</string>
+    <string name="ui_title_corrupted">CORRUPTED</string>
+    <string name="ui_hint_connect">&gt; CONNECT CABLE TO PROTOCOL PORT &lt;</string>
+    <string name="ui_hint_toggle">&gt; TOGGLE PLUG SWITCH TO INITIALIZE &lt;</string>
+    <string name="ui_hint_initializing">&gt; INITIALIZING... &lt;</string>
+
+    <!-- Help Screen -->
+    <string name="help_title">ECHO PROTOCOL v2.0</string>
+    <string name="help_how_to_survive">&gt; HOW TO SURVIVE &lt;</string>
+    <string name="help_controls">Tap to Pulse (Reveals map). Drag to Move.</string>
+    <string name="help_vision_blur">Pulsing rapidly causes Vision Blur!</string>
+    <string name="help_item_yellow">[+] YELLOW: Data Fragments (Points)</string>
+    <string name="help_item_blue">[V] BLUE: Clarity Shards / Slows Firewall</string>
+    <string name="help_item_purple">[S] PURPLE: Shield Protocol</string>
+    <string name="help_item_red">[-] RED: Corrupted Entities (AVOID/DESTROY)</string>
+    <string name="help_overclock_title">--- OVERCLOCK &amp; COMBAT ---</string>
+    <string name="help_overclock_desc">Build Combos without taking damage to fill Overclock.</string>
+    <string name="help_overclock_combat">When active, RAM into Enemies &amp; Bosses to DESTROY them!</string>
+    <string name="help_hard_mode_desc">HARD MODE: Fast fade, Inverted Glitches, Hidden Bosses.</string>
+    <string name="ui_repair_system">REPAIR SYSTEM</string>
+    <string name="ui_system_repaired">SYSTEM REPAIRED</string>
+    <string name="ui_repair_protocol">RUN_CLEAN_PROTOCOL.EXE</string>
+    <string name="help_tap_return">[ TAP TO RETURN ]</string>
+
+    <!-- Pause / System Messages -->
+    <string name="pause_title">SYSTEM PAUSED</string>
+    <string name="pause_resume">&gt; RESUME &lt;</string>
+    <string name="pause_menu">&gt; MAIN MENU &lt;</string>
+    <string name="msg_core_unlocked">SYSTEM CORE UNLOCKED. FOLLOW THE SIGNAL.</string>
+    <string name="msg_damage_detected">SYSTEM DAMAGE DETECTED</string>
+    <string name="msg_emp_detected">SYSTEM EMP DETECTED</string>
+    <string name="msg_glitch">SYSTEM GLITCH... DON\'T TRUST YOUR EYES</string>
+    <string name="msg_fighting_back">THE SYSTEM IS FIGHTING BACK!</string>
+
+    <!-- Game Modes Specific -->
+    <string name="wave_count">WAVE %1$d</string>
+    <string name="sector_count">SECTOR %1$d</string>
+    <string name="sector_target">TARGET: %1$d TB</string>
+    <string name="msg_sector_corrupted">SECTOR CORRUPTED.</string>
+    <string name="msg_system_failing">SYSTEM FAILING.</string>
+    <string name="msg_guardian_active">WARNING: GUARDIAN ACTIVE</string>
+
+    <!-- Boss Names -->
+    <string name="boss_0">GUARDIAN-01: THE WATCHER</string>
+    <string name="boss_1">GUARDIAN-02: MUTATED CORE</string>
+    <string name="boss_2">GUARDIAN-03: SYSTEM LEACH</string>
+    <string name="boss_3">GUARDIAN-04: MEMORY EATER</string>
+    <string name="boss_omega">GUARDIAN-OMEGA: THE ARCHITECT</string>
+
+    <!-- Story Lines - Endless -->
+    <string name="story_endless_1">&gt; SYSTEM TRAP DETECTED.</string>
+    <string name="story_endless_2">&gt; THERE IS NO EXIT.</string>
+    <string name="story_endless_3">&gt; THIS IS NOT A MISSION ANYMORE...</string>
+    <string name="story_endless_4">&gt; THIS IS SURVIVAL.</string>
+
+    <string name="popup_endless_1">THEY ARE WATCHING YOU...</string>
+    <string name="popup_endless_2">HOW LONG CAN YOU LAST?</string>
+    <string name="popup_endless_3">SIGNAL LOST...</string>
+    <string name="popup_endless_4">SYSTEM MEMORY LEAKING...</string>
+
+    <!-- Story Lines - Main Mode -->
+    <string name="story_main_1">&gt; INITIALIZING PROBE-7...</string>
+    <string name="story_main_2">&gt; SYSTEM CORRUPTION AT 98%.</string>
+    <string name="story_main_3">&gt; DIRECTIVE: PURGE THE SECTORS.</string>
+    <string name="story_main_4">&gt; PROBE-7, YOU ARE OUR LAST HOPE.</string>
+
+    <string name="story_mid_1">&gt; WARNING: THE VIRUS IS EVOLVING.</string>
+    <string name="story_mid_2">&gt; IT IS LEARNING FROM YOUR MOVES.</string>
+    <string name="story_mid_3">&gt; I... I THINK I AM CORRUPTING TOO...</string>
+
+    <string name="story_perfect_1">&gt; MAINFRAME PURGED WITH ZERO ERRORS.</string>
+    <string name="story_perfect_2">&gt; CORRUPTION ELIMINATED.</string>
+    <string name="story_perfect_3">&gt; NEW CORE PROTOCOL ACCEPTED...</string>
+    <string name="story_perfect_4">&gt; NEW CORE IDENTITY: PROBE-7.</string>
+    <string name="story_perfect_5">&gt; (YOU HAVE BECOME THE SYSTEM)</string>
+
+    <string name="story_neutral_1">&gt; MAINFRAME PURGED.</string>
+    <string name="story_neutral_2">&gt; HEAVY DAMAGE SUSTAINED.</string>
+    <string name="story_neutral_3">&gt; I CAN\'T SEE ANYTHING...</string>
+    <string name="story_neutral_4">&gt; REBOOTING IN THE DARK...</string>
+
+    <!-- Story Lines - Firewall -->
+    <string name="story_firewall_1">&gt; ANOMALY DETECTED IN PROBE-7.</string>
+    <string name="story_firewall_2">&gt; YOU ARE NO LONGER AUTHORIZED.</string>
+    <string name="story_firewall_3">&gt; INITIATING DELETION FIREWALL.</string>
+    <string name="story_firewall_4">&gt; RUN.</string>
+
+    <string name="popup_firewall_1">STOP RUNNING.</string>
+    <string name="popup_firewall_2">WE CREATED YOU.</string>
+    <string name="popup_firewall_3">YOU ARE THE VIRUS NOW.</string>
+    <string name="popup_firewall_4">THERE IS NOWHERE TO HIDE.</string>
+
+    <!-- Bad Ending -->
+    <string name="story_bad_1">&gt; CRITICAL FAILURE.</string>
+    <string name="story_bad_2">&gt; PROBE-7 DELETED.</string>
+    <string name="story_bad_3">&gt; THE CORRUPTION WINS.</string>
+
+</resources>
