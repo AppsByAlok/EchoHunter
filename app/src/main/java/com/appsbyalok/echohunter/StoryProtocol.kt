@@ -5,13 +5,15 @@ import kotlin.random.Random
 object StoryProtocol {
 
     // --- In Game popup system ---
-    var currentPopup: String = ""
+    var currentPopupRes: Int = 0
+    var currentPopupArg: Int? = null
     var popupTimer: Float = 0f
     var isGlitchActive: Boolean = false
     var areControlsInverted: Boolean = false
 
-    fun showIngameMessage(msg: String, duration: Float = 3f) {
-        currentPopup = msg
+    fun showIngameMessage(resId: Int, duration: Float = 3f) {
+        currentPopupRes = resId
+        currentPopupArg = null
         popupTimer = duration
     }
 
@@ -26,15 +28,15 @@ object StoryProtocol {
 
     // --- Cinematic Intro for Boss ---
     var bossIntroTimer: Float = 0f
-    var currentBossName: String = ""
+    var currentBossNameRes: Int = 0
 
     fun startBossIntro(bossType: Int) {
-        currentBossName = when(bossType) {
-            0 -> "GUARDIAN-01: THE WATCHER"
-            1 -> "GUARDIAN-02: MUTATED CORE"
-            2 -> "GUARDIAN-03: SYSTEM LEACH"
-            3 -> "GUARDIAN-04: MEMORY EATER"
-            else -> "GUARDIAN-OMEGA: THE ARCHITECT"
+        currentBossNameRes = when(bossType) {
+            0 -> R.string.boss_0
+            1 -> R.string.boss_1
+            2 -> R.string.boss_2
+            3 -> R.string.boss_3
+            else -> R.string.boss_omega
         }
         bossIntroTimer = 2.5f // 2.5 सेकंड के लिए गेम फ्रीज होगा
     }
@@ -42,80 +44,80 @@ object StoryProtocol {
     // --- Story Lines for each Mode ---
 
     // 1. ENDLESS WAVES (Survival)
-    val endlessIntroLines = arrayOf(
-        "> SYSTEM TRAP DETECTED.",
-        "> THERE IS NO EXIT.",
-        "> THIS IS NOT A MISSION ANYMORE...",
-        "> THIS IS SURVIVAL."
+    val endlessIntroLines = intArrayOf(
+        R.string.story_endless_1,
+        R.string.story_endless_2,
+        R.string.story_endless_3,
+        R.string.story_endless_4
     )
-    val endlessPopups = arrayOf(
-        "THEY ARE WATCHING YOU...",
-        "HOW LONG CAN YOU LAST?",
-        "SIGNAL LOST...",
-        "SYSTEM MEMORY LEAKING..."
+    val endlessPopups = intArrayOf(
+        R.string.popup_endless_1,
+        R.string.popup_endless_2,
+        R.string.popup_endless_3,
+        R.string.popup_endless_4
     )
 
     // 2. STORY MODE (Mainframe Salvation - Canon Story)
-    val storyIntroLines = arrayOf(
-        "> INITIALIZING PROBE-7...",
-        "> SYSTEM CORRUPTION AT 98%.",
-        "> DIRECTIVE: PURGE THE SECTORS.",
-        "> PROBE-7, YOU ARE OUR LAST HOPE."
+    val storyIntroLines = intArrayOf(
+        R.string.story_main_1,
+        R.string.story_main_2,
+        R.string.story_main_3,
+        R.string.story_main_4
     )
-    val storyMidLines = arrayOf(
-        "> WARNING: THE VIRUS IS EVOLVING.",
-        "> IT IS LEARNING FROM YOUR MOVES.",
-        "> I... I THINK I AM CORRUPTING TOO..."
+    val storyMidLines = intArrayOf(
+        R.string.story_mid_1,
+        R.string.story_mid_2,
+        R.string.story_mid_3
     )
     // Dark Twist Endings
-    val storyPerfectEnding = arrayOf(
-        "> MAINFRAME PURGED WITH ZERO ERRORS.",
-        "> CORRUPTION ELIMINATED.",
-        "> NEW CORE PROTOCOL ACCEPTED...",
-        "> NEW CORE IDENTITY: PROBE-7.",
-        "> (YOU HAVE BECOME THE SYSTEM)"
+    val storyPerfectEnding = intArrayOf(
+        R.string.story_perfect_1,
+        R.string.story_perfect_2,
+        R.string.story_perfect_3,
+        R.string.story_perfect_4,
+        R.string.story_perfect_5
     )
-    val storyNeutralEnding = arrayOf(
-        "> MAINFRAME PURGED.",
-        "> HEAVY DAMAGE SUSTAINED.",
-        "> I CAN'T SEE ANYTHING...",
-        "> REBOOTING IN THE DARK..."
+    val storyNeutralEnding = intArrayOf(
+        R.string.story_neutral_1,
+        R.string.story_neutral_2,
+        R.string.story_neutral_3,
+        R.string.story_neutral_4
     )
 
     // 3. FIREWALL BREACH (Escape Protocol)
-    val firewallIntroLines = arrayOf(
-        "> ANOMALY DETECTED IN PROBE-7.",
-        "> YOU ARE NO LONGER AUTHORIZED.",
-        "> INITIATING DELETION FIREWALL.",
-        "> RUN."
+    val firewallIntroLines = intArrayOf(
+        R.string.story_firewall_1,
+        R.string.story_firewall_2,
+        R.string.story_firewall_3,
+        R.string.story_firewall_4
     )
-    val firewallPopups = arrayOf(
-        "STOP RUNNING.",
-        "WE CREATED YOU.",
-        "YOU ARE THE VIRUS NOW.",
-        "THERE IS NOWHERE TO HIDE."
-    )
-
-    val badEndingLines = arrayOf(
-        "> CRITICAL FAILURE.",
-        "> PROBE-7 DELETED.",
-        "> THE CORRUPTION WINS."
+    val firewallPopups = intArrayOf(
+        R.string.popup_firewall_1,
+        R.string.popup_firewall_2,
+        R.string.popup_firewall_3,
+        R.string.popup_firewall_4
     )
 
-    // गेम के दौरान रैंडम ग्लिच ट्रिगर करने का फंक्शन
-    fun triggerRandomGlitch(score: Int, gameMode: Int) {
+    val badEndingLines = intArrayOf(
+        R.string.story_bad_1,
+        R.string.story_bad_2,
+        R.string.story_bad_3
+    )
+
+    // Function to trigger random glitches during the game (now checks difficulty)
+    fun triggerRandomGlitch(score: Int, gameMode: Int, difficulty: Int) {
         if (score > 30 && Random.nextDouble() < 0.05) {
             isGlitchActive = true
-            showIngameMessage("SYSTEM GLITCH... DON'T TRUST YOUR EYES", 2f)
+            showIngameMessage(R.string.msg_glitch, 2f)
         } else {
             isGlitchActive = false
             areControlsInverted = false
         }
 
-        // कहानी के बीच में कंट्रोल्स उल्टे कर देना
-        if (gameMode == 1 && score > 100 && Random.nextDouble() < 0.1) {
+        // Invert controls during the story (HARD MODE ONLY)
+        if (difficulty == 1 && gameMode == 1 && score > 100 && Random.nextDouble() < 0.1) {
             areControlsInverted = true
-            showIngameMessage("THE SYSTEM IS FIGHTING BACK!", 3f)
+            showIngameMessage(R.string.msg_fighting_back, 3f)
         }
     }
 }
