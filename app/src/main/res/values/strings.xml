@@ -29,7 +29,7 @@
     <string name="ui_title_corrupted">CORRUPTED</string>
     <string name="ui_hint_connect">&gt; CONNECT CABLE TO PROTOCOL PORT &lt;</string>
     <string name="ui_hint_toggle">&gt; TOGGLE PLUG SWITCH TO INITIALIZE &lt;</string>
-    <string name="ui_hint_initializing">&gt; INITIALIZING... &lt;</string>
+    <string name="ui_hint_initializing">&gt; INITIALIZING… &lt;</string>
 
     <!-- Help Screen -->
     <string name="help_title">ECHO PROTOCOL v2.0</string>
@@ -56,7 +56,7 @@
     <string name="msg_core_unlocked">SYSTEM CORE UNLOCKED. FOLLOW THE SIGNAL.</string>
     <string name="msg_damage_detected">SYSTEM DAMAGE DETECTED</string>
     <string name="msg_emp_detected">SYSTEM EMP DETECTED</string>
-    <string name="msg_glitch">SYSTEM GLITCH... DON\'T TRUST YOUR EYES</string>
+    <string name="msg_glitch">SYSTEM GLITCH… DON\'T TRUST YOUR EYES</string>
     <string name="msg_fighting_back">THE SYSTEM IS FIGHTING BACK!</string>
 
     <!-- Game Modes Specific -->
@@ -77,34 +77,34 @@
     <!-- Story Lines - Endless -->
     <string name="story_endless_1">&gt; SYSTEM TRAP DETECTED.</string>
     <string name="story_endless_2">&gt; THERE IS NO EXIT.</string>
-    <string name="story_endless_3">&gt; THIS IS NOT A MISSION ANYMORE...</string>
+    <string name="story_endless_3">&gt; THIS IS NOT A MISSION ANYMORE…</string>
     <string name="story_endless_4">&gt; THIS IS SURVIVAL.</string>
 
-    <string name="popup_endless_1">THEY ARE WATCHING YOU...</string>
+    <string name="popup_endless_1">THEY ARE WATCHING YOU…</string>
     <string name="popup_endless_2">HOW LONG CAN YOU LAST?</string>
-    <string name="popup_endless_3">SIGNAL LOST...</string>
-    <string name="popup_endless_4">SYSTEM MEMORY LEAKING...</string>
+    <string name="popup_endless_3">SIGNAL LOST…</string>
+    <string name="popup_endless_4">SYSTEM MEMORY LEAKING…</string>
 
     <!-- Story Lines - Main Mode -->
-    <string name="story_main_1">&gt; INITIALIZING PROBE-7...</string>
+    <string name="story_main_1">&gt; INITIALIZING PROBE-7…</string>
     <string name="story_main_2">&gt; SYSTEM CORRUPTION AT 98%.</string>
     <string name="story_main_3">&gt; DIRECTIVE: PURGE THE SECTORS.</string>
     <string name="story_main_4">&gt; PROBE-7, YOU ARE OUR LAST HOPE.</string>
 
     <string name="story_mid_1">&gt; WARNING: THE VIRUS IS EVOLVING.</string>
     <string name="story_mid_2">&gt; IT IS LEARNING FROM YOUR MOVES.</string>
-    <string name="story_mid_3">&gt; I... I THINK I AM CORRUPTING TOO...</string>
+    <string name="story_mid_3">&gt; I… I THINK I AM CORRUPTING TOO…</string>
 
     <string name="story_perfect_1">&gt; MAINFRAME PURGED WITH ZERO ERRORS.</string>
     <string name="story_perfect_2">&gt; CORRUPTION ELIMINATED.</string>
-    <string name="story_perfect_3">&gt; NEW CORE PROTOCOL ACCEPTED...</string>
+    <string name="story_perfect_3">&gt; NEW CORE PROTOCOL ACCEPTED…</string>
     <string name="story_perfect_4">&gt; NEW CORE IDENTITY: PROBE-7.</string>
     <string name="story_perfect_5">&gt; (YOU HAVE BECOME THE SYSTEM)</string>
 
     <string name="story_neutral_1">&gt; MAINFRAME PURGED.</string>
     <string name="story_neutral_2">&gt; HEAVY DAMAGE SUSTAINED.</string>
-    <string name="story_neutral_3">&gt; I CAN\'T SEE ANYTHING...</string>
-    <string name="story_neutral_4">&gt; REBOOTING IN THE DARK...</string>
+    <string name="story_neutral_3">&gt; I CAN\'T SEE ANYTHING…</string>
+    <string name="story_neutral_4">&gt; REBOOTING IN THE DARK…</string>
 
     <!-- Story Lines - Firewall -->
     <string name="story_firewall_1">&gt; ANOMALY DETECTED IN PROBE-7.</string>
