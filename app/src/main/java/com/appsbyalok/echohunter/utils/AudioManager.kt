@@ -1,4 +1,4 @@
-package com.appsbyalok.echohunter
+package com.appsbyalok.echohunter.utils
 
 import android.media.AudioManager
 import android.media.ToneGenerator

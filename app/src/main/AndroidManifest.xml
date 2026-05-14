@@ -11,6 +11,8 @@
 
         <activity
             android:name="com.appsbyalok.echohunter.MainActivity"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:exported="true">
 
             <intent-filter>

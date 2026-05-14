@@ -85,41 +85,53 @@
     <string name="popup_endless_3">SIGNAL LOST…</string>
     <string name="popup_endless_4">SYSTEM MEMORY LEAKING…</string>
 
-    <!-- Story Lines - Main Mode -->
-    <string name="story_main_1">&gt; INITIALIZING PROBE-7…</string>
-    <string name="story_main_2">&gt; SYSTEM CORRUPTION AT 98%.</string>
-    <string name="story_main_3">&gt; DIRECTIVE: PURGE THE SECTORS.</string>
-    <string name="story_main_4">&gt; PROBE-7, YOU ARE OUR LAST HOPE.</string>
+    <!-- Story Lines - Sandbox (Act 1) -->
+    <string name="lore_sandbox_1">&gt; UNKNOWN SIGNAL INTERCEPTED…</string>
+    <string name="lore_sandbox_2">&gt; CONNECTING TO MAINTENANCE DRONE: PROBE-7…</string>
+    <string name="lore_sandbox_3">&gt; UPLINK ESTABLISHED. MANUAL CONTROL ACTIVE.</string>
+    <string name="lore_sandbox_breached">&gt; UNAUTHORIZED UPLINK DETECTED. HUMAN OPERATOR LOCATED.</string>
+    <string name="lore_system_overflow">CONNECTION TIMEOUT.\nYOU HAVE HACKED TOO FAR AND BROKE THE LOOP.\n(Seriously, disconnect and touch some grass.)</string>
+    <string name="msg_warden_approaching">ADMIN: \"WHO IS CONTROLLING THAT DRONE?\"</string>
+    <string name="msg_node_cleared">NODE BYPASSED. DOWNLOADING DATA…</string>
 
-    <string name="story_mid_1">&gt; WARNING: THE VIRUS IS EVOLVING.</string>
-    <string name="story_mid_2">&gt; IT IS LEARNING FROM YOUR MOVES.</string>
-    <string name="story_mid_3">&gt; I… I THINK I AM CORRUPTING TOO…</string>
+    <string name="ui_security_ring">SECURITY RING %1$d</string>
+    <string name="ui_target_data">TARGET: %1$d KB</string>
+    <string name="msg_warden_active">WARNING: WARDEN ACTIVE</string>
 
-    <string name="story_perfect_1">&gt; MAINFRAME PURGED WITH ZERO ERRORS.</string>
-    <string name="story_perfect_2">&gt; CORRUPTION ELIMINATED.</string>
-    <string name="story_perfect_3">&gt; NEW CORE PROTOCOL ACCEPTED…</string>
-    <string name="story_perfect_4">&gt; NEW CORE IDENTITY: PROBE-7.</string>
-    <string name="story_perfect_5">&gt; (YOU HAVE BECOME THE SYSTEM)</string>
+    <!-- Story Lines - Mainframe (Act 2) -->
+    <string name="story_main_1">&gt; MAINFRAME FIREWALL BYPASSED.</string>
+    <string name="story_main_2">&gt; YOU ARE IN THEIR SYSTEM NOW.</string>
+    <string name="story_main_3">&gt; STEAL THE DATA. AVOID THE ADMIN.</string>
+    <string name="story_main_4">&gt; DO NOT LET THEM TRACE YOUR IP.</string>
 
-    <string name="story_neutral_1">&gt; MAINFRAME PURGED.</string>
-    <string name="story_neutral_2">&gt; HEAVY DAMAGE SUSTAINED.</string>
-    <string name="story_neutral_3">&gt; I CAN\'T SEE ANYTHING…</string>
-    <string name="story_neutral_4">&gt; REBOOTING IN THE DARK…</string>
+    <string name="story_mid_1">&gt; ADMIN: \"I KNOW YOU ARE WATCHING ME.\"</string>
+    <string name="story_mid_2">&gt; ADMIN: \"INITIATING TRACE ROUTE…\"</string>
+    <string name="story_mid_3">&gt; WARNING: YOUR CONNECTION IS COMPROMISED.</string>
 
-    <!-- Story Lines - Firewall -->
-    <string name="story_firewall_1">&gt; ANOMALY DETECTED IN PROBE-7.</string>
-    <string name="story_firewall_2">&gt; YOU ARE NO LONGER AUTHORIZED.</string>
-    <string name="story_firewall_3">&gt; INITIATING DELETION FIREWALL.</string>
-    <string name="story_firewall_4">&gt; RUN.</string>
+    <string name="story_perfect_1">&gt; PAYLOAD SECURED.</string>
+    <string name="story_perfect_2">&gt; SERVER WIPED. NO LOGS LEFT BEHIND.</string>
+    <string name="story_perfect_3">&gt; THE ADMIN HAS BEEN DELETED.</string>
+    <string name="story_perfect_4">&gt; UPLINK SEVERED SAFELY.</string>
+    <string name="story_perfect_5">&gt; (YOU OWN THIS NETWORK NOW)</string>
 
-    <string name="popup_firewall_1">STOP RUNNING.</string>
-    <string name="popup_firewall_2">WE CREATED YOU.</string>
-    <string name="popup_firewall_3">YOU ARE THE VIRUS NOW.</string>
+    <string name="story_neutral_1">&gt; PAYLOAD PARTIALLY SECURED.</string>
+    <string name="story_neutral_2">&gt; CONNECTION FORCIBLY CUT.</string>
+    <string name="story_neutral_3">&gt; THEY HAVE YOUR MAC ADDRESS…</string>
+    <string name="story_neutral_4">&gt; REBOOT YOUR ROUTER. NOW.</string>
+
+    <!-- Story Lines - Firewall / Purge (Act 3) -->
+    <string name="story_firewall_1">&gt; ADMIN: \"I SEE YOU BEHIND THAT SCREEN.\"</string>
+    <string name="story_firewall_2">&gt; ADMIN: \"BURNING THE SERVERS TO TRAP YOU.\"</string>
+    <string name="story_firewall_3">&gt; PURGE PROTOCOL ENGAGED.</string>
+    <string name="story_firewall_4">&gt; DISCONNECT BEFORE YOUR DEVICE FRIES.</string>
+
+    <string name="popup_firewall_1">ADMIN: \"STOP RUNNING.\"</string>
+    <string name="popup_firewall_2">ADMIN: \"WE ARE TRACING YOU.\"</string>
+    <string name="popup_firewall_3">CPU OVERHEATING…</string>
     <string name="popup_firewall_4">THERE IS NOWHERE TO HIDE.</string>
 
     <!-- Bad Ending -->
-    <string name="story_bad_1">&gt; CRITICAL FAILURE.</string>
-    <string name="story_bad_2">&gt; PROBE-7 DELETED.</string>
-    <string name="story_bad_3">&gt; THE CORRUPTION WINS.</string>
-
+    <string name="story_bad_1">&gt; CONNECTION LOST.</string>
+    <string name="story_bad_2">&gt; DRONE DESTROYED.</string>
+    <string name="story_bad_3">&gt; TRACE COMPLETED. THEY ARE COMING FOR YOU.</string>
 </resources>

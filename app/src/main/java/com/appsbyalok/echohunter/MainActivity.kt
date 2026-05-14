@@ -6,6 +6,10 @@ import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.window.OnBackInvokedDispatcher
+import com.appsbyalok.echohunter.data.SaveManager
+import com.appsbyalok.echohunter.data.UpgradeSystem
+import com.appsbyalok.echohunter.utils.EchoAudioManager
+import com.appsbyalok.echohunter.view.GameView
 
 class MainActivity : Activity() {
     private lateinit var gameView: GameView
@@ -13,6 +17,8 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         SaveManager.init(this)
+        UpgradeSystem.init(this)
+
         gameView = GameView(this)
         setContentView(gameView)
 

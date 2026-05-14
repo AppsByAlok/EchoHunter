@@ -1,8 +1,9 @@
-package com.appsbyalok.echohunter
+package com.appsbyalok.echohunter.modes
 
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import com.appsbyalok.echohunter.engine.GameState
 
 // Interface for Strategy Pattern
 interface GameModeStrategy {

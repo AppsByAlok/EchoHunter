@@ -1,9 +1,17 @@
-package com.appsbyalok.echohunter
+package com.appsbyalok.echohunter.engine
 
+import android.media.ToneGenerator
 import android.os.Bundle
+import com.appsbyalok.echohunter.modes.CampaignMode
+import com.appsbyalok.echohunter.utils.EchoAudioManager
+import com.appsbyalok.echohunter.modes.FirewallMode
+import com.appsbyalok.echohunter.modes.GameModeStrategy
+import com.appsbyalok.echohunter.modes.StoryMode
+import com.appsbyalok.echohunter.data.StoryProtocol
+import com.appsbyalok.echohunter.data.UpgradeSystem
 import kotlin.math.*
+import kotlin.random.Random
 
-// Shared constants for colors
 object GameColors {
     const val BG = 0xFF08080C.toInt()
     const val GRID = 0xFF141420.toInt()
@@ -19,34 +27,59 @@ object GameColors {
     const val COOLANT = 0xFF00AAFF.toInt()
 }
 
-// Single Source of Truth for game data
 class GameState {
 
-    var modeStrategy: GameModeStrategy = EndlessMode()
+    var modeStrategy: GameModeStrategy = CampaignMode()
     var gameMode = 0
         set(value) {
             field = value
             modeStrategy = when (value) {
                 1 -> StoryMode()
                 2 -> FirewallMode()
-                else -> EndlessMode()
+                else -> CampaignMode()
             }
         }
 
-    // UI & App State
     var state = 5
     var difficulty = 0
     var stateTimer = 0f
     var nextStateAfterStory = 0
     var timeSinceStart = 0f
 
-    // Player State
+    var isRotationWarning = false
+
+    // --- NAYA: Tracks which memory card the player tapped ---
+    var selectedStoryAct = 0
+
+    var gridMap: Array<IntArray>? = null
+    var tileSize = 100f
+    var mapWidth = 0f
+    var mapHeight = 0f
+
     var px = 0f; var py = 0f
-    var targetPx = 0f; var targetPy = 0f
-    var hp = 3; val maxHp = 3
+
+    var joyBaseX = 0f; var joyBaseY = 0f
+    var joyKnobX = 0f; var joyKnobY = 0f
+    var joyDirX = 0f; var joyDirY = 0f
+    var isJoyActive = false
+    var lastFacingX = 1f; var lastFacingY = 0f
+
+    val maxSpikes = 8
+    val spikeX = FloatArray(maxSpikes)
+    val spikeY = FloatArray(maxSpikes)
+    val spikeVx = FloatArray(maxSpikes)
+    val spikeVy = FloatArray(maxSpikes)
+    val spikeLife = FloatArray(maxSpikes)
+    val spikeActive = BooleanArray(maxSpikes)
+    var attackCooldown = 0f
+
+    var isAttackPressed = false
+    var isOverclockPressed = false
+
+    var hp = 3
+    val maxHp: Int get() = 3 + UpgradeSystem.getBonusMaxHp()
     var isTouching = false
 
-    // Abilities & Timers
     var pulse = false; var pulseR = 0f
     var cooldownTimer = 0f
     var visionClarity = 1.0f
@@ -58,19 +91,22 @@ class GameState {
     var showOverclockTextTimer = 0f
     val isOverclocked: Boolean get() = overclockTimer > 0f
 
-    // Stats & Progression
     var score = 0; var combo = 0
     var maxCombo = 0
     var wave = 1
+
+    var currentLevel = 1
+    var collectedDataKB = 0L
+    var isLevelCleared = false
+
     var comboBreakTimer = 0f
     var currentSector = 1
     var sectorTarget = 30
 
-    // Camera & Environment
     var cameraX = 0f
+    var cameraY = 0f
     var baseWorldSpeed = 0f
 
-    // Effects & Feedback Variables
     var damageFlash = 0f
     var sectorFlash = 0f
     var shakeAmount = 0f
@@ -78,10 +114,8 @@ class GameState {
     var timeScale = 1.0f
     var slowMoTimer = 0f
 
-    // --- NEW: Hit-Stop Effect (Freezes game for micro-seconds on impact) ---
     var hitStopTimer = 0f
 
-    // Interactive Ending Variables (Cinematic Core Merge)
     var isPerfectEnd = false
     var coreX = 0f
     var coreY = 0f
@@ -89,25 +123,21 @@ class GameState {
     var mergeTimer = 0f
     var whiteFlash = 0f
 
-    // Visual Polish Variables (Cyberpunk Effects)
     var chromaticIntensity = 0f
     var shockwaveR = 0f
     var shockwaveX = 0f
     var shockwaveY = 0f
     var shockwaveActive = false
 
-    // Boss Death Decompilation State
     var bossDeathTimer = 0f
     var bossDeathX = 0f
     var bossDeathY = 0f
 
-    // Radar / Heartbeat Ping System
     var isEnemyNear = false
     var isEnemyVeryNear = false
     var radarPingTimer = 0f
     var heartbeatTimer = 0f
 
-    // Firewall (Game Mode 2)
     var firewallWorldX = 0f
     var firewallOffset = -100f
     val obsCount = 4
@@ -116,15 +146,13 @@ class GameState {
     val obsGapSize = FloatArray(obsCount)
     val obsType = IntArray(obsCount)
 
-    // Boss State
     var bossActive = false
     var bossHp = 0; var bossMaxHp = 0
     var bossX = -1000f; var bossY = -1000f
     var bossIframe = 0f
     var bossType = 0
-    var bossVis = 1.0f // NEW: Boss visibility for hard mode dimming
+    var bossVis = 1.0f
 
-    // Optimization Math variables
     var innerRSq = 0f
     var outerRSq = 0f
     var passiveAuraRadiusSq = 0f
@@ -142,11 +170,15 @@ class GameState {
         b.putInt("sectorTarget", sectorTarget)
         b.putInt("wave", wave)
         b.putFloat("cameraX", cameraX)
+        b.putFloat("cameraY", cameraY)
         b.putBoolean("bossActive", bossActive)
         b.putInt("bossType", bossType)
         b.putInt("bossHp", bossHp)
         b.putInt("bossMaxHp", bossMaxHp)
         b.putFloat("bossVis", bossVis)
+
+        b.putInt("currentLevel", currentLevel)
+        b.putLong("collectedDataKB", collectedDataKB)
 
         b.putBoolean("isPerfectEnd", isPerfectEnd)
         b.putFloat("coreX", coreX)
@@ -166,11 +198,15 @@ class GameState {
         sectorTarget = b.getInt("sectorTarget", 30)
         wave = b.getInt("wave", 1)
         cameraX = b.getFloat("cameraX", 0f)
+        cameraY = b.getFloat("cameraY", 0f)
         bossActive = b.getBoolean("bossActive", false)
         bossType = b.getInt("bossType", 0)
         bossHp = b.getInt("bossHp", 0)
         bossMaxHp = b.getInt("bossMaxHp", 0)
         bossVis = b.getFloat("bossVis", 1.0f)
+
+        currentLevel = b.getInt("currentLevel", 1)
+        collectedDataKB = b.getLong("collectedDataKB", 0L)
 
         isPerfectEnd = b.getBoolean("isPerfectEnd", false)
         coreX = b.getFloat("coreX", 0f)
@@ -179,16 +215,23 @@ class GameState {
     }
 
     fun resetGame() {
-        score = 0; combo = 0; hp = maxHp; wave = 1
+        score = 0; combo = 0; wave = 1
+        hp = maxHp
+        collectedDataKB = 0L
+        isLevelCleared = false
+
         visionClarity = 1.0f; shieldTimer = 0f; playerIframe = 0f
         overclockMeter = 0f; overclockTimer = 0f
-        cameraX = 0f; firewallWorldX = cameraX - 1000f
+        cameraX = 0f; cameraY = 0f; firewallWorldX = cameraX - 1000f
         currentSector = 1; sectorTarget = 30; bossActive = false
         empFlashTimer = 0f; comboBreakTimer = 0f
+        attackCooldown = 0f
+        for (i in 0 until maxSpikes) spikeActive[i] = false
 
         StoryProtocol.popupTimer = 0f
         StoryProtocol.isGlitchActive = false
         StoryProtocol.areControlsInverted = false
+        isRotationWarning = false
 
         timeScale = 1.0f
         slowMoTimer = 0f
@@ -211,6 +254,7 @@ class GameState {
         if (empFlashTimer > 0f) empFlashTimer -= dt
         if (slowMoTimer > 0f) slowMoTimer -= dt
         if (bossDeathTimer > 0f) bossDeathTimer -= dt
+        if (attackCooldown > 0f) attackCooldown -= dt
 
         if (visionClarity < 1.0f) visionClarity = min(1.0f, visionClarity + 0.1f * dt)
         else if (visionClarity > 1.0f) visionClarity = max(1.0f, visionClarity - 0.1f * dt)
@@ -223,8 +267,9 @@ class GameState {
 
         if (overclockTimer > 0f) {
             overclockTimer -= dt
-            overclockMeter = (overclockTimer / 5f) * 100f
-            if (overclockTimer <= 0f) EchoAudioManager.playSound(android.media.ToneGenerator.TONE_CDMA_PIP, 100)
+            val maxOcTime = 5f + UpgradeSystem.getBonusOverclockTime()
+            overclockMeter = (overclockTimer / maxOcTime) * 100f
+            if (overclockTimer <= 0f) EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 100)
         } else if (overclockMeter > 0f) {
             val drainSpeed = if(difficulty == 0) 5f else 10f
             overclockMeter = max(0f, overclockMeter - drainSpeed * dt)
@@ -238,26 +283,64 @@ class GameState {
         }
     }
 
-    fun updatePlayerMovement(dt: Float, height: Float, scale: Float) {
-        val targetWorldX = cameraX + targetPx
-        val pdx = targetWorldX - px
-        val pdy = targetPy - py
-        val pDistSq = pdx * pdx + pdy * pdy
-        val pSpeed = scale * (if (isOverclocked) 1.5f else 1.0f)
-        val pSpeedDt = pSpeed * dt
+    fun updatePlayerMovement(dt: Float, width: Float, height: Float, scale: Float) {
+        val baseSpeed = scale * (if (isOverclocked) 1.2f else 0.8f)
+        val pSpeed = baseSpeed * UpgradeSystem.getSpeedMultiplier()
 
-        if (pDistSq > pSpeedDt * pSpeedDt) {
-            val pDist = sqrt(pDistSq)
-            px += (pdx / pDist) * pSpeedDt
-            py += (pdy / pDist) * pSpeedDt
-        } else {
-            px = targetWorldX
-            py = targetPy
+        if (joyDirX != 0f || joyDirY != 0f) {
+            lastFacingX = joyDirX
+            lastFacingY = joyDirY
+        }
+
+        var vx = joyDirX * pSpeed * dt
+        var vy = joyDirY * pSpeed * dt
+
+        if (StoryProtocol.areControlsInverted) {
+            vx = -vx
+            vy = -vy
         }
 
         val playerRadius = scale * 0.015f
-        if (py < playerRadius) py = playerRadius
-        if (py > height - playerRadius) py = height - playerRadius
+
+        if (gridMap != null) {
+            val nextPx = px + vx
+            if (!isCollidingWithWall(nextPx, py, playerRadius)) px = nextPx
+
+            val nextPy = py + vy
+            if (!isCollidingWithWall(px, nextPy, playerRadius)) py = nextPy
+
+            cameraX += ((px - width / 2f) - cameraX) * 5f * dt
+            cameraY += ((py - height / 2f) - cameraY) * 5f * dt
+
+            cameraX = max(0f, min(cameraX, mapWidth - width))
+            cameraY = max(0f, min(cameraY, mapHeight - height))
+        } else {
+            px += vx
+            py += vy
+            if (px < cameraX + playerRadius) px = cameraX + playerRadius
+            if (px > cameraX + width - playerRadius) px = cameraX + width - playerRadius
+            if (py < cameraY + playerRadius) py = cameraY + playerRadius
+            if (py > cameraY + height - playerRadius) py = cameraY + height - playerRadius
+        }
+    }
+
+    private fun isCollidingWithWall(cx: Float, cy: Float, radius: Float): Boolean {
+        val grid = gridMap ?: return false
+        val ts = tileSize
+        val hitbox = radius * 0.6f
+
+        val left = ((cx - hitbox) / ts).toInt()
+        val right = ((cx + hitbox) / ts).toInt()
+        val top = ((cy - hitbox) / ts).toInt()
+        val bottom = ((cy + hitbox) / ts).toInt()
+
+        for (x in left..right) {
+            for (y in top..bottom) {
+                if (x < 0 || x >= grid.size || y < 0 || y >= grid[0].size) return true
+                if (grid[x][y] == 1) return true
+            }
+        }
+        return false
     }
 
     fun updateCameraAndMovement(dt: Float, width: Float, scale: Float) {
@@ -268,7 +351,6 @@ class GameState {
         val passiveAuraRadius = scale * 0.12f
         passiveAuraRadiusSq = passiveAuraRadius * passiveAuraRadius
 
-        // Hard mode mein enemies FAST disappear, Easy mein slow
         val baseFade = if (difficulty == 1) 0.65f else 0.85f
         fadeMultiplier = min(0.99f, baseFade + 0.16f * visionClarity)
 
@@ -296,11 +378,11 @@ class GameState {
         val diffMult = if (difficulty == 0) 0.8f else 1.0f
         val gapBase = height * 0.4f
         obsGapSize[i] = max(height * (if(difficulty==0) 0.35f else 0.25f), gapBase - (score * 0.002f * height * diffMult))
-        obsGapY[i] = (height * 0.1f) + kotlin.random.Random.nextFloat() * (height * 0.8f - obsGapSize[i])
+        obsGapY[i] = (height * 0.1f) + Random.nextFloat() * (height * 0.8f - obsGapSize[i])
 
         val baseRedChance = if (score < 15) 0.0 else (score - 15) * 0.02
         val maxRedChance = if (difficulty == 0) 0.3 else 0.8
         val redChance = min(maxRedChance, baseRedChance)
-        obsType[i] = if (kotlin.random.Random.nextDouble() < redChance) 1 else 0
+        obsType[i] = if (Random.nextDouble() < redChance) 1 else 0
     }
 }
