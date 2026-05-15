@@ -6,9 +6,11 @@ import com.appsbyalok.echohunter.data.LevelEngine
 import com.appsbyalok.echohunter.data.SaveManager
 import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.data.UpgradeSystem
+import com.appsbyalok.echohunter.systems.ArsenalSystem
 import com.appsbyalok.echohunter.systems.CollisionSystem
 import com.appsbyalok.echohunter.systems.EffectSystem
 import com.appsbyalok.echohunter.systems.EnemySystem
+import com.appsbyalok.echohunter.systems.PlayerAI
 import com.appsbyalok.echohunter.utils.EchoAudioManager
 
 class GameEngine(
@@ -25,6 +27,10 @@ class GameEngine(
     var onCoreUnlock: ((Boolean) -> Unit)? = null
     var onBossTrigger: ((Int, Float) -> Unit)? = null
     var onStoryState: ((IntArray, Int) -> Unit)? = null
+
+    // NAYA: Arsenal System instance
+    private val arsenalSys = ArsenalSystem(gs, effectSys)
+    private val playerAI = PlayerAI(gs, enemySys)
 
     fun update(dt: Float, targetW: Float, targetH: Float, scale: Float) {
         gs.timeSinceStart += dt
@@ -49,8 +55,10 @@ class GameEngine(
         val simDt = if (gs.slowMoTimer > 0f) dt * 0.15f else dt
 
         if (gs.state == 1 || gs.state == 8) {
+            if (gs.isAutoPilotActive) playerAI.update(simDt, scale)
+            arsenalSys.update(simDt, scale)
 
-            if (gs.isAttackPressed && gs.attackCooldown <= 0f) fireMalwareSpike(scale)
+            if (gs.isTrapPressed && gs.trapCooldownTimer <= 0f) arsenalSys.deployTrap()
             if (gs.isOverclockPressed && gs.overclockMeter >= 100f && !gs.isOverclocked) activateOverclock(scale)
 
             for (i in 0 until gs.maxSpikes) {
@@ -128,7 +136,7 @@ class GameEngine(
 
         if (gs.state == 1) {
             enemySys.updateEnemies(simDt, gs, targetW, targetH, scale)
-            enemySys.updateBoss(simDt, gs, targetW, scale)
+            enemySys.updateBoss(simDt, gs, scale)
             enemySys.updatePowerups(simDt, gs, targetW, targetH)
 
             collisionSys.checkCollisions(targetW, targetH, scale, onDamage!!, onScore!!, onCoreUnlock!!)
@@ -156,7 +164,6 @@ class GameEngine(
         }
     }
 
-
     fun generateLevelMaze(targetW: Float, targetH: Float, scale: Float) {
         val seed = 1000 + gs.currentLevel
 
@@ -181,7 +188,6 @@ class GameEngine(
                     pRow = y
                     gs.gridMap!![x][y] = com.appsbyalok.echohunter.data.MazeGenerator.PATH
                 } else if (gs.gridMap!![x][y] == com.appsbyalok.echohunter.data.MazeGenerator.DEST_NODE) {
-                    // DESTINATION dhundo aur save karo
                     dCol = x
                     dRow = y
                 }
@@ -191,37 +197,11 @@ class GameEngine(
         gs.px = pCol * gs.tileSize + (gs.tileSize / 2f)
         gs.py = pRow * gs.tileSize + (gs.tileSize / 2f)
 
-        // NAYA: Ab Core hamesha wahi rahega jahan MazeGenerator ne banaya hai
         gs.coreX = dCol * gs.tileSize + (gs.tileSize / 2f)
         gs.coreY = dRow * gs.tileSize + (gs.tileSize / 2f)
 
         gs.cameraX = gs.px - targetW / 2f
         gs.cameraY = gs.py - targetH / 2f
-    }
-
-    private fun fireMalwareSpike(scale: Float) {
-        val baseCooldown = 0.25f
-        gs.attackCooldown = baseCooldown * UpgradeSystem.getSpikeCooldownMultiplier()
-
-        for (i in 0 until gs.maxSpikes) {
-            if (!gs.spikeActive[i]) {
-                gs.spikeActive[i] = true
-                gs.spikeX[i] = gs.px
-                gs.spikeY[i] = gs.py
-                gs.spikeLife[i] = 0.4f
-
-                val spikeSpeed = scale * 2.0f
-                val dirX = if (gs.lastFacingX == 0f && gs.lastFacingY == 0f) 1f else gs.lastFacingX
-                val dirY = if (gs.lastFacingX == 0f && gs.lastFacingY == 0f) 0f else gs.lastFacingY
-
-                gs.spikeVx[i] = dirX * spikeSpeed
-                gs.spikeVy[i] = dirY * spikeSpeed
-
-                EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 50)
-                effectSys.spawnParticles(gs.px, gs.py, 1, scale)
-                break
-            }
-        }
     }
 
     private fun activateOverclock(scale: Float) {

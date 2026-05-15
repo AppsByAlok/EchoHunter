@@ -5,7 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import com.appsbyalok.echohunter.data.SaveManager
 import com.appsbyalok.echohunter.data.StoryProtocol
-import com.appsbyalok.echohunter.engine.GameColors
+import com.appsbyalok.echohunter.utils.GameColors
 import com.appsbyalok.echohunter.engine.GameState
 import kotlin.random.Random
 

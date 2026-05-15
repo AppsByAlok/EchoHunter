@@ -2,6 +2,7 @@ package com.appsbyalok.echohunter.engine
 
 import android.media.ToneGenerator
 import android.os.Bundle
+import android.util.Log
 import com.appsbyalok.echohunter.modes.CampaignMode
 import com.appsbyalok.echohunter.utils.EchoAudioManager
 import com.appsbyalok.echohunter.modes.FirewallMode
@@ -11,21 +12,6 @@ import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.data.UpgradeSystem
 import kotlin.math.*
 import kotlin.random.Random
-
-object GameColors {
-    const val BG = 0xFF08080C.toInt()
-    const val GRID = 0xFF141420.toInt()
-    const val PULSE = 0xFF00FFFF.toInt()
-    const val RED = 0xFFFF2A4D.toInt()
-    const val YELLOW = 0xFFFFD700.toInt()
-    const val TEXT = 0xFFEEEEEE.toInt()
-    const val HP = 0xFF00FF7F.toInt()
-    const val CLARITY = 0xFFFFFFFF.toInt()
-    const val SHIELD = 0xFFAA00FF.toInt()
-    const val OVERCLOCK = 0xFFFF5500.toInt()
-    const val BOSS = 0xFFFF00FF.toInt()
-    const val COOLANT = 0xFF00AAFF.toInt()
-}
 
 class GameState {
 
@@ -47,9 +33,38 @@ class GameState {
     var timeSinceStart = 0f
 
     var isRotationWarning = false
-
-    // --- NAYA: Tracks which memory card the player tapped ---
     var selectedStoryAct = 0
+
+
+    // --- GLOBAL SNACK BAR / TOAST SYSTEM ---
+    var globalMessage = ""
+    var globalMessageTimer = 0f
+
+    fun showGlobalMessage(msg: String, duration: Float = 2f) {
+        Log.d("TAG", "showGlobalMessage called: $msg")
+        globalMessage = msg
+        globalMessageTimer = duration
+    }
+
+    // --- NAYA: CENTRALIZED UI COORDINATES (100% RESPONSIVE MATCH) ---
+    var uiBtnRadius = 0f
+    var uiAtkX = 0f; var uiAtkY = 0f
+    var uiOvrX = 0f; var uiOvrY = 0f
+    var uiTrapX = 0f; var uiTrapY = 0f
+    var uiPulseX = 0f; var uiPulseY = 0f
+    var uiPauseX = 0f; var uiPauseY = 0f
+
+    // --- AUTOPILOT & DOUBLE TAP ---
+    var isAutoPilotActive = false
+    var autoPilotTimer = 0f
+    var isAutoFireLocked = false
+    var isAutoSonarLocked = false
+    var isSonarPressed = false
+
+    // --- VISUAL DEBUGGER VARIABLES ---
+    var showDebugHitboxes = false
+    var lastTouchX = -100f
+    var lastTouchY = -100f
 
     var gridMap: Array<IntArray>? = null
     var tileSize = 100f
@@ -64,17 +79,35 @@ class GameState {
     var isJoyActive = false
     var lastFacingX = 1f; var lastFacingY = 0f
 
-    val maxSpikes = 8
+    val maxSpikes = 12
     val spikeX = FloatArray(maxSpikes)
     val spikeY = FloatArray(maxSpikes)
     val spikeVx = FloatArray(maxSpikes)
     val spikeVy = FloatArray(maxSpikes)
     val spikeLife = FloatArray(maxSpikes)
     val spikeActive = BooleanArray(maxSpikes)
-    var attackCooldown = 0f
+    val spikeType = IntArray(maxSpikes)
+
+    var currentWeapon = 1
+    var currentTrap = 2   // NAYA: 2 = EMP Mine (Blast karega). 1 = Decoy Hologram, 0 = Camouflage
 
     var isAttackPressed = false
     var isOverclockPressed = false
+    var isTrapPressed = false
+
+    var attackCooldown = 0f
+    var trapCooldownTimer = 0f
+
+    var globalSonarAlert = false
+    var localAttackAlert = false
+
+    var isCamouflaged = false
+    var camoTimer = 0f
+    var isDecoyActive = false
+    var decoyX = 0f; var decoyY = 0f
+    var decoyTimer = 0f
+    var empMineActive = false
+    var empMineX = 0f; var empMineY = 0f
 
     var hp = 3
     val maxHp: Int get() = 3 + UpgradeSystem.getBonusMaxHp()
@@ -92,7 +125,6 @@ class GameState {
     val isOverclocked: Boolean get() = overclockTimer > 0f
 
     var score = 0; var combo = 0
-    var maxCombo = 0
     var wave = 1
 
     var currentLevel = 1
@@ -132,6 +164,7 @@ class GameState {
     var bossDeathTimer = 0f
     var bossDeathX = 0f
     var bossDeathY = 0f
+    var isBossRage = false
 
     var isEnemyNear = false
     var isEnemyVeryNear = false
@@ -176,10 +209,8 @@ class GameState {
         b.putInt("bossHp", bossHp)
         b.putInt("bossMaxHp", bossMaxHp)
         b.putFloat("bossVis", bossVis)
-
         b.putInt("currentLevel", currentLevel)
         b.putLong("collectedDataKB", collectedDataKB)
-
         b.putBoolean("isPerfectEnd", isPerfectEnd)
         b.putFloat("coreX", coreX)
         b.putFloat("coreY", coreY)
@@ -204,10 +235,8 @@ class GameState {
         bossHp = b.getInt("bossHp", 0)
         bossMaxHp = b.getInt("bossMaxHp", 0)
         bossVis = b.getFloat("bossVis", 1.0f)
-
         currentLevel = b.getInt("currentLevel", 1)
         collectedDataKB = b.getLong("collectedDataKB", 0L)
-
         isPerfectEnd = b.getBoolean("isPerfectEnd", false)
         coreX = b.getFloat("coreX", 0f)
         coreY = b.getFloat("coreY", 0f)
@@ -225,7 +254,13 @@ class GameState {
         cameraX = 0f; cameraY = 0f; firewallWorldX = cameraX - 1000f
         currentSector = 1; sectorTarget = 30; bossActive = false
         empFlashTimer = 0f; comboBreakTimer = 0f
+
         attackCooldown = 0f
+        trapCooldownTimer = 0f
+        isCamouflaged = false
+        isDecoyActive = false
+        empMineActive = false
+
         for (i in 0 until maxSpikes) spikeActive[i] = false
 
         StoryProtocol.popupTimer = 0f
@@ -242,6 +277,9 @@ class GameState {
         shockwaveActive = false
         bossDeathTimer = 0f
         bossVis = 1.0f
+
+        isAutoFireLocked = false
+        isAutoSonarLocked = false
     }
 
     fun updateTimers(dt: Float, scale: Float) {
@@ -270,7 +308,7 @@ class GameState {
             val maxOcTime = 5f + UpgradeSystem.getBonusOverclockTime()
             overclockMeter = (overclockTimer / maxOcTime) * 100f
             if (overclockTimer <= 0f) EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 100)
-        } else if (overclockMeter > 0f) {
+        } else if (overclockMeter > 0f && overclockMeter < 100f) {
             val drainSpeed = if(difficulty == 0) 5f else 10f
             overclockMeter = max(0f, overclockMeter - drainSpeed * dt)
         }

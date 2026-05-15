@@ -6,12 +6,12 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.media.ToneGenerator
 import android.view.MotionEvent
-import com.appsbyalok.echohunter.utils.EchoAudioManager
 import com.appsbyalok.echohunter.data.SaveManager
-import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.data.UpgradeSystem
 import com.appsbyalok.echohunter.data.UpgradeType
-import com.appsbyalok.echohunter.engine.GameColors
+import com.appsbyalok.echohunter.engine.GameState
+import com.appsbyalok.echohunter.utils.EchoAudioManager
+import com.appsbyalok.echohunter.utils.GameColors
 import kotlin.math.abs
 import kotlin.math.max
 
@@ -30,7 +30,7 @@ class UIDecompiler {
     private val buyButtons = mutableMapOf<UpgradeType, RectF>()
     private val closeBtnRect = RectF()
 
-    fun draw(c: Canvas, targetW: Float, targetH: Float, scale: Float, time: Float) {
+    fun draw(c: Canvas, targetW: Float, targetH: Float, scale: Float) {
         c.drawColor(0xEE020A05.toInt()) // Terminal Dark Greenish BG
 
         // --- Header ---
@@ -126,7 +126,7 @@ class UIDecompiler {
         c.drawText("DISCONNECT", closeBtnRect.centerX(), closeBtnRect.centerY() + scale * 0.015f, pText)
     }
 
-    fun onTouch(x: Float, y: Float, action: Int, scale: Float, onBack: () -> Unit): Boolean {
+    fun onTouch(x: Float, y: Float, action: Int, scale: Float, gs: GameState, onBack: () -> Unit): Boolean {
         when (action) {
             MotionEvent.ACTION_DOWN -> {
                 lastTouchY = y
@@ -152,9 +152,10 @@ class UIDecompiler {
                         if (rect.contains(x, y)) {
                             if (UpgradeSystem.purchaseUpgrade(type)) {
                                 EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 150)
-                                StoryProtocol.showIngameMessage("SCRIPT INJECTED.\nFIRMWARE OVERRIDDEN.", 2f)
+                                gs.showGlobalMessage("SCRIPT INJECTED.\nFIRMWARE OVERRIDDEN.", 2f)
                             } else {
                                 EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
+                                gs.showGlobalMessage("ERROR: INSUFFICIENT DATA.\nREQUIRE MORE KILOBYTES.", 2f)
                             }
                             return true
                         }

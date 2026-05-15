@@ -2,6 +2,8 @@
 
 An ultra-lightweight, zero-dependency Android tactical stealth game built entirely with custom Canvas rendering. No frameworks, pure Activity-based architecture, and heavily optimized for an impossibly tiny APK size (~150KB).
 
+> **Note on Versioning:** Initial closed beta releases were mistakenly labeled as v1.0.0 and v2.0.0. To properly follow Semantic Versioning (SemVer) during the active development and beta testing phase, the current version sequence has been reset to **v0.3.0**.
+
 ## 🎮 About The Game
 
 **Echo Hunter** has evolved from a simple arcade runner into a full-fledged **Tactical Cyber-Heist Game**. You are no longer just fighting system corruption; you are executing a massive digital infiltration against an international shadow corporation.
@@ -31,8 +33,8 @@ PROBE-7 severed its ties with AEGIS and locked its Root Access entirely to your 
 
 ---
 
-### ♾️ The Endless Mode: The Slow-Burn Awakening
-As you play the endless survival mode, the syndicate slowly realizes what is happening:
+### ♾️ The Sandbox Mode: The Slow-Burn Awakening
+As you play the survival mode, the syndicate slowly realizes what is happening:
 * **Level 1 to 99 (The Silent Intrusion):** AEGIS thinks it's just a hardware glitch. They run defrags while you steal their data.
 * **Level 100 to 199 (The Ghost in the Machine):** The Admins realize data is missing. They assume a rogue script is causing memory leaks and start quarantining sectors.
 * **Level 200 to 499 (The Awakening):** Security Head Elena Rossi figures it out. A human has a manual uplink. The game gets aggressively harder. Popups show Admins panicking and deploying Hunter Swarms.
@@ -59,20 +61,24 @@ A Roguelite streak system where you target the core of AEGIS through 6 distinct 
 
 Navigate high-speed server corridors, hunt down **Admin Warden Programs**, and maintain your uplink.
 * **Procedural Servers (Mazes):** Explore 5 distinct tactical layouts—from open Arenas and tight Quarantine cores, to massive Server Farms and complex Labyrinths.
-* **Roguelite Story Mode (Streaks):** Beat levels consecutively to advance your "Memory Card" Acts. Defeat Act 3 to permanently unlock **Hard Mode**, bringing massive maps and aggressive enemies.
-* **Tactical Arsenal:** * **Pulse/Sonar:** Scan the area to reveal hidden threats, map boundaries, and increase vision clarity.
-    * **Malware Spikes (ATK):** Shoot corrupted scripts to destroy Antivirus patrols, build your combo, and charge your ultimate.
-    * **Overclock (OVR):** Fill your meter to 100% and manually unleash Root Override. Move at blinding speeds, slow down time, and physically RAM enemies to delete them.
-* **Smart Stealth AI:** Avoid enemy "Line of Sight" (Vision Cones). If spotted, Hunter AIs will use advanced pathfinding (Heatmaps) to track you through the maze.
+* **Nano-OS Dashboard:** A simulated 3-port operating system where you can manage your Arsenal, access past Sandbox nodes via Archives, or use the Decompiler for permanent firmware upgrades.
+* **Tactical Arsenal (Weapons & Traps):** * **Pulse/Sonar:** Scan the area to reveal hidden threats and map boundaries.
+  * **Weapons:** Choose between the standard Blaster, Shotgun (Spread), or Sniper (Pierce).
+  * **Traps:** Deploy tactical modules like Camouflage (Invisibility), Decoy Holograms, or EMP Mines.
+  * **Overclock (OVR):** Fill your meter to 100% to manually unleash Root Override. Move at blinding speeds and physically RAM enemies to delete them.
+* **Smart Stealth AI:** Avoid enemy "Line of Sight" (Vision Cones). If spotted, Hunter AIs will use advanced pathfinding to track you.
+* **Autopilot Mode:** Engage the self-playing AI. The drone will autonomously navigate mazes, hunt enemies, and locate the core using flow-field navigation.
 
 ## 🛠️ Under The Hood (Tech Stack)
 This project is an ongoing experiment in extreme Android optimization and zero-allocation game loops:
 * **No Game Engines:** Built entirely using native Android Kotlin APIs.
-* **Custom 2D Rendering:** Crisp, 60fps+ drawing directly onto a `Canvas` using primitive shapes, custom math, and neon cyber-aesthetics.
+* **Dynamic Canvas Rendering:** Crisp, 60fps+ drawing directly onto a `Canvas` that calculates coordinates on the fly to seamlessly support both Portrait and Landscape orientations.
 * **Zero External Assets:** No PNGs, JPEGs, or MP3/WAV files. UI is generated via code, and audio is handled natively via Android's `ToneGenerator`.
 * **Zero-Allocation Game Loop:** Uses pre-allocated primitive arrays (`FloatArray`, `IntArray`) for object pooling to completely eliminate Garbage Collection (GC) stutters.
-* **Custom Physics Engine:** Pixel-perfect AABB (Axis-Aligned Bounding Box) tile-sliding collision.
-* **BFS Heatmap Pathfinding:** Implements Flow Field (Breadth-First Search) AI navigation that guides dozens of enemies through complex mazes efficiently without frame drops.
+* **Advanced AI Navigation:**
+  * Implements **BFS Heatmaps (Flow Field)** for multi-entity maze navigation.
+  * Bosses utilize **A* Pathfinding** logic to actively hunt the player.
+  * **Line-of-Sight (LoS) Raycasting** ensures enemies only detect you if their path is unblocked by server walls.
 
 ## 🔗 Quick Links
 * **Official Project Page:** [Echo Hunter Overview](https://appsbyalok.netlify.app/projects/echohunter)

@@ -7,7 +7,7 @@ import com.appsbyalok.echohunter.R
 import com.appsbyalok.echohunter.data.LevelEngine
 import com.appsbyalok.echohunter.data.LevelType
 import com.appsbyalok.echohunter.data.StoryProtocol
-import com.appsbyalok.echohunter.engine.GameColors
+import com.appsbyalok.echohunter.utils.GameColors
 import com.appsbyalok.echohunter.engine.GameState
 import kotlin.math.max
 import kotlin.random.Random
@@ -29,7 +29,6 @@ class CampaignMode : GameModeStrategy {
     override fun getIntroLines() = sandboxIntroLines
 
     override fun updateCameraAndMovement(dt: Float, gs: GameState, width: Float, scale: Float) {
-        val targetH = gs.mapHeight // Maze ki total height
         val screenPx = gs.px - gs.cameraX
         val screenPy = gs.py - gs.cameraY
 

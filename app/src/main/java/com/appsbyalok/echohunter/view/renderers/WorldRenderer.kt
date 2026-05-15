@@ -13,7 +13,6 @@ import com.appsbyalok.echohunter.systems.EffectSystem
 import com.appsbyalok.echohunter.systems.EnemySystem
 import com.appsbyalok.echohunter.utils.GameColors
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -81,7 +80,7 @@ class WorldRenderer(
                 when (grid[x][y]) {
                     1 -> { // 2D NEON WALL RENDERING (Matches perfect collision)
                         // Inner fill
-                        p.color = 0x2200FFFF.toInt() // Faint cyan background
+                        p.color = 0x2200FFFF // Faint cyan background
                         c.drawRect(drawX, drawY, drawX + ts, drawY + ts, p)
 
                         // Glowing cyber border
@@ -138,14 +137,56 @@ class WorldRenderer(
             drawCore(c, scale, gs, targetW, screenPlayerX, screenPlayerY)
         }
 
+        // --- NAYA: DRAW TRAPS (EMP MINE & DECOY) ---
+        if (gs.empMineActive) {
+            val screenMineX = gs.empMineX - gs.cameraX
+            val screenMineY = gs.empMineY - gs.cameraY
+            p.style = Paint.Style.FILL
+            p.color = GameColors.RED
+            c.drawCircle(screenMineX, screenMineY, scale * 0.015f, p)
+
+            p.style = Paint.Style.STROKE
+            p.strokeWidth = scale * 0.003f
+            p.color = GameColors.YELLOW
+            val pulse = sin(gs.timeSinceStart * 10f) * scale * 0.015f
+            c.drawCircle(screenMineX, screenMineY, scale * 0.03f + max(0f, pulse), p)
+        }
+
+        if (gs.isDecoyActive) {
+            val screenDecoyX = gs.decoyX - gs.cameraX
+            val screenDecoyY = gs.decoyY - gs.cameraY
+            p.style = Paint.Style.STROKE
+            p.strokeWidth = scale * 0.005f
+            p.color = GameColors.PULSE
+            val holoPulse = sin(gs.timeSinceStart * 20f) * scale * 0.005f
+            c.drawCircle(screenDecoyX, screenDecoyY, scale * 0.02f + holoPulse, p)
+            c.drawCircle(screenDecoyX, screenDecoyY, scale * 0.035f - holoPulse, p)
+        }
+
         pGlow.color = GameColors.PULSE
         for (i in 0 until gs.maxSpikes) {
             if (gs.spikeActive[i]) {
                 val sx = gs.spikeX[i] - gs.cameraX
                 val sy = gs.spikeY[i] - gs.cameraY
 
-                pGlow.strokeWidth = scale * 0.008f * (gs.spikeLife[i] / 0.4f)
-                c.drawLine(sx, sy, sx - (gs.spikeVx[i] * 0.02f), sy - (gs.spikeVy[i] * 0.02f), pGlow)
+                // NAYA: Draw Different Weapons Correctly
+                when (gs.spikeType[i]) {
+                    2 -> { // SNIPER BEAM
+                        pGlow.color = GameColors.RED
+                        pGlow.strokeWidth = scale * 0.012f * (gs.spikeLife[i] / 0.6f)
+                        c.drawLine(sx, sy, sx - (gs.spikeVx[i] * 0.06f), sy - (gs.spikeVy[i] * 0.06f), pGlow)
+                    }
+                    1 -> { // SHOTGUN SPREAD
+                        pGlow.color = GameColors.OVERCLOCK
+                        pGlow.strokeWidth = scale * 0.015f * (gs.spikeLife[i] / 0.4f)
+                        c.drawLine(sx, sy, sx - (gs.spikeVx[i] * 0.01f), sy - (gs.spikeVy[i] * 0.01f), pGlow)
+                    }
+                    else -> { // NORMAL SPIKE
+                        pGlow.color = GameColors.PULSE
+                        pGlow.strokeWidth = scale * 0.008f * (gs.spikeLife[i] / 0.4f)
+                        c.drawLine(sx, sy, sx - (gs.spikeVx[i] * 0.02f), sy - (gs.spikeVy[i] * 0.02f), pGlow)
+                    }
+                }
             }
         }
 
@@ -157,18 +198,27 @@ class WorldRenderer(
             effectSys.drawLightning(c, screenPlayerX, screenPlayerY, scale)
         }
 
+        // --- DRAW PLAYER WITH CAMOUFLAGE OPACITY ---
         val shouldDrawPlayer = gs.playerIframe <= 0f || ((gs.timeSinceStart * 15).toInt() % 2 == 0)
         if (shouldDrawPlayer) {
             val playerRadius = scale * 0.015f
-            p.style = Paint.Style.FILL; p.color = currentPlayerColor
+
+            // Camouflage Opacity (Invisible mode)
+            val alpha = if (gs.isCamouflaged) 0x33 else 0xFF
+
+            p.style = Paint.Style.FILL
+            p.color = (alpha shl 24) or (currentPlayerColor and 0xFFFFFF)
             c.drawCircle(screenPlayerX, screenPlayerY, playerRadius, p)
 
             p.style = Paint.Style.STROKE; p.strokeWidth = scale * 0.003f
             if (gs.shieldTimer > 0f) {
-                p.color = GameColors.SHIELD; p.strokeWidth = scale * 0.006f
+                p.color = (alpha shl 24) or (GameColors.SHIELD and 0xFFFFFF)
+                p.strokeWidth = scale * 0.006f
                 c.drawCircle(screenPlayerX, screenPlayerY, playerRadius * 3f + sin(gs.timeSinceStart * 10f) * scale * 0.005f, p)
                 p.strokeWidth = scale * 0.003f
-            } else p.color = currentPlayerColor
+            } else {
+                p.color = (alpha shl 24) or (currentPlayerColor and 0xFFFFFF)
+            }
             c.drawCircle(screenPlayerX, screenPlayerY, playerRadius * 2f, p)
         }
 

@@ -17,6 +17,13 @@ object SaveManager {
     var maxCampaignLevel: Int = 1
         private set
 
+    var isAutoNextLevelEnabled: Boolean = false
+        private set
+
+    fun setAutoNextLevel(enabled: Boolean) {
+        isAutoNextLevelEnabled = enabled
+        prefs.edit().putBoolean("isAutoNextLevelEnabled", isAutoNextLevelEnabled).apply()
+    }
     // --- NAYA STREAK SYSTEM (ROGUELITE) ---
     var currentStoryStreak: Int = 0
         private set
@@ -46,6 +53,7 @@ object SaveManager {
         dataCoinsKB = prefs.getLong("dataCoinsKB", 0L)
         totalData = prefs.getInt("totalData", 0)
         maxCampaignLevel = prefs.getInt("maxCampaignLevel", 1)
+        isAutoNextLevelEnabled = prefs.getBoolean("isAutoNextLevelEnabled", false)
 
         // Load Streaks
         currentStoryStreak = prefs.getInt("currStory", 0)

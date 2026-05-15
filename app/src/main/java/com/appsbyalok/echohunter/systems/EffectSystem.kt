@@ -5,7 +5,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Typeface
-import com.appsbyalok.echohunter.engine.GameColors
+import com.appsbyalok.echohunter.utils.GameColors
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random

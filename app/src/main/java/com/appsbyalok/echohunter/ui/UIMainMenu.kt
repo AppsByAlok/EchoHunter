@@ -28,66 +28,53 @@ class UIMainMenu(private val context: Context) {
         typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
     }
 
+//    private val stringCache = SparseArray<String>()
+
     private val stringCache = SparseArray<String>()
     private val cablePath = Path()
 
-    private val menuTitles = arrayOf("SANDBOX", "MAINFRAME", "DECOMPILER")
-    private val menuSubs = arrayOf("Simulation Ring", "Core Access", "Firmware Patch")
+    // --- NAYA: 3 Ports System ---
+    private val menuTitles = arrayOf("SANDBOX", "MAINFRAME", "NANO-OS")
+    private val menuSubs = arrayOf("Simulation Ring", "Core Access", "System Dashboard")
 
-    private var plugX = 0f
-    private var plugY = 0f
-    private var targetPlugX = 0f
-    private var targetPlugY = 0f
-    private var plugRestX = 0f
-    private var plugRestY = 0f
+    private var plugX = 0f; private var plugY = 0f
+    private var targetPlugX = 0f; private var targetPlugY = 0f
+    private var plugRestX = 0f; private var plugRestY = 0f
     private var isDraggingPlug = false
     private var connectedMode = -1
     private var animatingToPort = -1
     private var isSwitchOn = false
+
+    // NAYA: Array size 4 kar diya
     private val portX = FloatArray(3)
     private val portY = FloatArray(3)
-
-    private var touchDownX = 0f
-    private var touchDownY = 0f
+    private var touchDownX = 0f; private var touchDownY = 0f
     private var wasSwitchHitOnDown = false
 
     private fun getCachedString(resId: Int): String {
         var str = stringCache.get(resId)
-        if (str == null) {
-            str = context.getString(resId)
-            stringCache.put(resId, str)
-        }
+        if (str == null) { str = context.getString(resId); stringCache.put(resId, str) }
         return str
     }
 
     fun initLayout(targetW: Float, targetH: Float) {
         val isPortrait = targetW < targetH
-
         plugRestX = targetW * 0.85f
         plugRestY = if (isPortrait) targetH * 0.90f else targetH * 0.85f
-        plugX = plugRestX
-        plugY = plugRestY
-        targetPlugX = plugRestX
-        targetPlugY = plugRestY
+        plugX = plugRestX; plugY = plugRestY
+        targetPlugX = plugRestX; targetPlugY = plugRestY
 
+        // --- 3-PORT CLEAN LAYOUT ---
         if (isPortrait) {
-            portX[0] = targetW * 0.25f
-            portY[0] = targetH * 0.58f
-
-            portX[1] = targetW * 0.75f
-            portY[1] = targetH * 0.58f
-
-            portX[2] = targetW * 0.5f
-            portY[2] = targetH * 0.74f
+            // Triangle Layout
+            portX[0] = targetW * 0.28f; portY[0] = targetH * 0.58f // Sandbox (Top Left)
+            portX[1] = targetW * 0.72f; portY[1] = targetH * 0.58f // Mainframe (Top Right)
+            portX[2] = targetW * 0.50f; portY[2] = targetH * 0.74f // Nano-OS (Bottom Center)
         } else {
-            portX[0] = targetW * 0.25f
-            portY[0] = targetH * 0.65f
-
-            portX[1] = targetW * 0.5f
-            portY[1] = targetH * 0.65f
-
-            portX[2] = targetW * 0.75f
-            portY[2] = targetH * 0.65f
+            // 3 in a row for Landscape
+            portX[0] = targetW * 0.25f; portY[0] = targetH * 0.65f
+            portX[1] = targetW * 0.50f; portY[1] = targetH * 0.65f
+            portX[2] = targetW * 0.75f; portY[2] = targetH * 0.65f
         }
     }
 
@@ -127,8 +114,7 @@ class UIMainMenu(private val context: Context) {
                     if (isSwitchOn) {
                         view.postDelayed({
                             if (isSwitchOn && connectedMode != -1 && gs.state == 0) {
-                                // Story Mode ab auto-start nahi hoga (Memory Card select karna padega)
-                                if (connectedMode != 1) onRouteConnection(connectedMode)
+                                if (connectedMode != 1 || !SaveManager.isStoryModeUnlocked) onRouteConnection(connectedMode)
                             }
                         }, 250)
                     }
@@ -515,7 +501,7 @@ class UIMainMenu(private val context: Context) {
                         if (isSwitchOn && connectedMode != -1) {
                             view.postDelayed({
                                 if (isSwitchOn && connectedMode != -1 && gs.state == 0) {
-                                    if (connectedMode != 1) onRouteConnection(connectedMode)
+                                    if (connectedMode != 1 || !SaveManager.isStoryModeUnlocked) onRouteConnection(connectedMode)
                                 }
                             }, 250)
                         }
