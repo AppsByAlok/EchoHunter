@@ -133,6 +133,7 @@ class TouchController(private val gs: GameState) {
             }
 
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_CANCEL -> {
+                // 1. Joystick pointer check
                 if (pointerId == joyPointerId) {
                     joyPointerId = -1
                     gs.isJoyActive = false
@@ -140,14 +141,18 @@ class TouchController(private val gs: GameState) {
                     gs.joyDirY = 0f
                 }
 
+                // --- FIX: STICKING BUTTONS REMOVAL ---
+                // Agar ACTION_UP (poori finger uthi) ya CANCEL event hua,
+                // ya fir jo finger uthi hai wo right-half (combat side) par thi,
+                // toh bina kisi condition ke attack aur trap states ko clear (false) karo!
                 val upX = (e.getX(pointerIndex) - offsetX) / gameScale
-                if (upX > targetW / 2f) {
+                if (upX > targetW / 2f || action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
                     gs.isAttackPressed = false
                     gs.isOverclockPressed = false
                     gs.isTrapPressed = false
                 }
 
-                if (e.pointerCount <= 1) {
+                if (e.pointerCount <= 1 || action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
                     gs.isTouching = false
                 }
             }

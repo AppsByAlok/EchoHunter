@@ -5,11 +5,11 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Typeface
 import android.media.ToneGenerator
-import com.appsbyalok.echohunter.utils.EchoAudioManager
 import com.appsbyalok.echohunter.R
 import com.appsbyalok.echohunter.data.StoryProtocol
-import com.appsbyalok.echohunter.utils.GameColors
 import com.appsbyalok.echohunter.engine.GameState
+import com.appsbyalok.echohunter.utils.EchoAudioManager
+import com.appsbyalok.echohunter.utils.GameColors
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
@@ -156,8 +156,6 @@ class EnemySystem {
             } else {
                 evy[i] = -evy[i] // Pure Bounce
             }
-
-            if (gs.gameMode == 2 && ex[i] < gs.firewallWorldX) { spawn(i, gs, width, height); continue }
 
             val targetX = if (gs.isDecoyActive) gs.decoyX else gs.px
             val targetY = if (gs.isDecoyActive) gs.decoyY else gs.py

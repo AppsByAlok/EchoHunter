@@ -62,6 +62,11 @@ class MenuRenderer(private val context: Context) {
         // DISCONNECT option
         pText.color = GameColors.RED
         c.drawText("> ${getCachedString(R.string.pause_menu)} <", targetW / 2f, targetH * 0.75f, pText)
+
+
+        // NAYA: MOD MENU OPTION
+        pText.color = GameColors.PULSE
+        c.drawText("> MOD MENU <", targetW / 2f, targetH * 0.88f, pText)
     }
 
     fun drawLevelVictory(c: Canvas, scale: Float, gs: GameState, targetW: Float, targetH: Float) {

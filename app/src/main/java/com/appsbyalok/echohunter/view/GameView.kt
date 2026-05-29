@@ -1,5 +1,6 @@
 package com.appsbyalok.echohunter.view
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.media.ToneGenerator
@@ -65,6 +66,23 @@ class GameView(context: Context) : View(context) {
     private val touchController = TouchController(gs)
 
     private var currentActivePort = -1
+
+    // NAYA: Mod Menu Action Listener
+    private val modMenuListener = object : UIModMenu.ModMenuListener {
+        override fun onForceBossSpawn() {
+            triggerBoss(0, min(targetW, targetH))
+        }
+        override fun onTriggerCoreMerge() {
+            handleCoreUnlock(true)
+        }
+        override fun onForceEMP() {
+            gs.empMineActive = true
+            gs.empMineX = gs.px
+            gs.empMineY = gs.py
+        }
+    }
+
+
 
     private val onMenuRoute: (Int) -> Unit = { mode ->
         currentActivePort = mode
@@ -166,9 +184,6 @@ class GameView(context: Context) : View(context) {
         val deviceW = w.toFloat()
         val deviceH = h.toFloat()
 
-        val oldTargetW = targetW
-        val oldTargetH = targetH
-
         if (deviceW >= deviceH) {
             targetH = 1080f
             targetW = 1080f * (deviceW / deviceH)
@@ -192,11 +207,6 @@ class GameView(context: Context) : View(context) {
             gameEngine.generateLevelMaze(targetW, targetH, scale)
             enemySys.respawnAll(gs, targetW, targetH)
 
-            var startX = targetW
-            for (i in 0 until gs.obsCount) {
-                startX += (targetW * 0.6f); gs.obsX[i] = startX
-                gs.randomizeObstacle(i, targetH)
-            }
             uiMainMenu.initLayout(targetW, targetH)
             isInitialized = true
         } else {
@@ -212,17 +222,6 @@ class GameView(context: Context) : View(context) {
 
             gs.baseWorldSpeed = targetW * 0.2f
             uiMainMenu.initLayout(targetW, targetH)
-
-            if (gs.gridMap == null) {
-                gs.px = (gs.px / oldTargetW) * targetW
-                gs.py = (gs.py / oldTargetH) * targetH
-
-                for (i in 0 until gs.obsCount) {
-                    gs.obsX[i] = (gs.obsX[i] / oldTargetW) * targetW
-                    gs.obsGapY[i] = (gs.obsGapY[i] / oldTargetH) * targetH
-                    gs.obsGapSize[i] = (gs.obsGapSize[i] / oldTargetH) * targetH
-                }
-            }
 
             gs.cameraX = gs.px - targetW / 2f
             gs.cameraY = gs.py - targetH / 2f
@@ -243,17 +242,16 @@ class GameView(context: Context) : View(context) {
 
         enemySys.respawnAll(gs, targetW, targetH)
 
-        var startX = targetW
-        for (i in 0 until gs.obsCount) {
-            startX += (targetW * 0.6f); gs.obsX[i] = startX
-            gs.randomizeObstacle(i, targetH)
-        }
-
         changeState(1)
         lastFrameTime = System.nanoTime()
     }
 
     private fun disconnectCable() {
+        if (!StoryProtocol.isGlitchActive) {
+            gs.shakeAmount = 0f
+            gs.chromaticIntensity = 0f
+            gs.sectorFlash = 0f
+        }
         uiMainMenu.disconnect()
         changeState(0)
     }
@@ -335,7 +333,6 @@ class GameView(context: Context) : View(context) {
             5, 7, 6, 4 -> storyStep = menuRenderer.drawStory(c, if (gs.state == 4) StoryProtocol.badEndingLines else currentStoryLines, scale, gs, targetW, targetH, storyStep)
             0 -> {
                 uiMainMenu.draw(c, scale, gs, targetW, targetH, effectSys)
-                if (modMenu.isOpen) modMenu.drawModMenu(c, scale, targetW, targetH, gs)
             }
             2 -> menuRenderer.drawPause(c, scale, gs, targetW, targetH)
             3 -> uiHelpMenu.draw(c, scale, targetW, targetH, gs)
@@ -424,13 +421,25 @@ class GameView(context: Context) : View(context) {
                 c.drawText(lines[1], boxX, rect.centerY() + scale * 0.045f, pMsgText)
             }
         }
+
+        // --- NAYA GLOBAL RENDER ---
+        if (modMenu.isOpen) {
+            modMenu.drawModMenu(c, scale, targetW, targetH, gs)
+        }
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(e: MotionEvent): Boolean {
         val scale = min(targetW, targetH)
         val vx = e.x / gameScale
         val vy = e.y / gameScale
         val action = e.actionMasked
+
+        // NAYA: Intercept touches if Mod Menu is open anywhere
+        if (modMenu.isOpen) {
+            modMenu.handleModMenuTouch(vx, vy, action, scale, targetW, targetH, gs, modMenuListener)
+            return true
+        }
 
         when (gs.state) {
             10 -> return uiDecompiler.onTouch(vx, vy, action, scale, gs, onAppClose)
@@ -452,18 +461,28 @@ class GameView(context: Context) : View(context) {
                 }
             }, onDisconnect)
             5, 7, 4, 6 -> {
-                if (action == MotionEvent.ACTION_UP) {
-                    if (gs.stateTimer < 1.5f || vy < targetH / 2f) return true
-                    if (storyStep < currentStoryLines.size) storyStep = currentStoryLines.size
-                    else { if (gs.state == 7) changeState(gs.nextStateAfterStory) else disconnectCable() }
+                // ACTION_UP ke sath sath multi-touch aur swipe cancels ko bhi register karenge
+                if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP || action == MotionEvent.ACTION_CANCEL) {
+
+                    // --- FIX: Strict 1.5s freeze aur top-half restriction ko jadd se hataya ---
+                    // Ab player jab chahe tab dynamic tap kar sakta hai pure screen par!
+
+                    // Pata karo screen par kaun si dialogue lines dikh rahi hain right now
+                    val activeLines = if (gs.state == 4) StoryProtocol.badEndingLines else currentStoryLines
+
+                    // TWO-TAP SYSTEM LOGIC:
+                    if (storyStep < activeLines.size) {
+                        // TAP 1: Agar typewriter chal raha hai, toh click karte hi instantly poora text reveal ho jaye
+                        storyStep = activeLines.size
+                    } else {
+                        if (gs.stateTimer < 0.5f || vy < targetH / 2f) return true
+                        // TAP 2: Agar text pehle se poora typed hai, toh click par agali screen par badho
+                        if (gs.state == 7) changeState(gs.nextStateAfterStory) else disconnectCable()
+                    }
                 }
                 return true
             }
             0 -> {
-                if (modMenu.isOpen) {
-                    modMenu.handleModMenuTouch(vx, vy, action, scale, targetW, targetH, gs)
-                    return true
-                }
 
                 if (action == MotionEvent.ACTION_DOWN && vx > targetW - scale * 0.15f && vy < scale * 0.15f) {
                     modMenu.isOpen = true
@@ -476,7 +495,10 @@ class GameView(context: Context) : View(context) {
             3 -> return uiHelpMenu.onTouch(vx, vy, action, scale, gs, this, effectSys, onHelpClose)
             2 -> {
                 if (action == MotionEvent.ACTION_UP && gs.stateTimer > 0.2f) {
-                    if (vy > targetH * 0.68f) {
+                    if (vy > targetH * 0.8f) { // NAYA: MOD MENU touch logic
+                        modMenu.isOpen = true
+                    }
+                    else if (vy > targetH * 0.68f) {
                         disconnectCable()
                     }
                     else if (vx > targetW - scale*0.15f && vy < scale*0.15f || (vy in targetH*0.5f..targetH*0.68f)) {
@@ -510,6 +532,16 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun handleDamage(scale: Float) {
+            // NAYA: God Mode Check
+            if (gs.modGodMode && gs.hp <= 1) {
+                StoryProtocol.showIngameMessage("MOD: GOD MODE PREVENTED DEATH", 1.5f)
+                return
+            }
+
+
+
+
+
         gs.hp--; gs.combo = 0; gs.comboBreakTimer = 1.0f; gs.damageFlash = 1f; gs.shakeAmount = scale * 0.08f
         gs.overclockMeter -= gs.overclockMeter*0.25f
         gs.playerIframe = 1.5f; gs.chromaticIntensity = 1.0f
@@ -530,21 +562,24 @@ class GameView(context: Context) : View(context) {
         // --- NAYA: SAFE BOSS SPAWN LOGIC ---
         var safeX = gs.px
         var safeY = gs.py
-        if (gs.gridMap != null) {
-            val w = gs.gridMap!!.size
-            val h = gs.gridMap!![0].size
-            for (attempt in 0..100) {
+        gs.gridMap?.let { grid ->
+            val w = grid.size
+            val h = grid[0].size
+            val minDistanceSq = (scale * 0.8f) * (scale * 0.8f)
+            repeat(101) {
                 val rx = Random.nextInt(1, w - 1)
                 val ry = Random.nextInt(1, h - 1)
-                if (gs.gridMap!![rx][ry] != 1) { // 1 = WALL
+
+                if (grid[rx][ry] != 1) {
                     val tryX = rx * gs.tileSize + gs.tileSize / 2f
                     val tryY = ry * gs.tileSize + gs.tileSize / 2f
                     val dx = tryX - gs.px
                     val dy = tryY - gs.py
-                    if (dx * dx + dy * dy > (scale * 0.8f) * (scale * 0.8f)) {
+
+                    if ((dx * dx) + (dy * dy) > minDistanceSq) {
                         safeX = tryX
                         safeY = tryY
-                        break
+                        return@let // Exits the 'let' block early once found
                     }
                 }
             }
@@ -554,7 +589,7 @@ class GameView(context: Context) : View(context) {
         // ------------------------------------
         gs.shakeAmount = scale * 0.08f; gs.damageFlash = 0.3f; gs.chromaticIntensity = 0.5f
         StoryProtocol.startBossIntro(type); StoryProtocol.showIngameMessage(StoryProtocol.currentBossNameRes, 4f)
-        EchoAudioManager.playSound(android.media.ToneGenerator.TONE_CDMA_ABBR_ALERT, 400)
+        EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 400)
         enemySys.spawnSwarmIfNeeded(gs, targetW, targetH)
     }
 

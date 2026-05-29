@@ -4,13 +4,12 @@ import android.media.ToneGenerator
 import com.appsbyalok.echohunter.data.LevelEngine
 import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.data.UpgradeSystem
-import com.appsbyalok.echohunter.utils.GameColors
 import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.utils.EchoAudioManager
+import com.appsbyalok.echohunter.utils.GameColors
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
-import kotlin.random.Random
 
 class CollisionSystem(
     val gs: GameState,
@@ -26,63 +25,13 @@ class CollisionSystem(
         onScoreAdd: (Int) -> Unit,
         onCoreUnlock: (Boolean) -> Unit,
     ) {
-        val screenPlayerX = gs.px - gs.cameraX
         val hitRadius = scale * 0.045f
         val hitDistSq = hitRadius * hitRadius
 
         var playedEnemyKillSound = false
         var playedEnemyHackSound = false
 
-        val safeLeftBoundary = gs.cameraX + if (gs.gameMode == 2) gs.firewallOffset else 0f
-
-        // 1. Firewall Logic (For Game Mode 2)
-        if (gs.gameMode == 2) {
-            if (screenPlayerX < gs.firewallOffset) {
-                gs.px += width * 0.2f
-                onDamage(scale)
-                gs.chromaticIntensity = 1.0f
-            }
-
-            for (i in 0 until gs.obsCount) {
-                val screenObsX = gs.obsX[i] - gs.cameraX
-                val obsW = scale * 0.05f
-                val isDanger = gs.obsType[i] == 1
-
-                if (screenPlayerX + scale * 0.02f > screenObsX && screenPlayerX - scale * 0.02f < screenObsX + obsW) {
-                    if (gs.py < gs.obsGapY[i] || gs.py > gs.obsGapY[i] + gs.obsGapSize[i]) {
-                        if (isDanger) {
-                            if (gs.playerIframe <= 0f) {
-                                if (gs.shieldTimer <= 0) {
-                                    val dmgAmount = if (gs.difficulty == 0 && Random.nextFloat() > 0.5f) 0 else 1
-                                    if (dmgAmount > 0) {
-                                        onDamage(scale)
-                                        gs.chromaticIntensity = max(gs.chromaticIntensity, 0.8f)
-                                        gs.px = max(safeLeftBoundary + scale * 0.05f, gs.obsX[i] - scale * 0.1f)
-                                    }
-                                } else {
-                                    gs.shieldTimer = 0f
-                                    gs.px = gs.obsX[i] + obsW + scale * 0.05f
-                                    gs.playerIframe = 1.0f
-                                }
-                            } else {
-                                gs.px = max(safeLeftBoundary + scale * 0.05f, gs.obsX[i] - scale * 0.05f)
-                            }
-                        } else {
-                            gs.px = max(safeLeftBoundary + scale * 0.05f, gs.obsX[i] - scale * 0.02f)
-                        }
-                        break
-                    }
-                }
-
-                if (screenObsX + obsW < 0) {
-                    gs.obsX[i] = gs.getNextObstacleX(width)
-                    gs.randomizeObstacle(i, height)
-                    onScoreAdd(5)
-                }
-            }
-        }
-
-        // 2. Powerups & Data Drops Collision
+        // Powerups & Data Drops Collision
         for (i in 0 until enemySystem.pwn) {
             if (enemySystem.pwActive[i]) {
                 val dx = enemySystem.pwX[i] - gs.px
@@ -113,17 +62,22 @@ class CollisionSystem(
             }
         }
 
-        // --- 1. EMP MINE TRAP COLLISION (FIXED & COMPLETED) ---
+        // --- 1. EMP MINE TRAP COLLISION ---
         if (gs.empMineActive) {
             var mineTriggered = false
             for (i in 0 until enemySystem.n) {
                 val dx = gs.empMineX - enemySystem.ex[i]
                 val dy = gs.empMineY - enemySystem.ey[i]
-                if (dx * dx + dy * dy < (scale * 0.15f) * (scale * 0.15f)) { mineTriggered = true; break }
+                if (dx * dx + dy * dy < (scale * 0.15f) * (scale * 0.15f)) {
+                    mineTriggered = true; break
+                }
             }
             if (!mineTriggered && gs.bossActive) {
-                val bdx = gs.empMineX - gs.bossX; val bdy = gs.empMineY - gs.bossY
-                if (bdx * bdx + bdy * bdy < (scale * 0.2f) * (scale * 0.2f)) { mineTriggered = true }
+                val bdx = gs.empMineX - gs.bossX
+                val bdy = gs.empMineY - gs.bossY
+                if (bdx * bdx + bdy * bdy < (scale * 0.2f) * (scale * 0.2f)) {
+                    mineTriggered = true
+                }
             }
 
             if (mineTriggered) {
@@ -135,14 +89,18 @@ class CollisionSystem(
 
                 // Destroy nearby enemies & damage boss
                 for (j in 0 until enemySystem.n) {
-                    val edx = gs.empMineX - enemySystem.ex[j]; val edy = gs.empMineY - enemySystem.ey[j]
+                    val edx = gs.empMineX - enemySystem.ex[j]
+                    val edy = gs.empMineY - enemySystem.ey[j]
                     if (edx * edx + edy * edy < (scale * 0.4f) * (scale * 0.4f)) {
-                        onScoreAdd(5); gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
+                        onScoreAdd(5); gs.collectedDataKB += LevelEngine.getKillRewardKB(
+                            gs.currentLevel, isBoss = false
+                        )
                         enemySystem.spawn(j, gs, width, height)
                     }
                 }
                 if (gs.bossActive) {
-                    val bdx = gs.empMineX - gs.bossX; val bdy = gs.empMineY - gs.bossY
+                    val bdx = gs.empMineX - gs.bossX
+                    val bdy = gs.empMineY - gs.bossY
                     if (bdx * bdx + bdy * bdy < (scale * 0.5f) * (scale * 0.5f)) {
                         gs.bossHp -= 5 // Massive EMP damage
                         if (gs.bossHp <= 0) triggerBossDeath(scale, onScoreAdd, onCoreUnlock)
@@ -169,7 +127,9 @@ class CollisionSystem(
                         if (gs.bossHp <= gs.bossMaxHp / 2 && !gs.isBossRage) {
                             gs.isBossRage = true
                             gs.chromaticIntensity = 1.0f
-                            StoryProtocol.showIngameMessage("WARNING: BOSS OVERRIDE DETECTED - RAGE MODE ACTIVE!", 3f)
+                            StoryProtocol.showIngameMessage(
+                                "WARNING: BOSS OVERRIDE DETECTED - RAGE MODE ACTIVE!", 3f
+                            )
                         }
 
                         gs.bossIframe = 0.15f // Quick iframe against multi-hit spikes
@@ -206,7 +166,9 @@ class CollisionSystem(
 
                             gs.combo++
                             onScoreAdd(2 + gs.combo)
-                            gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
+                            gs.collectedDataKB += LevelEngine.getKillRewardKB(
+                                gs.currentLevel, isBoss = false
+                            )
 
                             if (!gs.isOverclocked) {
                                 gs.overclockMeter = min(100f, gs.overclockMeter + 15f)
@@ -216,7 +178,9 @@ class CollisionSystem(
                                 }
                             }
 
-                            effectSystem.spawnParticles(enemySystem.ex[i], enemySystem.ey[i], 1, scale)
+                            effectSystem.spawnParticles(
+                                enemySystem.ex[i], enemySystem.ey[i], 1, scale
+                            )
                             EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 50)
 
                             if (!gs.bossActive || enemySystem.type[i] == 1) {
@@ -234,8 +198,47 @@ class CollisionSystem(
             }
         }
 
-        // 5. Enemies Collision (Player Body / Ramming)
+
+        // 5. Enemies Collision
+        val config = LevelEngine.getLevelConfig(gs.currentLevel)
+        val isDefense =
+            config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE)
+
         for (i in 0 until enemySystem.n) {
+
+            // --- CORE DEFENSE COLLISION LOGIC ---
+            if (isDefense && gs.coreRadius > 0f) {
+                val cdx = gs.coreX - enemySystem.ex[i]
+                val cdy = gs.coreY - enemySystem.ey[i]
+                val coreHitDistSq =
+                    (gs.coreRadius + (scale * 0.03f)) * (gs.coreRadius + (scale * 0.03f))
+
+                if (cdx * cdx + cdy * cdy < coreHitDistSq) {
+                    gs.coreHp--
+                    effectSystem.spawnParticles(gs.coreX, gs.coreY, 0, scale * 1.5f)
+                    EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 200)
+                    gs.shakeAmount = max(gs.shakeAmount, scale * 0.1f)
+                    gs.chromaticIntensity = max(gs.chromaticIntensity, 0.6f)
+
+                    // Dushman core se takra kar fanaa ho jayega
+                    enemySystem.spawn(i, gs, width, height)
+
+                    // Agar core ki HP khatam ho gayi, toh seedha Death trigger karo
+                    if (gs.coreHp <= 0) {
+                        gs.hp = 0
+                        StoryProtocol.showIngameMessage(
+                            "CRITICAL: SYSTEM CORE COMPROMISED!", 4f
+                        )
+                        onDamage(scale) // Death sequence activate
+                    }
+                    continue // Is enemy ke liye baaki checks skip karo
+                }
+            }
+
+
+
+
+
             val dx = gs.px - enemySystem.ex[i]
             val dy = gs.py - enemySystem.ey[i]
             val d2 = dx * dx + dy * dy
@@ -243,7 +246,9 @@ class CollisionSystem(
             if (d2 < hitDistSq) {
                 if (gs.isOverclocked) {
                     onScoreAdd(5)
-                    gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
+                    gs.collectedDataKB += LevelEngine.getKillRewardKB(
+                        gs.currentLevel, isBoss = false
+                    )
                     effectSystem.spawnParticles(enemySystem.ex[i], enemySystem.ey[i], 1, scale)
 
                     if (!playedEnemyKillSound) {
@@ -252,13 +257,14 @@ class CollisionSystem(
                     }
                     gs.hitStopTimer = max(gs.hitStopTimer, 0.05f)
 
-                    if (enemySystem.type[i] == 2) gs.firewallWorldX -= width * 0.25f
                 } else if (enemySystem.type[i] == 1) {
                     if (gs.playerIframe <= 0f) {
                         if (gs.shieldTimer > 0f) {
                             gs.shieldTimer = 0f
                             gs.playerIframe = 1.0f
-                            effectSystem.spawnParticles(enemySystem.ex[i], enemySystem.ey[i], 1, scale)
+                            effectSystem.spawnParticles(
+                                enemySystem.ex[i], enemySystem.ey[i], 1, scale
+                            )
                         } else {
                             effectSystem.spawnParticles(gs.px, gs.py, 0, scale)
                             onDamage(scale)
@@ -267,8 +273,9 @@ class CollisionSystem(
                     }
                 } else if (enemySystem.type[i] == 2) {
                     onScoreAdd(5)
-                    gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
-                    gs.firewallWorldX -= width * 0.25f
+                    gs.collectedDataKB += LevelEngine.getKillRewardKB(
+                        gs.currentLevel, isBoss = false
+                    )
                     effectSystem.spawnParticles(enemySystem.ex[i], enemySystem.ey[i], 0, scale)
 
                     if (!playedEnemyHackSound) {
@@ -277,7 +284,9 @@ class CollisionSystem(
                     }
                 } else {
                     onScoreAdd(2)
-                    gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
+                    gs.collectedDataKB += LevelEngine.getKillRewardKB(
+                        gs.currentLevel, isBoss = false
+                    )
                 }
 
                 enemySystem.spawn(i, gs, width, height)
@@ -320,7 +329,11 @@ class CollisionSystem(
         }
     }
 
-    private fun triggerBossDeath(scale: Float, onScoreAdd: (Int) -> Unit, onCoreUnlock: (Boolean) -> Unit) {
+    private fun triggerBossDeath(
+        scale: Float,
+        onScoreAdd: (Int) -> Unit,
+        onCoreUnlock: (Boolean) -> Unit,
+    ) {
         gs.bossActive = false
         gs.bossDeathX = gs.bossX
         gs.bossDeathY = gs.bossY

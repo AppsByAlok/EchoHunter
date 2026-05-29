@@ -3,15 +3,14 @@ package com.appsbyalok.echohunter.engine
 import android.media.ToneGenerator
 import android.os.Bundle
 import android.util.Log
-import com.appsbyalok.echohunter.modes.CampaignMode
-import com.appsbyalok.echohunter.utils.EchoAudioManager
-import com.appsbyalok.echohunter.modes.FirewallMode
-import com.appsbyalok.echohunter.modes.GameModeStrategy
-import com.appsbyalok.echohunter.modes.StoryMode
 import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.data.UpgradeSystem
-import kotlin.math.*
-import kotlin.random.Random
+import com.appsbyalok.echohunter.modes.CampaignMode
+import com.appsbyalok.echohunter.modes.GameModeStrategy
+import com.appsbyalok.echohunter.modes.StoryMode
+import com.appsbyalok.echohunter.utils.EchoAudioManager
+import kotlin.math.max
+import kotlin.math.min
 
 class GameState {
 
@@ -21,7 +20,6 @@ class GameState {
             field = value
             modeStrategy = when (value) {
                 1 -> StoryMode()
-                2 -> FirewallMode()
                 else -> CampaignMode()
             }
         }
@@ -48,11 +46,16 @@ class GameState {
 
     // --- NAYA: CENTRALIZED UI COORDINATES (100% RESPONSIVE MATCH) ---
     var uiBtnRadius = 0f
-    var uiAtkX = 0f; var uiAtkY = 0f
-    var uiOvrX = 0f; var uiOvrY = 0f
-    var uiTrapX = 0f; var uiTrapY = 0f
-    var uiPulseX = 0f; var uiPulseY = 0f
-    var uiPauseX = 0f; var uiPauseY = 0f
+    var uiAtkX = 0f
+    var uiAtkY = 0f
+    var uiOvrX = 0f
+    var uiOvrY = 0f
+    var uiTrapX = 0f
+    var uiTrapY = 0f
+    var uiPulseX = 0f
+    var uiPulseY = 0f
+    var uiPauseX = 0f
+    var uiPauseY = 0f
 
     // --- AUTOPILOT & DOUBLE TAP ---
     var isAutoPilotActive = false
@@ -60,6 +63,11 @@ class GameState {
     var isAutoFireLocked = false
     var isAutoSonarLocked = false
     var isSonarPressed = false
+
+
+    // NAYA: MOD MENU FLAGS
+    var modGodMode = false
+    var modInfiniteOvr = false
 
     // --- VISUAL DEBUGGER VARIABLES ---
     var showDebugHitboxes = false
@@ -71,13 +79,18 @@ class GameState {
     var mapWidth = 0f
     var mapHeight = 0f
 
-    var px = 0f; var py = 0f
+    var px = 0f
+    var py = 0f
 
-    var joyBaseX = 0f; var joyBaseY = 0f
-    var joyKnobX = 0f; var joyKnobY = 0f
-    var joyDirX = 0f; var joyDirY = 0f
+    var joyBaseX = 0f
+    var joyBaseY = 0f
+    var joyKnobX = 0f
+    var joyKnobY = 0f
+    var joyDirX = 0f
+    var joyDirY = 0f
     var isJoyActive = false
-    var lastFacingX = 1f; var lastFacingY = 0f
+    var lastFacingX = 1f
+    var lastFacingY = 0f
 
     val maxSpikes = 12
     val spikeX = FloatArray(maxSpikes)
@@ -89,7 +102,12 @@ class GameState {
     val spikeType = IntArray(maxSpikes)
 
     var currentWeapon = 1
-    var currentTrap = 2   // NAYA: 2 = EMP Mine (Blast karega). 1 = Decoy Hologram, 0 = Camouflage
+    var currentTrap = 2   // 2 = EMP Mine, 1 = Decoy Hologram, 0 = Camouflage
+
+    var coreHp = 10
+    var coreMaxHp = 10
+
+    var escapeGateActive = false
 
     var isAttackPressed = false
     var isOverclockPressed = false
@@ -104,16 +122,19 @@ class GameState {
     var isCamouflaged = false
     var camoTimer = 0f
     var isDecoyActive = false
-    var decoyX = 0f; var decoyY = 0f
+    var decoyX = 0f
+    var decoyY = 0f
     var decoyTimer = 0f
     var empMineActive = false
-    var empMineX = 0f; var empMineY = 0f
+    var empMineX = 0f
+    var empMineY = 0f
 
     var hp = 3
     val maxHp: Int get() = 3 + UpgradeSystem.getBonusMaxHp()
     var isTouching = false
 
-    var pulse = false; var pulseR = 0f
+    var pulse = false
+    var pulseR = 0f
     var cooldownTimer = 0f
     var visionClarity = 1.0f
     var shieldTimer = 0f
@@ -124,7 +145,8 @@ class GameState {
     var showOverclockTextTimer = 0f
     val isOverclocked: Boolean get() = overclockTimer > 0f
 
-    var score = 0; var combo = 0
+    var score = 0
+    var combo = 0
     var wave = 1
 
     var currentLevel = 1
@@ -171,17 +193,11 @@ class GameState {
     var radarPingTimer = 0f
     var heartbeatTimer = 0f
 
-    var firewallWorldX = 0f
-    var firewallOffset = -100f
-    val obsCount = 4
-    val obsX = FloatArray(obsCount)
-    val obsGapY = FloatArray(obsCount)
-    val obsGapSize = FloatArray(obsCount)
-    val obsType = IntArray(obsCount)
-
     var bossActive = false
-    var bossHp = 0; var bossMaxHp = 0
-    var bossX = -1000f; var bossY = -1000f
+    var bossHp = 0
+    var bossMaxHp = 0
+    var bossX = -1000f
+    var bossY = -1000f
     var bossIframe = 0f
     var bossType = 0
     var bossVis = 1.0f
@@ -215,6 +231,9 @@ class GameState {
         b.putFloat("coreX", coreX)
         b.putFloat("coreY", coreY)
         b.putFloat("mergeTimer", mergeTimer)
+        b.putInt("coreHp", coreHp)
+        b.putInt("coreMaxHp", coreMaxHp)
+        b.putBoolean("escapeGateActive", escapeGateActive)
     }
 
     fun restoreState(b: Bundle) {
@@ -241,6 +260,9 @@ class GameState {
         coreX = b.getFloat("coreX", 0f)
         coreY = b.getFloat("coreY", 0f)
         mergeTimer = b.getFloat("mergeTimer", 0f)
+        coreHp = b.getInt("coreHp", 10)
+        coreMaxHp = b.getInt("coreMaxHp", 10)
+        escapeGateActive = b.getBoolean("escapeGateActive", false)
     }
 
     fun resetGame() {
@@ -251,7 +273,8 @@ class GameState {
 
         visionClarity = 1.0f; shieldTimer = 0f; playerIframe = 0f
         overclockMeter = 0f; overclockTimer = 0f
-        cameraX = 0f; cameraY = 0f; firewallWorldX = cameraX - 1000f
+        cameraX = 0f
+        cameraY = 0f
         currentSector = 1; sectorTarget = 30; bossActive = false
         empFlashTimer = 0f; comboBreakTimer = 0f
 
@@ -267,6 +290,11 @@ class GameState {
         StoryProtocol.isGlitchActive = false
         StoryProtocol.areControlsInverted = false
         isRotationWarning = false
+
+        coreHp = 10
+        coreMaxHp = 10
+
+        escapeGateActive = false
 
         timeScale = 1.0f
         slowMoTimer = 0f
@@ -309,7 +337,7 @@ class GameState {
             overclockMeter = (overclockTimer / maxOcTime) * 100f
             if (overclockTimer <= 0f) EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 100)
         } else if (overclockMeter > 0f && overclockMeter < 100f) {
-            val drainSpeed = if(difficulty == 0) 5f else 10f
+            val drainSpeed = if (difficulty == 0) 5f else 10f
             overclockMeter = max(0f, overclockMeter - drainSpeed * dt)
         }
     }
@@ -317,7 +345,9 @@ class GameState {
     fun updatePulseRadius(dt: Float, maxRad: Float) {
         if (pulse) {
             pulseR += maxRad * 2.5f * dt
-            if (pulseR > maxRad) { pulse = false; pulseR = 0f }
+            if (pulseR > maxRad) {
+                pulse = false; pulseR = 0f
+            }
         }
     }
 
@@ -402,25 +432,5 @@ class GameState {
             innerRSq = 0f
             outerRSq = 0f
         }
-    }
-
-    fun getNextObstacleX(width: Float): Float {
-        var maxX = cameraX + width
-        for (j in 0 until obsCount) {
-            if (obsX[j] > maxX) maxX = obsX[j]
-        }
-        return maxX + (width * 0.6f)
-    }
-
-    fun randomizeObstacle(i: Int, height: Float) {
-        val diffMult = if (difficulty == 0) 0.8f else 1.0f
-        val gapBase = height * 0.4f
-        obsGapSize[i] = max(height * (if(difficulty==0) 0.35f else 0.25f), gapBase - (score * 0.002f * height * diffMult))
-        obsGapY[i] = (height * 0.1f) + Random.nextFloat() * (height * 0.8f - obsGapSize[i])
-
-        val baseRedChance = if (score < 15) 0.0 else (score - 15) * 0.02
-        val maxRedChance = if (difficulty == 0) 0.3 else 0.8
-        val redChance = min(maxRedChance, baseRedChance)
-        obsType[i] = if (Random.nextDouble() < redChance) 1 else 0
     }
 }

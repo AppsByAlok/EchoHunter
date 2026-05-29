@@ -94,4 +94,15 @@ object UpgradeSystem {
     fun getDataMagnetRadiusMultiplier(): Float = 1.0f + (getLevel(UpgradeType.DATA_MAGNET) * 0.5f)
 
     fun getRewardBonusPercent(): Float = getLevel(UpgradeType.COMPRESSION_ALGO) * 0.10f
+
+    fun clearAllData() {
+        // 1. Map values reset to 0
+        for (type in UpgradeType.entries) {
+            currentLevels[type] = 0
+        }
+        // 2. Clear SharedPrefs completely
+        if (::prefs.isInitialized) {
+            prefs.edit().clear().apply()
+        }
+    }
 }

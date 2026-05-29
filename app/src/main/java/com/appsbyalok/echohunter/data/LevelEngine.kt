@@ -1,110 +1,105 @@
 package com.appsbyalok.echohunter.data
 
 import kotlin.math.min
+import kotlin.math.pow
 
-// Defines the various types of levels/nodes in the game
-enum class LevelType {
-    NORMAL,        // Standard survival sweep
-    DEFENSE,       // Protect the core from incoming threats
-    BOSS,          // Encounter a powerful Warden boss
-    DEFENSE_BOSS,  // Protect the core while fighting a Warden
-    ADMIN_BONUS    // Easter egg level 100: Only loot, no enemies
+// Represents individual gameplay components that can overlap cleanly
+enum class LevelFeature {
+    CLASSIC,       // Baseline Default: Score/Data collect to win (%2 uses this layout)
+    MAZE,          // Structural Variation: Tight/Complex path layout (%4 secondary modifier)
+    DEFENSE,       // Prime 3: Protect the central core protocol
+    BOSS,          // Prime 5: Warden Arena entity encounter
+    ESCAPE,        // Prime 7: Secure target threshold then locate escape gate
+    ELIMINATION,   // Prime 11: Terminate high-value target security arrays
+    SPECIAL,       // Narrative anomaly elements
+    ADMIN_BONUS    // Level 100 Easter Egg override
 }
 
-// Blueprint for how a specific level should behave
 data class LevelConfig(
-    val type: LevelType,
+    val features: Set<LevelFeature>,
     val targetScore: Int,
     val speedMultiplier: Float,
     val hpMultiplier: Float,
     val spawnRateMultiplier: Float,
+    val aiIntelligence: Float,
     val clearRewardKB: Long
 )
 
-/**
- * LevelEngine: The mathematical brain of the game that generates levels,
- * difficulty scaling, and data rewards based on the current security ring.
- */
 object LevelEngine {
 
     /**
-     * Calculates and returns the full configuration for the requested level.
+     * Rearranged Frequencies using Prime distribution with optimized structural weights.
      */
-    fun getLevelConfig(level: Int): LevelConfig {
-        val type = determineLevelType(level)
+    private fun determineLevelFeatures(level: Int): Set<LevelFeature> {
+        if (level % 100 == 0) return setOf(LevelFeature.ADMIN_BONUS)
 
-        // --- Difficulty Scaling Math ---
-        // Speed scales slowly and caps at 3x to ensure the game remains playable
-        val speedMult = min(3.0f, 1.0f + (level * 0.015f))
+        val activeFeatures = mutableSetOf<LevelFeature>()
 
-        // HP scales linearly with no hard cap
-        val hpMult = 1.0f + (level * 0.05f)
+        // 1. Structural Modifiers & Core Prime Assignments
+        if (level % 3 == 0)  activeFeatures.add(LevelFeature.DEFENSE)
+        if (level % 5 == 0)  activeFeatures.add(LevelFeature.BOSS)
+        if (level % 7 == 0)  activeFeatures.add(LevelFeature.ESCAPE)
+        if (level % 11 == 0) activeFeatures.add(LevelFeature.ELIMINATION)
 
-        // Spawn rate (how fast enemies appear) caps at 5x
-        val spawnRateMult = min(5.0f, 1.0f + (level * 0.02f))
-
-        // --- Target Score ---
-        // Base target is 50, increases by 10 per level (e.g., Level 10 = 150 target)
-        val targetScore = 50 + (level * 10)
-
-        // --- Economy & Rewards ---
-        // Base reward scales based on the level number
-        val rewardMultiplier = 1.0 + (level * 0.1)
-        var clearReward = (100 * rewardMultiplier).toLong() // Starts at ~110 KB for Level 1
-
-        // Multiply rewards based on the mode's difficulty
-        when (type) {
-            LevelType.BOSS -> clearReward *= 3          // 3x loot for boss levels
-            LevelType.DEFENSE -> clearReward *= 2       // 2x loot for defense levels
-            LevelType.DEFENSE_BOSS -> clearReward *= 5  // 5x loot for the hardest combination
-            LevelType.ADMIN_BONUS -> {
-                // Admin mode overrides normal targets. It's a timed loot fest.
-                // Grants a massive fixed reward (50MB = 51200 KB)
-                return LevelConfig(type, 9999, 1f, 1f, 1f, 51200L)
-            }
-            LevelType.NORMAL -> { /* Normal multipliers apply */ }
+        // %2 is now clean Classic template. MAZE is restricted to rare %4 logic for variety
+        if (level % 4 == 0 && !activeFeatures.contains(LevelFeature.BOSS)) {
+            activeFeatures.add(LevelFeature.MAZE)
         }
 
-        // Apply the "Data Siphon Protocols" upgrade bonus to the final reward
+        // Conflict Resolution: Boss maps must remain spacious arenas
+        if (activeFeatures.contains(LevelFeature.BOSS)) {
+            activeFeatures.remove(LevelFeature.MAZE)
+        }
+
+        // Fallback safety layer
+        if (activeFeatures.isEmpty() || (activeFeatures.size == 1 && activeFeatures.contains(LevelFeature.MAZE))) {
+            activeFeatures.add(LevelFeature.CLASSIC)
+        }
+        return activeFeatures
+    }
+
+    fun getLevelConfig(level: Int): LevelConfig {
+        val features = determineLevelFeatures(level)
+
+        // Balanced and playable scaling thresholds
+        val speedMult = min(2.5f, 1.0f + (level * 0.012f))
+        val hpMult = 1.0f + (level * 0.04f)
+        val spawnRateMult = min(4.0f, 1.0f + (level * 0.018f))
+
+        // AI Intelligence tuning (Level 1 starts dumb, Level 100 is expert)
+        val aiIntel = min(1.0f, 0.2f + (level / 100f) * 0.8f)
+
+        // Cap score limits to maintain smooth game sessions
+        val targetScore = min(200, 15 + (level * 2))
+
+        // Compounding roguelite reward matrix
+        var clearReward = (60L * (1.08).pow(level.toDouble() / 2.0).toLong()).coerceAtLeast(100L)
+
+        var featureMult = 1.0
+        if (features.contains(LevelFeature.BOSS)) featureMult *= 2.5
+        if (features.contains(LevelFeature.DEFENSE)) featureMult *= 1.5
+        if (features.contains(LevelFeature.ESCAPE)) featureMult *= 1.3
+
+        clearReward = (clearReward * featureMult).toLong()
         clearReward += (clearReward * UpgradeSystem.getRewardBonusPercent()).toLong()
 
+        if (features.contains(LevelFeature.ADMIN_BONUS)) {
+            return LevelConfig(features, 0, 1.1f, 1f, 0.4f, 0f, 153600L)
+        }
+
         return LevelConfig(
-            type = type,
+            features = features,
             targetScore = targetScore,
             speedMultiplier = speedMult,
             hpMultiplier = hpMult,
             spawnRateMultiplier = spawnRateMult,
+            aiIntelligence = aiIntel,
             clearRewardKB = clearReward
         )
     }
 
-    /**
-     * Determines the mode of the level based on multiples' logic.
-     */
-    private fun determineLevelType(level: Int): LevelType {
-        return when {
-            level % 100 == 0 -> LevelType.ADMIN_BONUS
-            level % 15 == 0 -> LevelType.DEFENSE_BOSS // Multiple of both 3 and 5
-            level % 5 == 0 -> LevelType.BOSS
-            level % 3 == 0 -> LevelType.DEFENSE
-            else -> LevelType.NORMAL
-        }
-    }
-
-    /**
-     * Calculates the data dropped when a single enemy is destroyed.
-     */
     fun getKillRewardKB(level: Int, isBoss: Boolean): Long {
-        // Base calculation based on enemy type and current level
-        var reward = if (isBoss) {
-            500L + (level * 50L) // Boss drop scaling
-        } else {
-            5L + (level / 2L)    // Normal enemy drop scaling
-        }
-
-        // Apply the "Data Siphon Protocols" upgrade bonus
-        reward += (reward * UpgradeSystem.getRewardBonusPercent()).toLong()
-
-        return reward
+        val base = if (isBoss) 400L + (level * 15L) else 5L + (level / 6L)
+        return base + (base * UpgradeSystem.getRewardBonusPercent()).toLong()
     }
 }

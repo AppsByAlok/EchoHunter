@@ -54,6 +54,12 @@ class GameEngine(
         gs.updateTimers(dt, scale)
         val simDt = if (gs.slowMoTimer > 0f) dt * 0.15f else dt
 
+        // MOD: Infinite Overclock
+        if (gs.modInfiniteOvr) {
+            gs.overclockMeter = 100f
+            if (gs.isOverclocked) gs.overclockTimer = 5f // Hamesha active rakhega
+        }
+
         if (gs.state == 1 || gs.state == 8) {
             if (gs.isAutoPilotActive) playerAI.update(simDt, scale)
             arsenalSys.update(simDt, scale)
@@ -74,6 +80,17 @@ class GameEngine(
 
             if (gs.gridMap == null) {
                 gs.updateCameraAndMovement(simDt, targetW, scale)
+            }
+
+            // --- NAYA: ESCAPE GATE COLLISION ---
+            if (gs.state == 1 && gs.escapeGateActive) {
+                val cdx = gs.px - gs.coreX
+                val cdy = gs.py - gs.coreY
+                // Agar player portal ke collision radius me aa gaya
+                if (cdx * cdx + cdy * cdy < gs.coreRadius * gs.coreRadius) {
+                    gs.isLevelCleared = true
+                    gs.escapeGateActive = false // Reset for next loop
+                }
             }
 
             if (gs.state == 8) {
@@ -197,8 +214,20 @@ class GameEngine(
         gs.px = pCol * gs.tileSize + (gs.tileSize / 2f)
         gs.py = pRow * gs.tileSize + (gs.tileSize / 2f)
 
-        gs.coreX = dCol * gs.tileSize + (gs.tileSize / 2f)
-        gs.coreY = dRow * gs.tileSize + (gs.tileSize / 2f)
+        // --- NAYA: CORE SIRF TABHI SPAWN HOGA JAB ZAROORAT HO ---
+        val config = LevelEngine.getLevelConfig(gs.currentLevel)
+        if (config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE) ||
+            config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ESCAPE)) {
+            gs.coreX = dCol * gs.tileSize + (gs.tileSize / 2f)
+            gs.coreY = dRow * gs.tileSize + (gs.tileSize / 2f)
+            gs.coreRadius = scale * 0.08f // Normal visible core
+        } else {
+            // Core ko screen se bahar safe coordinate par rakh diya hai aur uski radius zero ki hai,
+            // taaki Classic aur Elimination modes me PlayerAI glitch na ho aur map boundary se bahar na bhage!
+            gs.coreX = -9999f
+            gs.coreY = -9999f
+            gs.coreRadius = 0f
+        }
 
         gs.cameraX = gs.px - targetW / 2f
         gs.cameraY = gs.py - targetH / 2f

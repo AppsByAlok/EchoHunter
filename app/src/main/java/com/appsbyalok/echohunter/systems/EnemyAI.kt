@@ -6,8 +6,10 @@ import kotlin.math.sqrt
 // EnemyAI: Modular class strictly for Pathfinding and Line-of-Sight math
 class EnemyAI {
     private var heatMap: Array<IntArray>? = null
-    private val qX = IntArray(25000) // Fast pre-allocated BFS queue
-    private val qY = IntArray(25000)
+   // private val MAX_QUEUE = 65000  // Private property name 'MAX_QUEUE' should not contain underscores in the middle or the end
+    companion object { private const val MAX_QUEUE = 65000 }
+    private val qX = IntArray(MAX_QUEUE)
+    private val qY = IntArray(MAX_QUEUE)
 
     fun updateHeatMap(gs: GameState) {
         val grid = gs.gridMap ?: return
@@ -22,15 +24,24 @@ class EnemyAI {
 
         val ts = gs.tileSize
 
-        // NAYA: Agar Decoy active hai, toh saare dushman Decoy ki taraf attract honge!
-        val targetX = if (gs.isDecoyActive) gs.decoyX else gs.px
-        val targetY = if (gs.isDecoyActive) gs.decoyY else gs.py
+        // --- NAYA: CHECK IF IT IS A DEFENSE LEVEL ---
+        val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
+        val isDefense = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE)
+
+        // Agar Defense mode hai, toh target Core hoga, warna Decoy/Player.
+        val targetX = if (isDefense) gs.coreX else if (gs.isDecoyActive) gs.decoyX else gs.px
+        val targetY = if (isDefense) gs.coreY else if (gs.isDecoyActive) gs.decoyY else gs.py
+
+        // Agar Camouflage active hai aur decoy nahi hai, lekin DEFENSE mode chal raha hai,
+        // toh dushman ruka nahi rahega, wo seedha Core par attack karne bhagega!
+        if (gs.isCamouflaged && !gs.isDecoyActive && !isDefense) return
+
+        val pxC = (targetX / ts).toInt().coerceIn(0, w - 1)
+        val pyC = (targetY / ts).toInt().coerceIn(0, h - 1)
 
         // Agar Camouflage (Invisibility) active hai aur decoy nahi hai, toh dushman tumhe nahi dhoondh payenge
         if (gs.isCamouflaged && !gs.isDecoyActive) return
 
-        val pxC = (targetX / ts).toInt().coerceIn(0, w - 1)
-        val pyC = (targetY / ts).toInt().coerceIn(0, h - 1)
 
         var head = 0; var tail = 0
         qX[tail] = pxC; qY[tail] = pyC; tail++
@@ -40,7 +51,7 @@ class EnemyAI {
         val dirsY = intArrayOf(-1, 1, 0, 0)
 
         // Breadth-First Search (Flow Field logic)
-        while (head < tail && tail < 25000) {
+        while (head < tail) {
             val cx = qX[head]; val cy = qY[head]; head++
             val dist = heatMap!![cx][cy]
 
@@ -49,11 +60,15 @@ class EnemyAI {
                 if (nx in 0 until w && ny in 0 until h && grid[nx][ny] != 1) {
                     if (heatMap!![nx][ny] > dist + 1) {
                         heatMap!![nx][ny] = dist + 1
-                        qX[tail] = nx; qY[tail] = ny; tail++
+
+                        if (tail < MAX_QUEUE) {
+                            qX[tail] = nx; qY[tail] = ny; tail++
+                        }
                     }
                 }
             }
         }
+
     }
 
     fun steerByHeatMap(ex: Float, ey: Float, evx: Float, evy: Float, speed: Float, gs: GameState): Pair<Float, Float> {
@@ -64,6 +79,17 @@ class EnemyAI {
 
         if (cx !in hm.indices || cy !in hm[0].indices) return Pair(evx, evy)
 
+        // --- NAYA: AI INTELLIGENCE CHECK ---
+        val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
+
+        // Agar AI galti karta hai (Intelligence check fail), toh wo random direction me move karega
+        if (kotlin.random.Random.nextFloat() > config.aiIntelligence) {
+            val rx = evx + (kotlin.random.Random.nextFloat() - 0.5f) * speed * 0.5f
+            val ry = evy + (kotlin.random.Random.nextFloat() - 0.5f) * speed * 0.5f
+            return Pair(rx, ry)
+        }
+
+        // Agar AI smart hai, toh perfect Heatmap use karega
         var bestVal = hm[cx][cy]
         var targetX = ex
         var targetY = ey

@@ -12,7 +12,10 @@ import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.systems.EffectSystem
 import com.appsbyalok.echohunter.systems.EnemySystem
 import com.appsbyalok.echohunter.utils.GameColors
+import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -78,25 +81,16 @@ class WorldRenderer(
                 if (drawX < -ts || drawX > targetW || drawY < -ts || drawY > targetH) continue
 
                 when (grid[x][y]) {
-                    1 -> { // 2D NEON WALL RENDERING (Matches perfect collision)
-                        // Inner fill
-                        p.color = 0x2200FFFF // Faint cyan background
+                    1 -> { // 2D NEON WALL RENDERING
+                        p.color = 0x2200FFFF
                         c.drawRect(drawX, drawY, drawX + ts, drawY + ts, p)
 
-                        // Glowing cyber border
                         p.style = Paint.Style.STROKE
                         p.strokeWidth = scale * 0.005f
                         p.color = GameColors.PULSE
                         val m = ts * 0.1f
                         c.drawRect(drawX + m, drawY + m, drawX + ts - m, drawY + ts - m, p)
-                        p.style = Paint.Style.FILL // Reset
-                    }
-                    2 -> { // DESTINATION / CORE
-                        p.color = GameColors.YELLOW
-                        p.setShadowLayer(20f, 0f, 0f, GameColors.YELLOW)
-                        val hover = sin(gs.timeSinceStart * 4f) * (scale * 0.01f)
-                        c.drawCircle(drawX + ts/2, drawY + ts/2 + hover, ts * 0.3f, p)
-                        p.clearShadowLayer()
+                        p.style = Paint.Style.FILL
                     }
                 }
             }
@@ -133,11 +127,16 @@ class WorldRenderer(
             c.drawCircle(screenShockX, screenShockY, gs.shockwaveR, p)
         }
 
-        if (gs.state == 8 || gs.state == 9) {
-            drawCore(c, scale, gs, targetW, screenPlayerX, screenPlayerY)
+        // --- FIX: DEFENSE mode, ESCAPE mode ya Story Core sabke liye call karenge ---
+        val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
+        val isDefense = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE)
+        val isEscape = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ESCAPE) // <-- NAYA CHECK
+
+        // Ab Escape level par bhi drawCore trigger hoga!
+        if (isDefense || isEscape || gs.state == 8 || gs.state == 9) {
+            drawCore(c, scale, gs, targetW, targetH, screenPlayerX, screenPlayerY)
         }
 
-        // --- NAYA: DRAW TRAPS (EMP MINE & DECOY) ---
         if (gs.empMineActive) {
             val screenMineX = gs.empMineX - gs.cameraX
             val screenMineY = gs.empMineY - gs.cameraY
@@ -169,7 +168,6 @@ class WorldRenderer(
                 val sx = gs.spikeX[i] - gs.cameraX
                 val sy = gs.spikeY[i] - gs.cameraY
 
-                // NAYA: Draw Different Weapons Correctly
                 when (gs.spikeType[i]) {
                     2 -> { // SNIPER BEAM
                         pGlow.color = GameColors.RED
@@ -198,12 +196,9 @@ class WorldRenderer(
             effectSys.drawLightning(c, screenPlayerX, screenPlayerY, scale)
         }
 
-        // --- DRAW PLAYER WITH CAMOUFLAGE OPACITY ---
         val shouldDrawPlayer = gs.playerIframe <= 0f || ((gs.timeSinceStart * 15).toInt() % 2 == 0)
         if (shouldDrawPlayer) {
             val playerRadius = scale * 0.015f
-
-            // Camouflage Opacity (Invisible mode)
             val alpha = if (gs.isCamouflaged) 0x33 else 0xFF
 
             p.style = Paint.Style.FILL
@@ -226,23 +221,28 @@ class WorldRenderer(
         effectSys.drawFloatingTexts(c, gs.cameraX, gs.cameraY, scale)
     }
 
-    private fun drawCore(c: Canvas, scale: Float, gs: GameState, targetW: Float, screenPlayerX: Float, screenPlayerY: Float) {
+    private fun drawCore(c: Canvas, scale: Float, gs: GameState, targetW: Float, targetH: Float, screenPlayerX: Float, screenPlayerY: Float) {
         val screenCoreX = gs.coreX - gs.cameraX
         val screenCoreY = gs.coreY - gs.cameraY
 
+        // --- 1. DETECT LEVEL FEATURES ---
+        val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
+        val isDefense = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE)
+        val isEscape = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ESCAPE)
+
+        // --- 2. SCREEN OFF-BOUNDS ARROW INDICATOR (STORY MODE GATEWAY ONLY) ---
         if (screenCoreX > targetW - scale * 0.1f && gs.state == 8) {
             val arrowX = targetW - scale * 0.06f
-            val arrowY = screenCoreY
-
             val alpha = ((sin(gs.timeSinceStart * 10f) + 1f) / 2f * 155 + 100).toInt()
+
             p.color = (alpha shl 24) or 0xFFFF00
             p.style = Paint.Style.FILL
 
             arrowPath.reset()
-            arrowPath.moveTo(arrowX - scale * 0.04f, arrowY - scale * 0.03f)
-            arrowPath.lineTo(arrowX + scale * 0.02f, arrowY)
-            arrowPath.lineTo(arrowX - scale * 0.04f, arrowY + scale * 0.03f)
-            arrowPath.lineTo(arrowX - scale * 0.02f, arrowY)
+            arrowPath.moveTo(arrowX - scale * 0.04f, screenCoreY - scale * 0.03f)
+            arrowPath.lineTo(arrowX + scale * 0.02f, screenCoreY)
+            arrowPath.lineTo(arrowX - scale * 0.04f, screenCoreY + scale * 0.03f)
+            arrowPath.lineTo(arrowX - scale * 0.02f, screenCoreY)
             arrowPath.close()
             c.drawPath(arrowPath, p)
 
@@ -255,21 +255,136 @@ class WorldRenderer(
                 lastCoreDist = dist
                 coreDistStr = context.getString(R.string.ui_core_signal, dist)
             }
-            c.drawText(coreDistStr, arrowX - scale * 0.05f, arrowY + scale * 0.01f, pText)
-        } else {
-            p.style = Paint.Style.STROKE
-            p.strokeWidth = scale * 0.015f
-            p.color = GameColors.YELLOW
-            c.drawCircle(screenCoreX, screenCoreY, gs.coreRadius + sin(gs.timeSinceStart * 5f) * scale * 0.03f, p)
+            c.drawText(coreDistStr, arrowX - scale * 0.05f, screenCoreY + scale * 0.01f, pText)
+            return // Arrow dikh raha hai toh baki base structure draw karne ki zaroorat nahi
+        }
 
-            p.style = Paint.Style.FILL
-            p.color = GameColors.CLARITY
-            c.drawCircle(screenCoreX, screenCoreY, gs.coreRadius * 0.4f, p)
+        // --- 3. PREMIUM CORE BASE RENDERING MATRIX ---
+        if (gs.coreRadius > 0f && gs.state != 9) {
 
+            when {
+                // A. DEFENSE MODE VISUALS (Purple Pulsing Shield & HP Bar)
+                isDefense && gs.state != 8 -> {
+                    // Pulsing Shield Effect around the Core
+                    p.style = Paint.Style.STROKE
+                    p.strokeWidth = scale * 0.015f
+                    p.color = GameColors.SHIELD
+                    c.drawCircle(screenCoreX, screenCoreY, gs.coreRadius + (sin(gs.timeSinceStart * 10f) * scale * 0.02f), p)
+
+                    // Core Base Body
+                    p.style = Paint.Style.STROKE
+                    p.strokeWidth = scale * 0.01f
+                    p.color = GameColors.YELLOW
+                    c.drawCircle(screenCoreX, screenCoreY, gs.coreRadius, p)
+
+                    p.style = Paint.Style.FILL
+                    p.color = GameColors.CLARITY
+                    c.drawCircle(screenCoreX, screenCoreY, gs.coreRadius * 0.4f, p)
+
+                    // HEALTH BAR LAYER (Purely for Active Defense Levels)
+                    p.style = Paint.Style.FILL
+                    val hpBarW = scale * 0.18f
+                    val hpBarH = scale * 0.02f
+                    val hpY = screenCoreY - gs.coreRadius - scale * 0.05f
+
+                    // HP Bar BG
+                    p.color = 0xFF440000.toInt()
+                    c.drawRect(screenCoreX - hpBarW / 2, hpY, screenCoreX + hpBarW / 2, hpY + hpBarH, p)
+
+                    // HP Bar Color shifting
+                    p.color = when {
+                        gs.coreHp > gs.coreMaxHp * 0.5f -> GameColors.HP
+                        gs.coreHp > gs.coreMaxHp * 0.25f -> GameColors.YELLOW
+                        else -> GameColors.RED
+                    }
+                    val currentHpW = hpBarW * (max(0f, gs.coreHp.toFloat()) / gs.coreMaxHp)
+                    c.drawRect(screenCoreX - hpBarW / 2, hpY, screenCoreX - hpBarW / 2 + currentHpW, hpY + hpBarH, p)
+
+                    // Cyber Border Frame
+                    p.style = Paint.Style.STROKE
+                    p.strokeWidth = scale * 0.004f
+                    p.color = GameColors.TEXT
+                    c.drawRect(screenCoreX - hpBarW / 2, hpY, screenCoreX + hpBarW / 2, hpY + hpBarH, p)
+                }
+
+                // B. ESCAPE MODE VISUALS (Exit Portal Portal Logic)
+                isEscape && gs.state != 8 -> {
+                    if (gs.escapeGateActive) {
+                        // Active Portal (Green Neon Pulse)
+                        p.style = Paint.Style.STROKE
+                        p.strokeWidth = scale * 0.015f
+                        p.color = GameColors.HP
+                        c.drawCircle(screenCoreX, screenCoreY, gs.coreRadius + (sin(gs.timeSinceStart * 10f) * scale * 0.02f), p)
+
+                        p.style = Paint.Style.FILL
+                        p.color = GameColors.PULSE
+                        c.drawCircle(screenCoreX, screenCoreY, gs.coreRadius * 0.5f, p)
+                    } else {
+                        // Locked Portal (Dim Red / Inactive Structure)
+                        p.style = Paint.Style.STROKE
+                        p.strokeWidth = scale * 0.01f
+                        p.color = 0xFF550000.toInt()
+                        c.drawCircle(screenCoreX, screenCoreY, gs.coreRadius, p)
+
+                        p.style = Paint.Style.FILL
+                        p.color = 0xFF330000.toInt()
+                        c.drawCircle(screenCoreX, screenCoreY, gs.coreRadius * 0.3f, p)
+                    }
+                }
+
+                // C. STANDARD MODE CORE / STORY MODE MERGE CORE (Default Layout)
+                else -> {
+                    p.style = Paint.Style.STROKE
+                    p.strokeWidth = scale * 0.015f
+                    p.color = GameColors.YELLOW
+                    c.drawCircle(screenCoreX, screenCoreY, gs.coreRadius + sin(gs.timeSinceStart * 5f) * scale * 0.03f, p)
+
+                    p.style = Paint.Style.FILL
+                    p.color = GameColors.CLARITY
+                    c.drawCircle(screenCoreX, screenCoreY, gs.coreRadius * 0.4f, p)
+                }
+            }
+
+            // --- 4. TARGET DIRECTIONAL ARROW (Global UI Tracker Helper) ---
+            if (gs.state == 8 || (isEscape && gs.escapeGateActive)) {
+                val dx = gs.coreX - gs.px
+                val dy = gs.coreY - gs.py
+                val distSq = dx * dx + dy * dy
+                val hideRadius = min(targetW, targetH) * 0.4f
+
+                if (distSq > hideRadius * hideRadius) {
+                    val angle = kotlin.math.atan2(dy, dx)
+                    val arrowDist = min(targetW, targetH) * 0.35f
+
+                    val arrowX = targetW / 2f + cos(angle) * arrowDist
+                    val arrowY = targetH / 2f + sin(angle) * arrowDist
+
+                    val alpha = (abs(sin(gs.timeSinceStart * 5f)) * 155 + 100).toInt()
+                    val arrowColor = if (gs.state == 8) GameColors.YELLOW else GameColors.HP
+
+                    p.style = Paint.Style.FILL
+                    p.color = (alpha shl 24) or (arrowColor and 0xFFFFFF)
+
+                    arrowPath.reset()
+                    arrowPath.moveTo(arrowX + cos(angle) * scale * 0.04f, arrowY + sin(angle) * scale * 0.04f)
+                    arrowPath.lineTo(arrowX + cos(angle + 2.5f) * scale * 0.03f, arrowY + sin(angle + 2.5f) * scale * 0.03f)
+                    arrowPath.lineTo(arrowX + cos(angle - 2.5f) * scale * 0.03f, arrowY + sin(angle - 2.5f) * scale * 0.03f)
+                    arrowPath.close()
+                    c.drawPath(arrowPath, p)
+
+                    pText.color = (alpha shl 24) or (arrowColor and 0xFFFFFF)
+                    pText.textSize = scale * 0.035f
+                    pText.textAlign = Paint.Align.CENTER
+                    val dist = (sqrt(distSq) / scale * 10).toInt()
+                    c.drawText("$dist M", arrowX, arrowY - scale * 0.04f, pText)
+                }
+            }
+
+            // --- 5. DOTTED DATA EXTRACTOR TETHER (Story Mode Merges) ---
             if (gs.state == 8) {
                 val dx = screenCoreX - screenPlayerX
                 val dy = screenCoreY - screenPlayerY
-                val dist = sqrt(dx*dx + dy*dy)
+                val dist = sqrt(dx * dx + dy * dy)
 
                 if (dist > scale * 0.2f) {
                     pDash.strokeWidth = scale * 0.005f

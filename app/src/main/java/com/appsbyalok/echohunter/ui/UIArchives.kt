@@ -6,12 +6,12 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.media.ToneGenerator
 import android.view.MotionEvent
-import com.appsbyalok.echohunter.utils.EchoAudioManager
 import com.appsbyalok.echohunter.data.LevelEngine
-import com.appsbyalok.echohunter.data.LevelType
+import com.appsbyalok.echohunter.data.LevelFeature
 import com.appsbyalok.echohunter.data.SaveManager
-import com.appsbyalok.echohunter.utils.GameColors
 import com.appsbyalok.echohunter.engine.GameState
+import com.appsbyalok.echohunter.utils.EchoAudioManager
+import com.appsbyalok.echohunter.utils.GameColors
 import kotlin.math.abs
 import kotlin.math.max
 
@@ -36,6 +36,11 @@ class UIArchives {
     private val autoNextBoxRect = RectF()
     private val autoPilotBoxRect = RectF()
 
+    // Garbage Collector stutter variables optimized out using object pools
+    private val reusableRect = RectF()
+    private val badgeRect = RectF()
+    private val featureEnumValues = LevelFeature.entries.toTypedArray()
+
     private fun generateNodeList() {
         cachedList.clear()
         val maxLvl = SaveManager.maxCampaignLevel
@@ -47,8 +52,8 @@ class UIArchives {
 
         var importantCount = 0
         for (i in minRecent - 1 downTo 1) {
-            val type = LevelEngine.getLevelConfig(i).type
-            if (type == LevelType.BOSS || type == LevelType.DEFENSE || type == LevelType.DEFENSE_BOSS) {
+            val config = LevelEngine.getLevelConfig(i)
+            if (config.features.contains(LevelFeature.BOSS) || config.features.contains(LevelFeature.DEFENSE)) {
                 cachedList.add(i)
                 importantCount++
                 if (importantCount >= 25) break
@@ -56,38 +61,61 @@ class UIArchives {
         }
     }
 
+    // High-performance Manual ARGB Blend Logic via Bitwise Masks
+    private fun mixColorsManual(colorA: Int, colorB: Int, ratio: Float): Int {
+        val inverseRatio = 1f - ratio
+
+        val aA = (colorA shr 24 and 0xFF)
+        val aR = (colorA shr 16 and 0xFF)
+        val aG = (colorA shr 8 and 0xFF)
+        val aaVal = colorA and 0xFF
+
+        val bA = (colorB shr 24 and 0xFF)
+        val bR = (colorB shr 16 and 0xFF)
+        val bG = (colorB shr 8 and 0xFF)
+        val bbVal = colorB and 0xFF
+
+        val outA = ((aA * inverseRatio) + (bA * ratio)).toInt()
+        val outR = ((aR * inverseRatio) + (bR * ratio)).toInt()
+        val outG = ((aG * inverseRatio) + (bG * ratio)).toInt()
+        val outB = ((aaVal * inverseRatio) + (bbVal * ratio)).toInt()
+
+        return (outA shl 24) or (outR shl 16) or (outG shl 8) or outB
+    }
+
     fun draw(c: Canvas, width: Float, height: Float, gs: GameState, scale: Float) {
-        c.drawColor(0xEE0A0A10.toInt())
+        c.drawColor(0xEE050508.toInt()) // Dark cyber hacking base background
 
         if (SaveManager.maxCampaignLevel != lastMaxLevel || cachedList.isEmpty()) generateNodeList()
 
-        pText.textSize = scale * 0.08f
-        pText.color = GameColors.COOLANT
-        c.drawText("SANDBOX DIRECTORY", width / 2f, scale * 0.12f, pText)
+        pText.textSize = scale * 0.07f
+        pText.color = GameColors.PULSE
+        c.drawText("SYSTEM ARCHIVES", width / 2f, scale * 0.11f, pText)
 
-        // Auto-Next Box (Left)
-        autoNextBoxRect.set(width / 2f - scale * 0.4f, scale * 0.18f, width / 2f - scale * 0.02f, scale * 0.28f)
-        p.style = Paint.Style.STROKE; p.color = if (SaveManager.isAutoNextLevelEnabled) GameColors.HP else GameColors.RED; p.strokeWidth = scale * 0.005f
-        c.drawRoundRect(autoNextBoxRect, scale * 0.02f, scale * 0.02f, p)
-        p.style = Paint.Style.FILL; p.color = 0x22000000
-        c.drawRoundRect(autoNextBoxRect, scale * 0.02f, scale * 0.02f, p)
-        pText.textSize = scale * 0.035f; pText.color = if (SaveManager.isAutoNextLevelEnabled) GameColors.HP else GameColors.RED
-        c.drawText(if (SaveManager.isAutoNextLevelEnabled) "AUTO-NEXT: ON" else "AUTO-NEXT: OFF", autoNextBoxRect.centerX(), autoNextBoxRect.centerY() + scale * 0.012f, pText)
+        val boxWidth = if (width > height) scale * 0.35f else scale * 0.38f
 
-        // Auto-Pilot Box (Right)
-        autoPilotBoxRect.set(width / 2f + scale * 0.02f, scale * 0.18f, width / 2f + scale * 0.4f, scale * 0.28f)
-        p.style = Paint.Style.STROKE; p.color = if (gs.isAutoPilotActive) GameColors.HP else GameColors.RED; p.strokeWidth = scale * 0.005f
-        c.drawRoundRect(autoPilotBoxRect, scale * 0.02f, scale * 0.02f, p)
-        p.style = Paint.Style.FILL; p.color = 0x22000000
-        c.drawRoundRect(autoPilotBoxRect, scale * 0.02f, scale * 0.02f, p)
-        pText.textSize = scale * 0.035f; pText.color = if (gs.isAutoPilotActive) GameColors.HP else GameColors.RED
-        c.drawText(if (gs.isAutoPilotActive) "AUTOPILOT: ON" else "AUTOPILOT: OFF", autoPilotBoxRect.centerX(), autoPilotBoxRect.centerY() + scale * 0.012f, pText)
+        // Auto-Next Checkbox Button Layout
+        autoNextBoxRect.set(width / 2f - boxWidth, scale * 0.17f, width / 2f - scale * 0.015f, scale * 0.26f)
+        p.style = Paint.Style.STROKE; p.color = if (SaveManager.isAutoNextLevelEnabled) GameColors.HP else GameColors.RED; p.strokeWidth = scale * 0.004f
+        c.drawRoundRect(autoNextBoxRect, scale * 0.01f, scale * 0.01f, p)
+        p.style = Paint.Style.FILL; p.color = 0x1F000000
+        c.drawRoundRect(autoNextBoxRect, scale * 0.01f, scale * 0.01f, p)
+        pText.textSize = scale * 0.032f; pText.color = if (SaveManager.isAutoNextLevelEnabled) GameColors.HP else GameColors.RED
+        c.drawText(if (SaveManager.isAutoNextLevelEnabled) "AUTO-NEXT: ON" else "AUTO-NEXT: OFF", autoNextBoxRect.centerX(), autoNextBoxRect.centerY() + scale * 0.011f, pText)
 
+        // Autopilot Checkbox Button Layout
+        autoPilotBoxRect.set(width / 2f + scale * 0.015f, scale * 0.17f, width / 2f + boxWidth, scale * 0.26f)
+        p.style = Paint.Style.STROKE; p.color = if (gs.isAutoPilotActive) GameColors.HP else GameColors.RED; p.strokeWidth = scale * 0.004f
+        c.drawRoundRect(autoPilotBoxRect, scale * 0.01f, scale * 0.01f, p)
+        p.style = Paint.Style.FILL; p.color = 0x1F000000
+        c.drawRoundRect(autoPilotBoxRect, scale * 0.01f, scale * 0.01f, p)
+        pText.textSize = scale * 0.032f; pText.color = if (gs.isAutoPilotActive) GameColors.HP else GameColors.RED
+        c.drawText(if (gs.isAutoPilotActive) "AUTOPILOT: ON" else "AUTOPILOT: OFF", autoPilotBoxRect.centerX(), autoPilotBoxRect.centerY() + scale * 0.011f, pText)
 
-        // Small Grid Setup
-        val startY = scale * 0.35f + scrollY
+        // Dynamic Row Generation Layout Config
+        val startY = scale * 0.32f + scrollY
         val boxSize = scale * 0.16f
-        val gap = scale * 0.04f
+        val gap = scale * 0.035f
         val columns = if (width > height) 6 else 4
         val totalW = columns * boxSize + (columns - 1) * gap
         val startX = (width - totalW) / 2f
@@ -97,56 +125,106 @@ class UIArchives {
         var col = 0
         var row = 0
 
+        val topClipLimit = scale * 0.28f
+        val bottomClipLimit = height - scale * 0.13f
+
         for (lvl in cachedList) {
             val cx = startX + col * (boxSize + gap)
             val cy = startY + row * (boxSize + gap)
-            val btnRect = RectF(cx, cy, cx + boxSize, cy + boxSize)
-            levelButtons[lvl] = btnRect
 
-            val config = LevelEngine.getLevelConfig(lvl)
-            val isNextNode = (lvl == SaveManager.maxCampaignLevel)
+            reusableRect.set(cx, cy, cx + boxSize, cy + boxSize)
 
-            p.style = Paint.Style.FILL
-            p.color = if (isNextNode) 0xFF113311.toInt() else 0xFF111115.toInt()
-            c.drawRoundRect(btnRect, scale * 0.02f, scale * 0.02f, p)
+            if (reusableRect.bottom >= topClipLimit && reusableRect.top <= bottomClipLimit) {
+                levelButtons[lvl] = RectF(reusableRect)
 
-            // Draw Icon based on Type
-            p.style = Paint.Style.STROKE
-            p.strokeWidth = scale * 0.005f
-            when (config.type) {
-                LevelType.DEFENSE -> {
-                    p.color = GameColors.SHIELD
-                    c.drawCircle(btnRect.centerX(), btnRect.centerY(), boxSize * 0.3f, p)
+                val config = LevelEngine.getLevelConfig(lvl)
+                val isNextNode = (lvl == SaveManager.maxCampaignLevel)
+
+                // --- 1. DYNAMIC ACCENT TONE BLENDING ENGINE ---
+                var mixedColor = GameColors.GRID
+                var colorCount = 0
+
+                for (f in featureEnumValues) {
+                    if (config.features.contains(f)) {
+                        val featureColor = when (f) {
+                            LevelFeature.CLASSIC -> GameColors.PULSE
+                            LevelFeature.MAZE -> GameColors.TEXT
+                            LevelFeature.DEFENSE -> GameColors.SHIELD
+                            LevelFeature.BOSS -> GameColors.BOSS
+                            LevelFeature.ESCAPE -> GameColors.YELLOW
+                            LevelFeature.ELIMINATION -> GameColors.RED
+                            LevelFeature.SPECIAL -> GameColors.OVERCLOCK
+                            LevelFeature.ADMIN_BONUS -> GameColors.HP
+                        }
+                        mixedColor = if (colorCount == 0) featureColor else mixColorsManual(mixedColor, featureColor, 0.5f)
+                        colorCount++
+                    }
                 }
-                LevelType.BOSS, LevelType.DEFENSE_BOSS -> {
-                    p.color = GameColors.RED
-                    c.drawRect(btnRect.centerX() - boxSize*0.25f, btnRect.centerY() - boxSize*0.25f, btnRect.centerX() + boxSize*0.25f, btnRect.centerY() + boxSize*0.25f, p)
+
+                val baseBgTone = if (isNextNode) 0xFF052510.toInt() else GameColors.BG
+                val finalBgColor = mixColorsManual(baseBgTone, mixedColor, 0.25f)
+
+                // Background Matrix Render
+                p.style = Paint.Style.FILL; p.color = finalBgColor
+                c.drawRoundRect(reusableRect, scale * 0.015f, scale * 0.015f, p)
+
+                // Circuit Board Framing Borders
+                p.style = Paint.Style.STROKE; p.strokeWidth = scale * 0.003f
+                p.color = if (isNextNode) GameColors.HP else mixColorsManual(0x22FFFFFF, mixedColor, 0.4f)
+                c.drawRoundRect(reusableRect, scale * 0.015f, scale * 0.015f, p)
+
+                // --- 2. MICRO-CHIP BADGES ROW LAYOUT ---
+                if (colorCount > 0) {
+                    val badgeW = boxSize * 0.12f
+                    val badgeH = boxSize * 0.05f
+                    val badgeGap = boxSize * 0.04f
+                    val totalBadgesW = (colorCount * badgeW) + ((colorCount - 1) * badgeGap)
+
+                    var currentBadgeX = reusableRect.centerX() - (totalBadgesW / 2f)
+                    val badgeY = reusableRect.bottom - boxSize * 0.16f
+
+                    p.style = Paint.Style.FILL
+                    for (f in featureEnumValues) {
+                        if (config.features.contains(f)) {
+                            p.color = when (f) {
+                                LevelFeature.CLASSIC -> GameColors.PULSE
+                                LevelFeature.MAZE -> GameColors.TEXT
+                                LevelFeature.DEFENSE -> GameColors.SHIELD
+                                LevelFeature.BOSS -> GameColors.BOSS
+                                LevelFeature.ESCAPE -> GameColors.YELLOW
+                                LevelFeature.ELIMINATION -> GameColors.RED
+                                LevelFeature.SPECIAL -> GameColors.OVERCLOCK
+                                LevelFeature.ADMIN_BONUS -> GameColors.HP
+                            }
+                            badgeRect.set(currentBadgeX, badgeY, currentBadgeX + badgeW, badgeY + badgeH)
+                            c.drawRoundRect(badgeRect, scale * 0.002f, scale * 0.002f, p)
+                            currentBadgeX += badgeW + badgeGap
+                        }
+                    }
                 }
-                else -> {
-                    p.color = GameColors.PULSE
-                }
+
+                // --- 3. HARDWARE SIGNAL TEXT LAYER ---
+                pText.color = GameColors.CLARITY
+                pText.textSize = scale * 0.04f
+                c.drawText("$lvl", reusableRect.centerX(), reusableRect.centerY() - boxSize * 0.05f, pText)
             }
-            c.drawRoundRect(btnRect, scale * 0.02f, scale * 0.02f, p)
-
-            pText.color = GameColors.CLARITY
-            pText.textSize = scale * 0.04f
-            c.drawText("$lvl", btnRect.centerX(), btnRect.centerY() + scale * 0.015f, pText)
 
             col++
             if (col >= columns) { col = 0; row++ }
         }
 
         val totalHeight = (row + 1) * (boxSize + gap)
-        maxScroll = max(0f, totalHeight - height + scale * 0.4f)
+        maxScroll = max(0f, totalHeight - height + scale * 0.45f)
 
-        closeBtnRect.set(width / 2f - scale * 0.2f, height - scale * 0.12f, width / 2f + scale * 0.2f, height - scale * 0.03f)
-        p.style = Paint.Style.FILL; p.color = 0xFF330000.toInt()
-        c.drawRoundRect(closeBtnRect, scale * 0.02f, scale * 0.02f, p)
-        p.style = Paint.Style.STROKE; p.color = GameColors.RED
-        c.drawRoundRect(closeBtnRect, scale * 0.02f, scale * 0.02f, p)
+        // Micro-console Terminate Core System Button
+        closeBtnRect.set(width / 2f - scale * 0.16f, height - scale * 0.10f, width / 2f + scale * 0.16f, height - scale * 0.03f)
+        p.style = Paint.Style.FILL; p.color = 0xFF220505.toInt()
+        c.drawRoundRect(closeBtnRect, scale * 0.01f, scale * 0.01f, p)
+        p.style = Paint.Style.STROKE; p.color = GameColors.RED; p.strokeWidth = scale * 0.004f
+        c.drawRoundRect(closeBtnRect, scale * 0.01f, scale * 0.01f, p)
 
-        pText.color = GameColors.RED; pText.textSize = scale * 0.04f
-        c.drawText("RETURN", closeBtnRect.centerX(), closeBtnRect.centerY() + scale * 0.015f, pText)
+        pText.color = GameColors.RED; pText.textSize = scale * 0.035f
+        c.drawText("DISCONNECT", closeBtnRect.centerX(), closeBtnRect.centerY() + scale * 0.012f, pText)
     }
 
     fun onTouch(x: Float, y: Float, action: Int, scale: Float, gs: GameState, onSelect: (Int) -> Unit, onBack: () -> Unit): Boolean {
@@ -166,7 +244,6 @@ class UIArchives {
                         EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
                         onBack(); return true
                     }
-                    // --- FIXED: USE RECT CONTAINS FOR 100% ACCURACY ---
                     if (autoNextBoxRect.contains(x, y)) {
                         SaveManager.setAutoNextLevel(!SaveManager.isAutoNextLevelEnabled)
                         EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 50)
@@ -175,7 +252,7 @@ class UIArchives {
                     else if (autoPilotBoxRect.contains(x, y)) {
                         gs.isAutoPilotActive = !gs.isAutoPilotActive
                         if (gs.isAutoPilotActive) {
-                            gs.autoPilotTimer = 600f // 10 minutes limit
+                            gs.autoPilotTimer = 600f
                             EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 150)
                             gs.showGlobalMessage("AUTOPILOT ENGAGED.\nSELECT A LEVEL TO START.", 3f)
                         } else {
@@ -194,6 +271,7 @@ class UIArchives {
                 }
             }
         }
-        return true
+        val returnValue = true
+        return returnValue
     }
 }

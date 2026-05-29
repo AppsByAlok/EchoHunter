@@ -15,8 +15,8 @@ android {
         minSdk = 21
         //noinspection OldTargetApi
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.3.0"
+        versionCode = 7
+        versionName = "0.4.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -48,9 +48,9 @@ android {
 
 dependencies {
     // Local Unit Tests (Fast, runs on your PC's JVM - For testing Maze Math)
-    testImplementation("junit:junit:4.13.2")
+    testImplementation(libs.androidx.junit.ktx)
 
     // Android Instrumented Tests (Runs on Emulator / Physical Device)
-    androidTestImplementation("androidx.test.ext:junit:1.3.0")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
 }

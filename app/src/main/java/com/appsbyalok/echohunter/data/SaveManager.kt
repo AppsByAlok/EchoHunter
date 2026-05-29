@@ -152,4 +152,23 @@ object SaveManager {
         maxCampaignLevel = max(1, level)
         prefs.edit().putInt("maxCampaignLevel", maxCampaignLevel).apply()
     }
+
+    fun clearAllData() {
+        dataCoinsKB = 0L
+        totalData = 0
+        maxCampaignLevel = 1
+        isAutoNextLevelEnabled = false
+        currentStoryStreak = 0
+        unlockedStoryStreak = 0
+        currentHardStreak = 0
+        unlockedHardStreak = 0
+        highScore = 0
+        previousScore = 0
+
+        // 1. SharedPreferences of SaveManager clear karein
+        prefs.edit().clear().apply()
+
+        // 2. Upgrade System ko link karke uski storage ko bhi wipe karein
+        UpgradeSystem.clearAllData()
+    }
 }

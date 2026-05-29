@@ -5,10 +5,11 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import com.appsbyalok.echohunter.R
 import com.appsbyalok.echohunter.data.LevelEngine
-import com.appsbyalok.echohunter.data.LevelType
+import com.appsbyalok.echohunter.data.LevelFeature
 import com.appsbyalok.echohunter.data.StoryProtocol
-import com.appsbyalok.echohunter.utils.GameColors
 import com.appsbyalok.echohunter.engine.GameState
+import com.appsbyalok.echohunter.utils.EchoAudioManager
+import com.appsbyalok.echohunter.utils.GameColors
 import kotlin.math.max
 import kotlin.random.Random
 
@@ -77,13 +78,34 @@ class CampaignMode : GameModeStrategy {
         // Stop spawning if level is already cleared
         if (gs.isLevelCleared) return
 
+//        // Level Complete Condition
+//        if (gs.score >= config.targetScore && !gs.bossActive) {
+//            if (config.features.contains(LevelFeature.BOSS)) {
+//                // Check if boss hasn't spawned yet to prevent infinite triggers
+//                if (gs.bossHp <= 0 && !gs.bossActive && gs.timeSinceStart > 2f) {
+//                    val bossType = Random.nextInt(0, 5)
+//                    onTriggerBoss(bossType, scale)
+//                }
+//            } else {
+//                // Normal Level Cleared - Set the flag for GameEngine to catch!
+//                gs.isLevelCleared = true
+//            }
+//        }
+
         // Level Complete Condition
         if (gs.score >= config.targetScore && !gs.bossActive) {
-            if (config.type == LevelType.BOSS || config.type == LevelType.DEFENSE_BOSS) {
+            if (config.features.contains(LevelFeature.BOSS)) {
                 // Check if boss hasn't spawned yet to prevent infinite triggers
                 if (gs.bossHp <= 0 && !gs.bossActive && gs.timeSinceStart > 2f) {
                     val bossType = Random.nextInt(0, 5)
                     onTriggerBoss(bossType, scale)
+                }
+            } else if (config.features.contains(LevelFeature.ESCAPE)) {
+                // --- NAYA: ESCAPE LOGIC ---
+                if (!gs.escapeGateActive) {
+                    gs.escapeGateActive = true
+                    StoryProtocol.showIngameMessage("TARGET REACHED! LOCATE THE EXIT PORTAL!", 4f)
+                    EchoAudioManager.playSound(android.media.ToneGenerator.TONE_CDMA_ABBR_ALERT, 300)
                 }
             } else {
                 // Normal Level Cleared - Set the flag for GameEngine to catch!

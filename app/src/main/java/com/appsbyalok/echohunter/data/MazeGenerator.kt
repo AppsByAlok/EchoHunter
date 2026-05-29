@@ -4,6 +4,10 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.random.Random
 
+/**
+ * MazeGenerator: Procedurally constructs game maps of various layouts (Arena, Quarantine,
+ * Pillars, Server Farm, Labyrinth) depending on the active LevelFeatures and level index.
+ */
 object MazeGenerator {
     const val PATH = 0
     const val WALL = 1
@@ -12,24 +16,28 @@ object MazeGenerator {
     const val PLAYER_SPAWN = 4
 
     enum class MazeType {
-        ARENA, QUARANTINE, PILLARS, SERVER_FARM, LABYRINTH
+        ARENA,          // Open space for massive boss fights or admin loops
+        QUARANTINE,     // Compact fortified room with corner obstacles for Core Defense
+        PILLARS,        // Regular array of pillar blockades for cover
+        SERVER_FARM,    // Interconnected terminal rooms and corridors
+        LABYRINTH       // Complex, tight maze paths for escape objectives
     }
 
     fun generateLevelMap(level: Int, gameMode: Int, difficulty: Int, seed: Int, storyAct: Int = 0): Array<IntArray> {
         val config = LevelEngine.getLevelConfig(level)
         val rand = Random(seed)
 
-        // Sync with LevelEngine's blueprint!
+        // Map LevelFeatures dynamically to spatial layouts
         val type = when {
-            config.type == LevelType.ADMIN_BONUS -> MazeType.ARENA
-            config.type == LevelType.DEFENSE || config.type == LevelType.DEFENSE_BOSS -> MazeType.QUARANTINE
-            config.type == LevelType.BOSS -> MazeType.ARENA
-            level % 3 == 0 -> MazeType.PILLARS
-            level % 2 == 0 -> MazeType.LABYRINTH
-            else -> MazeType.SERVER_FARM
+            config.features.contains(LevelFeature.ADMIN_BONUS) -> MazeType.ARENA
+            config.features.contains(LevelFeature.BOSS) -> MazeType.ARENA       // Bosses need wide-open kiting space
+            config.features.contains(LevelFeature.DEFENSE) -> MazeType.QUARANTINE // Defense needs a specialized fortified shell
+            config.features.contains(LevelFeature.ESCAPE) -> MazeType.LABYRINTH   // Escape needs dense navigation
+            config.features.contains(LevelFeature.MAZE) -> MazeType.LABYRINTH     // Maze is a pure labyrinth
+            level % 3 == 0 -> MazeType.PILLARS                                    // Fallback structural variety
+            else -> MazeType.SERVER_FARM                                          // Default layout for classic sweeps
         }
 
-        // DYNAMIC SIZE CAPPER
         val maxGrid = if (difficulty == 1) 251 else 151
         var w = min(maxGrid, 21 + (level * 2))
         var h = min(maxGrid, 21 + (level * 2))
@@ -41,10 +49,11 @@ object MazeGenerator {
             w = min(maxGrid, actSize)
             h = min(maxGrid, actSize)
         } else if (type == MazeType.QUARANTINE) {
-            w = min(41, 21 + level) // Keep defense maps intense and compact
+            w = min(41, 21 + level) // Keep defense maps intense, defense zones should be compact
             h = min(41, 21 + level)
         }
 
+        // Ensure dimension scales are odd for perfect alignment calculations
         if (w % 2 == 0) w++
         if (h % 2 == 0) h++
 
@@ -56,14 +65,15 @@ object MazeGenerator {
         when (type) {
             MazeType.QUARANTINE -> {
                 generateQuarantine(grid, w, h)
-                // CORE DEFENSE: Core in exact middle, Player just below it!
+                // CORE DEFENSE: Core sits exactly in the middle; Player spawns safely below it
                 destX = w / 2; destY = h / 2
                 startX = destX; startY = destY + 2
             }
             MazeType.ARENA -> {
                 generateArena(grid, w, h)
+                // BOSS/ARENA layout: Player starts at bottom, objective/boss spawns in center
                 destX = w / 2; destY = h / 2
-                startX = destX; startY = h - 3 // Player at bottom, boss at top
+                startX = destX; startY = h - 3
             }
             MazeType.PILLARS -> {
                 generatePillars(grid, w, h)
@@ -86,9 +96,11 @@ object MazeGenerator {
 
         enforceOuterWalls(grid, w, h)
 
+        // Clear player spawn and register code
         if (grid[startX][startY] == WALL) grid[startX][startY] = PATH
         grid[startX][startY] = PLAYER_SPAWN
 
+        // Place destination key-node safely on open paths
         if (grid[destX][destY] == WALL) {
             outer@ for(x in w-2 downTo 1) {
                 for(y in h-2 downTo 1) {
@@ -101,6 +113,7 @@ object MazeGenerator {
         }
         grid[destX][destY] = DEST_NODE
 
+        // Populate guards away from initial player position
         placeGuards(grid, w, h, rand, level, startX, startY)
 
         return grid
@@ -118,6 +131,7 @@ object MazeGenerator {
         generateArena(grid, w, h)
         val cw = w / 4
         val ch = h / 4
+        // Seal off outer corners with protective bulkheads
         for(x in 1..cw) for(y in 1..ch) grid[x][y] = WALL
         for(x in w-1-cw until w-1) for(y in 1..ch) grid[x][y] = WALL
         for(x in 1..cw) for(y in h-1-ch until h-1) grid[x][y] = WALL
@@ -126,6 +140,7 @@ object MazeGenerator {
 
     private fun generatePillars(grid: Array<IntArray>, w: Int, h: Int) {
         generateArena(grid, w, h)
+        // Draw physical grid obstructions for cover-shooting mechanics
         for (x in 3 until w - 3 step 4) {
             for (y in 3 until h - 3 step 4) {
                 grid[x][y] = WALL
@@ -205,6 +220,7 @@ object MazeGenerator {
         }
         carve(2, 2)
 
+        // Inject path loops dynamically to prevent strict, frustrating dead-ends in intense gameplay
         val loopCount = (w * h) / 30
         var loopsMade = 0
         var attempts = 0
@@ -234,6 +250,7 @@ object MazeGenerator {
 
             val distSq = (gx - px)*(gx - px) + (gy - py)*(gy - py)
 
+            // Spawn guards away from the player's immediate starting viewport
             if (grid[gx][gy] == PATH && distSq > 25) {
                 grid[gx][gy] = GUARD_SPAWN
                 placed++
