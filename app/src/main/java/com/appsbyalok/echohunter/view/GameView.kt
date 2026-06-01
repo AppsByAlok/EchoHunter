@@ -445,10 +445,19 @@ class GameView(context: Context) : View(context) {
             10 -> return uiDecompiler.onTouch(vx, vy, action, scale, gs, onAppClose)
             11 -> return uiArchives.onTouch(vx, vy, action, scale, gs, onArchiveSelect, onAppClose)
             12 -> {
-                // If Auto-Next is ON, ignore screen taps so it seamlessly goes to the next level
-                if (action == MotionEvent.ACTION_UP && gs.stateTimer > 0.5f && !SaveManager.isAutoNextLevelEnabled) {
-                    EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 50)
-                    changeState(11)
+                // VICTORY MENU - Updated to use explicit RectF and ACTION_UP
+                if (action == MotionEvent.ACTION_UP && gs.stateTimer > 0.3f) {
+                    if (menuRenderer.victoryNextRect.contains(vx, vy)) {
+                        EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 150)
+                        if (SaveManager.isAutoNextLevelEnabled) {
+                            changeState(0) // Return to Main Menu
+                        } else {
+                            gs.currentLevel++
+                            gs.resetGame()
+                            changeState(1)
+                        }
+                        return true
+                    }
                 }
                 return true
             }
@@ -461,47 +470,51 @@ class GameView(context: Context) : View(context) {
                 }
             }, onDisconnect)
             5, 7, 4, 6 -> {
-                // ACTION_UP ke sath sath multi-touch aur swipe cancels ko bhi register karenge
                 if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP || action == MotionEvent.ACTION_CANCEL) {
-
-                    // --- FIX: Strict 1.5s freeze aur top-half restriction ko jadd se hataya ---
-                    // Ab player jab chahe tab dynamic tap kar sakta hai pure screen par!
-
-                    // Pata karo screen par kaun si dialogue lines dikh rahi hain right now
                     val activeLines = if (gs.state == 4) StoryProtocol.badEndingLines else currentStoryLines
 
-                    // TWO-TAP SYSTEM LOGIC:
                     if (storyStep < activeLines.size) {
-                        // TAP 1: Agar typewriter chal raha hai, toh click karte hi instantly poora text reveal ho jaye
                         storyStep = activeLines.size
                     } else {
                         if (gs.stateTimer < 0.5f || vy < targetH / 2f) return true
-                        // TAP 2: Agar text pehle se poora typed hai, toh click par agali screen par badho
                         if (gs.state == 7) changeState(gs.nextStateAfterStory) else disconnectCable()
                     }
                 }
                 return true
             }
             0 -> {
-
                 if (action == MotionEvent.ACTION_DOWN && vx > targetW - scale * 0.15f && vy < scale * 0.15f) {
                     modMenu.isOpen = true
                     EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 100)
                     return true
                 }
-
                 return uiMainMenu.onTouch(vx, vy, action, scale, targetW, targetH, this, gs, onDifficultyToggle, onHelpOpen, onMenuRoute)
             }
             3 -> return uiHelpMenu.onTouch(vx, vy, action, scale, gs, this, effectSys, onHelpClose)
             2 -> {
+                // PAUSE MENU - Updated to use exact explicit hitboxes instead of invisible horizontal slices
                 if (action == MotionEvent.ACTION_UP && gs.stateTimer > 0.2f) {
-                    if (vy > targetH * 0.8f) { // NAYA: MOD MENU touch logic
+                    if (menuRenderer.pauseModRect.contains(vx, vy)) {
                         modMenu.isOpen = true
+                        EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 100)
                     }
-                    else if (vy > targetH * 0.68f) {
+                    else if (menuRenderer.pauseDiscRect.contains(vx, vy)) {
                         disconnectCable()
                     }
-                    else if (vx > targetW - scale*0.15f && vy < scale*0.15f || (vy in targetH*0.5f..targetH*0.68f)) {
+                    else if (menuRenderer.pauseAutoRect.contains(vx, vy)) {
+                        gs.isAutoPilotActive = !gs.isAutoPilotActive
+                        EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100)
+                    }
+                    else if (menuRenderer.pauseResumeRect.contains(vx, vy)) {
+                        if (gs.isRotationWarning) {
+                            EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
+                        } else {
+                            changeState(if (gs.coreX > 0f && gs.bossHp <= 0 && gs.currentSector > 5) 8 else 1)
+                            lastFrameTime = System.nanoTime()
+                        }
+                    }
+                    // Keep original tap-top-right functionality to unpause quickly
+                    else if (vx > targetW - scale * 0.15f && vy < scale * 0.15f) {
                         if (gs.isRotationWarning) {
                             EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
                         } else {
@@ -532,9 +545,9 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun handleDamage(scale: Float) {
-            // NAYA: God Mode Check
+            // MOD: God Mode Check
             if (gs.modGodMode && gs.hp <= 1) {
-                StoryProtocol.showIngameMessage("MOD: GOD MODE PREVENTED DEATH", 1.5f)
+                StoryProtocol.showIngameMessage("MOD: GOD MODE PREVENTED DEATH\n\tYou are God, buddy 🫵", 1.5f)
                 return
             }
 
@@ -551,7 +564,14 @@ class GameView(context: Context) : View(context) {
         if (gs.hp <= 0) {
             SaveManager.addData(gs.collectedDataKB); SaveManager.saveRunResult(gs.score)
             if (gs.gameMode == 1) SaveManager.updateStoryStreak(false, gs.difficulty == 1, gs.selectedStoryAct)
-            StoryProtocol.isGlitchActive = true; changeState(4)
+
+            val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
+            val isIntenseDeath = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.BOSS) ||
+                    config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ELIMINATION) ||
+                    gs.difficulty == 1
+            StoryProtocol.isGlitchActive = isIntenseDeath
+
+            changeState(4)
         }
     }
 

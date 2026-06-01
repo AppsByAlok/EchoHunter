@@ -4,8 +4,8 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Typeface
 import com.appsbyalok.echohunter.data.SaveManager
-import com.appsbyalok.echohunter.utils.GameColors
 import com.appsbyalok.echohunter.engine.GameState
+import com.appsbyalok.echohunter.utils.GameColors
 
 class HUDRenderer {
     private val p = Paint().apply { isAntiAlias = true }
@@ -16,7 +16,7 @@ class HUDRenderer {
 
     fun drawHUD(c: Canvas, scale: Float, gs: GameState, targetW: Float) {
 
-        // --- 1. NEON HEALTH BLOCKS ---
+        // --- 1. NEON HEALTH BLOCKS & SCORE INFO ---
         val hpStartX = scale * 0.05f
         val hpStartY = scale * 0.05f
         val hpW = scale * 0.06f
@@ -41,27 +41,65 @@ class HUDRenderer {
             c.drawText("COMBO x${gs.combo}", scale * 0.05f, hpStartY + hpH + scale * 0.14f, pText)
         }
 
+        // --- 2. CENTER TOP UI (Dynamic Stacking for NO OVERLAPS) ---
+        var currentY = scale * 0.06f // Starting height for the center elements
+
+        // A. Level/Act Title
         pText.textAlign = Paint.Align.CENTER
+        pText.textSize = scale * 0.04f
         pText.color = GameColors.CLARITY
         val modeTitle = if (gs.gameMode == 1) "ACT ${gs.selectedStoryAct + 1} - SECTOR ${gs.currentSector}" else "LEVEL ${gs.currentLevel}"
-        c.drawText(modeTitle, targetW / 2f, scale * 0.06f, pText)
+        c.drawText(modeTitle, targetW / 2f, currentY, pText)
 
-        // Autopilot Tag
+        currentY += scale * 0.035f
+
+        // B. Autopilot Tag
         if (gs.isAutoPilotActive) {
             pText.color = GameColors.PULSE
-            c.drawText("AUTOPILOT ENGAGED", targetW / 2f, scale * 0.1f, pText)
+            pText.textSize = scale * 0.03f
+            c.drawText("AUTOPILOT ENGAGED", targetW / 2f, currentY, pText)
+            currentY += scale * 0.025f
+        } else {
+            currentY += scale * 0.01f // Normal gap
         }
 
-        val barW = scale * 0.4f; val barH = scale * 0.02f
-        val barX = targetW / 2f - barW / 2f; val barY = scale * 0.12f
+        // C. Overclock Bar
+        val barW = scale * 0.4f
+        val barH = scale * 0.02f
+        val barX = targetW / 2f - barW / 2f
 
         p.style = Paint.Style.STROKE; p.strokeWidth = scale * 0.005f; p.color = GameColors.TEXT
-        c.drawRect(barX, barY, barX + barW, barY + barH, p)
+        c.drawRect(barX, currentY, barX + barW, currentY + barH, p)
 
         p.style = Paint.Style.FILL; p.color = if (gs.isOverclocked) GameColors.OVERCLOCK else GameColors.PULSE
-        c.drawRect(barX, barY, barX + barW * (gs.overclockMeter / 100f), barY + barH, p)
+        c.drawRect(barX, currentY, barX + barW * (gs.overclockMeter / 100f), currentY + barH, p)
 
-        // --- 2. VIRTUAL JOYSTICK ---
+        currentY += barH + scale * 0.05f
+
+        // D. Defense Mode Uplink Timer
+        val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
+        if (config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE)) {
+            val secondsLeft = kotlin.math.max(0, gs.defenseTimer.toInt())
+
+            // Defence Timer text
+            if (secondsLeft > 0) {
+                pText.color = when {
+                    secondsLeft <= 5 -> GameColors.SHIELD
+                    secondsLeft <= 10 -> GameColors.YELLOW
+                    else -> GameColors.CLARITY
+                }
+
+                pText.textSize = scale * 0.04f
+                if (secondsLeft <= 5) {
+                    c.drawText("UPLINK SECURES IN: ${secondsLeft}s", targetW / 2f, currentY, pText)
+                } else {
+                    c.drawText("UPLINK STABLE: ${secondsLeft}s", targetW / 2f, currentY, pText)
+                }
+            }
+       }
+
+
+        // --- 3. VIRTUAL JOYSTICK ---
         if (gs.isJoyActive) {
             p.style = Paint.Style.STROKE; p.strokeWidth = scale * 0.01f; p.color = 0x55FFFFFF
             c.drawCircle(gs.joyBaseX, gs.joyBaseY, scale * 0.15f, p)
@@ -69,7 +107,7 @@ class HUDRenderer {
             c.drawCircle(gs.joyKnobX, gs.joyKnobY, scale * 0.05f, p)
         }
 
-        // --- 3. ACTION BUTTONS (With Auto Locks) ---
+        // --- 4. ACTION BUTTONS (With Auto Locks) ---
         drawActionButton(c, gs.uiAtkX, gs.uiAtkY, gs.uiBtnRadius, "ATK", if (gs.isAttackPressed || gs.isAutoFireLocked) GameColors.TEXT else GameColors.RED, gs.isAutoFireLocked)
 
         val ovrColor = if (gs.overclockMeter >= 100f) GameColors.OVERCLOCK else GameColors.TEXT

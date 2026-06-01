@@ -24,6 +24,8 @@ class GameState {
             }
         }
 
+    var levelStartTime = 0f
+
     var state = 5
     var difficulty = 0
     var stateTimer = 0f
@@ -104,6 +106,8 @@ class GameState {
     var currentWeapon = 1
     var currentTrap = 2   // 2 = EMP Mine, 1 = Decoy Hologram, 0 = Camouflage
 
+    var defenseTimer = 0f
+    var maxDefenseTimer = 0f
     var coreHp = 10
     var coreMaxHp = 10
 
@@ -152,6 +156,28 @@ class GameState {
     var currentLevel = 1
     var collectedDataKB = 0L
     var isLevelCleared = false
+        set(value) {
+            if (value && !field) {
+                val totalDurationSeconds = timeSinceStart - levelStartTime
+                val minutes = (totalDurationSeconds / 60).toInt()
+                val seconds = (totalDurationSeconds % 60).toInt()
+
+                val pilotType = if (isAutoPilotActive) "AUTOPILOT" else "MANUAL_PLAYER"
+                val targetScore =
+                    com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(currentLevel).targetScore
+
+                // Android Studio Logcat logs
+                Log.d(
+                    "ECHO_HUNTER_PERF",
+                    ">>> LEVEL $currentLevel CLEARED BY [$pilotType] | TIME ELAPSED: ${minutes}m ${seconds}s (${totalDurationSeconds} seconds) <<<"
+                )
+                Log.d(
+                    "ECHO_HUNTER_PERF",
+                    "Current Score: $score, Max Score: $targetScore, Combo: $combo, Wave: $wave, Sector: $currentSector, Current Level: $currentLevel , Current Time: ${System.currentTimeMillis()}"
+                )
+            }
+            field = value
+        }
 
     var comboBreakTimer = 0f
     var currentSector = 1
@@ -306,8 +332,23 @@ class GameState {
         bossDeathTimer = 0f
         bossVis = 1.0f
 
+        // FIX: RESET JOYSTICK
+        isJoyActive = false
+        joyDirX = 0f
+        joyDirY = 0f
+        joyBaseX = 0f
+        joyBaseY = 0f
+        joyKnobX = 0f
+        joyKnobY = 0f
+        isAttackPressed = false
+        isOverclockPressed = false
+        isTrapPressed = false
+        isSonarPressed = false
+
         isAutoFireLocked = false
         isAutoSonarLocked = false
+
+        levelStartTime = timeSinceStart
     }
 
     fun updateTimers(dt: Float, scale: Float) {
@@ -321,6 +362,7 @@ class GameState {
         if (slowMoTimer > 0f) slowMoTimer -= dt
         if (bossDeathTimer > 0f) bossDeathTimer -= dt
         if (attackCooldown > 0f) attackCooldown -= dt
+        if (defenseTimer > 0f) defenseTimer -= dt
 
         if (visionClarity < 1.0f) visionClarity = min(1.0f, visionClarity + 0.1f * dt)
         else if (visionClarity > 1.0f) visionClarity = max(1.0f, visionClarity - 0.1f * dt)

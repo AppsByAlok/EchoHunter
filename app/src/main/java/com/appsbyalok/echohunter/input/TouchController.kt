@@ -46,6 +46,13 @@ class TouchController(private val gs: GameState) {
 
         when (action) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+
+                // --- FIX: AUTO-HEAL GHOST POINTER ---
+                // Agar first finger screen par touch, toh old stuck IDs ko reset kar do!
+                if (action == MotionEvent.ACTION_DOWN) {
+                    joyPointerId = -1
+                }
+
                 if (vx < targetW / 2f) {
                     if (joyPointerId == -1) {
                         joyPointerId = pointerId
@@ -142,7 +149,7 @@ class TouchController(private val gs: GameState) {
                 }
 
                 // --- FIX: STICKING BUTTONS REMOVAL ---
-                // Agar ACTION_UP (poori finger uthi) ya CANCEL event hua,
+                // Agar ACTION_UP (poori finger up) ya CANCEL event hua,
                 // ya fir jo finger uthi hai wo right-half (combat side) par thi,
                 // toh bina kisi condition ke attack aur trap states ko clear (false) karo!
                 val upX = (e.getX(pointerIndex) - offsetX) / gameScale
@@ -157,7 +164,8 @@ class TouchController(private val gs: GameState) {
                 }
             }
         }
-        return true
+        val returnVal = true
+        return returnVal
     }
 
     private fun isInsideCircle(tx: Float, ty: Float, cx: Float, cy: Float, radius: Float): Boolean {

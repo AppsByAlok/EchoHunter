@@ -139,13 +139,13 @@ object SaveManager {
     }
 
     fun formatDataString(kb: Long): String {
-        if (kb < 1024L) return "${kb}KB"
+        if (kb < 1024L) return "$kb KB"
         val mb = kb / 1024.0
-        if (mb < 1024.0) return String.format(Locale.US,"%.1fMB", mb)
+        if (mb < 1024.0) return String.format(Locale.US,"%.1f MB", mb)
         val gb = mb / 1024.0
-        if (gb < 1024.0) return String.format(Locale.US,"%.2fGB", gb)
+        if (gb < 1024.0) return String.format(Locale.US,"%.2f GB", gb)
         val tb = gb / 1024.0
-        return String.format(Locale.US,"%.2fTB", tb)
+        return String.format(Locale.US,"%.2f TB", tb)
     }
 
     fun debugSetLevel(level: Int) {
@@ -165,10 +165,7 @@ object SaveManager {
         highScore = 0
         previousScore = 0
 
-        // 1. SharedPreferences of SaveManager clear karein
         prefs.edit().clear().apply()
-
-        // 2. Upgrade System ko link karke uski storage ko bhi wipe karein
         UpgradeSystem.clearAllData()
     }
 }

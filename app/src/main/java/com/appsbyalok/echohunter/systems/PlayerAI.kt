@@ -24,6 +24,8 @@ class PlayerAI(private val gs: GameState, private val enemySys: EnemySystem) {
     fun update(dt: Float, scale: Float) {
         if (!gs.isAutoPilotActive) return
 
+        if (gs.isJoyActive) return
+
         if (gs.autoPilotTimer > 0f) {
             gs.autoPilotTimer -= dt
             if (gs.autoPilotTimer <= 0f) {

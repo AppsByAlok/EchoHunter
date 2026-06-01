@@ -163,12 +163,36 @@ class CollisionSystem(
 
                         if (dx * dx + dy * dy < hitDistSq * 1.5f) {
                             spikeHit = true
-
                             gs.combo++
-                            onScoreAdd(2 + gs.combo)
-                            gs.collectedDataKB += LevelEngine.getKillRewardKB(
-                                gs.currentLevel, isBoss = false
-                            )
+
+//                            onScoreAdd(2 + gs.combo)
+//                            gs.collectedDataKB += LevelEngine.getKillRewardKB(
+//                                gs.currentLevel, isBoss = false
+//                            )
+
+                            // --- NAYA: ELIMINATION MODE SCORE LOGIC ---
+                            val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
+                            val isElimination = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ELIMINATION) && gs.gameMode == 0
+
+                            if (isElimination) {
+                                if (enemySystem.type[i] == 3) {
+                                    // Sahi Target Maara! Score badhao aur double data do!
+                                    onScoreAdd(2 + gs.combo)
+                                    gs.collectedDataKB += com.appsbyalok.echohunter.data.LevelEngine.getKillRewardKB(gs.currentLevel, false) * 2
+                                    com.appsbyalok.echohunter.data.StoryProtocol.showIngameMessage("TARGET ELIMINATED!", 1.5f)
+                                } else {
+                                    // Galat dushman maara, sirf thode data coins milenge, score nahi badhega
+                                    gs.collectedDataKB += com.appsbyalok.echohunter.data.LevelEngine.getKillRewardKB(gs.currentLevel, false) / 2
+                                }
+                            } else {
+                                // Classic / Escape / Maze Modes: Normal kill logic
+                                onScoreAdd(2 + gs.combo)
+                                gs.collectedDataKB += com.appsbyalok.echohunter.data.LevelEngine.getKillRewardKB(gs.currentLevel, false)
+                            }
+
+
+
+
 
                             if (!gs.isOverclocked) {
                                 gs.overclockMeter = min(100f, gs.overclockMeter + 15f)
@@ -201,8 +225,7 @@ class CollisionSystem(
 
         // 5. Enemies Collision
         val config = LevelEngine.getLevelConfig(gs.currentLevel)
-        val isDefense =
-            config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE)
+        val isDefense = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE) && gs.gameMode == 0
 
         for (i in 0 until enemySystem.n) {
 

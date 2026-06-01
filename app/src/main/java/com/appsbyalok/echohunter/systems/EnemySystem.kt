@@ -38,7 +38,8 @@ class EnemySystem {
     val evy = FloatArray(n)
     val vis = FloatArray(n)
     val type = IntArray(n)
-    val eState = IntArray(n) // 0=Patrol, 1=Alert, 2=Hunt
+    val eState = IntArray(n) // 0=Patrol, 1=Alert, 2=Hunt/Investigate
+    val investigateTimer = FloatArray(n)
 
     val pwn = 4
     val pwX = FloatArray(pwn)
@@ -116,17 +117,35 @@ class EnemySystem {
 
         val hunterProbability = if (gs.score < 10) 0.0f else min(0.65f, (gs.score - 10) * 0.015f)
 
-        if (isSwarm) type[i] = 1
-        else if (gs.gameMode == 2) type[i] = if (Random.nextFloat() < hunterProbability) 1 else if (Random.nextFloat() > 0.7f) 2 else 0
-        else type[i] = if (Random.nextFloat() < hunterProbability) 1 else 0
+        // --- NAYA: ELIMINATION & DEFENSE MODE SPAWN LOGIC ---
+        val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
+        val isElimination = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ELIMINATION) && gs.gameMode == 0
+        val isDefense = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE) && gs.gameMode == 0
 
-        vis[i] = 0f
+        if (isSwarm) {
+            type[i] = 1
+        } else if (isElimination && i < 5) {
+            type[i] = 3
+        } else if (isDefense) {
+            type[i] = 1
+        } else if (gs.gameMode == 2) {
+            type[i] = if (Random.nextFloat() < hunterProbability) 1 else if (Random.nextFloat() > 0.7f) 2 else 0
+        } else {
+            type[i] = if (Random.nextFloat() < hunterProbability) 1 else 0
+        }
+
+        vis[i] = 1f
         eState[i] = 0
+        investigateTimer[i] = 0f
     }
 
     fun updateEnemies(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {
         gs.isEnemyNear = false
         gs.isEnemyVeryNear = false
+
+        // --- NAYA FIX: config ko function ke start me declare karo ---
+        val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
+        val isDefense = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE) && gs.gameMode == 0
 
         val hitDistSq = (scale * 0.045f) * (scale * 0.045f)
         val speed = scale * (if (gs.difficulty == 0) 0.25f else 0.4f)
@@ -142,45 +161,64 @@ class EnemySystem {
         val enemyRadius = scale * 0.02f
 
         for (i in 0 until n) {
-            // --- FIX 2: STRICT BOUNCE, NO RANDOMIZATION THROUGH WALLS ---
             val nextEx = ex[i] + evx[i] * dt
             if (!isCollidingWithWall(nextEx, ey[i], enemyRadius, gs)) {
                 ex[i] = nextEx
             } else {
-                evx[i] = -evx[i] // Pure Bounce
+                evx[i] = -evx[i]
             }
 
             val nextEy = ey[i] + evy[i] * dt
             if (!isCollidingWithWall(ex[i], nextEy, enemyRadius, gs)) {
                 ey[i] = nextEy
             } else {
-                evy[i] = -evy[i] // Pure Bounce
+                evy[i] = -evy[i]
             }
 
-            val targetX = if (gs.isDecoyActive) gs.decoyX else gs.px
-            val targetY = if (gs.isDecoyActive) gs.decoyY else gs.py
+            // 1. TARGET FIX: Defense mode mein sab Core par attack karenge!
+            val targetX = if (isDefense) gs.coreX else if (gs.isDecoyActive) gs.decoyX else gs.px
+            val targetY = if (isDefense) gs.coreY else if (gs.isDecoyActive) gs.decoyY else gs.py
             val tdx = targetX - ex[i]
             val tdy = targetY - ey[i]
             val td2 = tdx * tdx + tdy * tdy
 
             val d2 = (gs.px - ex[i]) * (gs.px - ex[i]) + (gs.py - ey[i]) * (gs.py - ey[i])
 
-            // --- NAYA: REALISTIC SONAR WAVE AGGRO ---
             val hitByPulse = (gs.pulse && d2 in gs.innerRSq..gs.outerRSq)
 
-            // Yellow Patrols Wake Up!
+            // --- YELLOW PATROLS INVESTIGATE LOGIC ---
             if (type[i] == 0) {
-                // Agar Sonar ki wave unhe hit karti hai, ya goli paas chalti hai
                 if (hitByPulse || (gs.localAttackAlert && td2 < (scale * 1.5f) * (scale * 1.5f))) {
-                    type[i] = 1
-                    eState[i] = 2
+                    eState[i] = 2 // 2 = Suspicious/Investigate
+                    investigateTimer[i] = 3.0f
+                }
+
+                if (eState[i] == 2) {
+                    investigateTimer[i] -= dt
+
+                    if (investigateTimer[i] <= 0f) {
+                        eState[i] = 0
+                    } else {
+                        if (gs.gridMap != null) {
+                            val (nvx, nvy) = ai.steerByHeatMap(ex[i], ey[i], evx[i], evy[i], speed * 0.8f, gs)
+                            evx[i] = nvx; evy[i] = nvy
+                        }
+
+                        // THE TWIST: Agar investigate time enemy in rang to (Line of sight!)
+                        val inLoS = ai.hasLineOfSight(ex[i], ey[i], targetX, targetY, gs)
+                        if (inLoS && td2 < hitDistSq * 50f) {
+                            type[i] = 1 // Ab ban gaya ye permanent Red Hunter!
+                            eState[i] = 1
+                            EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 50)
+                        }
+                    }
                 }
             }
 
             // Red Hunters Tracking
             if (type[i] == 1) {
                 if (hitByPulse) {
-                    eState[i] = 2 // Update target if hit by pulse
+                    eState[i] = 2
                 } else if (gs.localAttackAlert && td2 < (scale * 1.5f) * (scale * 1.5f)) {
                     eState[i] = 2
                 }
@@ -189,7 +227,7 @@ class EnemySystem {
 
                 if (inLoS && td2 < hitDistSq * 50f) {
                     eState[i] = 1
-                    val eDist = sqrt(td2)
+                    val eDist = kotlin.math.sqrt(td2)
                     val chaseSpeed = speed * (if (gs.isOverclocked && !gs.isDecoyActive) -0.5f else 1.2f)
                     evx[i] = (evx[i] * 0.9f) + ((tdx / eDist) * chaseSpeed * 0.1f)
                     evy[i] = (evy[i] * 0.9f) + ((tdy / eDist) * chaseSpeed * 0.1f)
@@ -208,6 +246,17 @@ class EnemySystem {
 
             if (hitByPulse || d2 < gs.passiveAuraRadiusSq) vis[i] = 1f
             vis[i] *= gs.fadeMultiplier
+
+            // 2. SMART ANTI-DESPAWN:
+            val maxAllowedDistSq = if (isDefense || gs.bossActive) {
+                (width * 1.5f) * (width * 1.5f) // Tight Leash for Arena
+            } else {
+                (width * 4.0f) * (width * 4.0f) // Loose Leash for Maze Explorer
+            }
+
+            if (d2 > maxAllowedDistSq) {
+                spawn(i, gs, width, height)
+            }
         }
         gs.globalSonarAlert = false
         gs.localAttackAlert = false
@@ -392,6 +441,21 @@ class EnemySystem {
                         p.color = (a shl 24) or (GameColors.CLARITY and 0xFFFFFF)
                         c.drawCircle(screenEx, screenEy, entityRadius * 0.3f, p)
                     }
+                    3 -> {
+                        // --- NAYA: ELIMINATION TARGET (HVT) ---
+                        // Bright Red Bada Circle
+                        p.color = (a shl 24) or (0xFFFF2A4D.toInt() and 0xFFFFFF)
+                        c.drawCircle(screenEx, screenEy, entitySize, p)
+
+                        // Andar ek chota black circle (Holo-look)
+                        p.color = (a shl 24) or (GameColors.BG and 0xFFFFFF)
+                        c.drawCircle(screenEx, screenEy, entitySize * 0.5f, p)
+
+                        // Upar "TARGET" likha hoga
+                        pText.color = (a shl 24) or (0xFFFF2A4D.toInt() and 0xFFFFFF)
+                        pText.textSize = scale * 0.025f
+                        c.drawText("TARGET", screenEx, screenEy - entitySize * 1.5f, pText)
+                    }
                     else -> {
                         p.color = (a shl 24) or (GameColors.YELLOW and 0xFFFFFF)
                         entityPath.reset()
@@ -401,6 +465,13 @@ class EnemySystem {
                         entityPath.lineTo(screenEx - entitySize, screenEy)
                         entityPath.close()
                         c.drawPath(entityPath, p)
+
+                        // --- SUSPICIOUS QUESTION MARK ---
+                        if (eState[i] == 2) {
+                            pText.color = (a shl 24) or 0xFFFFFF
+                            pText.textSize = scale * 0.035f
+                            c.drawText("?", screenEx, screenEy - entitySize - scale * 0.01f, pText)
+                        }
                     }
                 }
             }

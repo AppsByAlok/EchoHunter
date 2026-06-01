@@ -214,16 +214,23 @@ class GameEngine(
         gs.px = pCol * gs.tileSize + (gs.tileSize / 2f)
         gs.py = pRow * gs.tileSize + (gs.tileSize / 2f)
 
-        // --- NAYA: CORE SIRF TABHI SPAWN HOGA JAB ZAROORAT HO ---
+        // --- NAYA: CORE SIRF TABHI SPAWN HOGA JAB ZAROORAT HO --- TODO ise theek karna hai. avi v story mode me core suru me nahi aana chaahiye magar aa raha hai. story mode core defecce ban jaa raha hai.
         val config = LevelEngine.getLevelConfig(gs.currentLevel)
         if (config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE) ||
             config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ESCAPE)) {
             gs.coreX = dCol * gs.tileSize + (gs.tileSize / 2f)
             gs.coreY = dRow * gs.tileSize + (gs.tileSize / 2f)
-            gs.coreRadius = scale * 0.08f // Normal visible core
+            gs.coreRadius = scale * 0.08f
+
+            // --- NAYA: DEFENSE MODE SETUP ---
+            if (config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE)) {
+                gs.defenseTimer = LevelEngine.getDefenseTimer(gs.currentLevel)
+                gs.maxDefenseTimer = gs.defenseTimer
+                // HP gently scale hogi, par 25 se upar nahi jayegi
+                gs.coreMaxHp = kotlin.math.min(25, 10 + (gs.currentLevel / 15))
+                gs.coreHp = gs.coreMaxHp
+            }
         } else {
-            // Core ko screen se bahar safe coordinate par rakh diya hai aur uski radius zero ki hai,
-            // taaki Classic aur Elimination modes me PlayerAI glitch na ho aur map boundary se bahar na bhage!
             gs.coreX = -9999f
             gs.coreY = -9999f
             gs.coreRadius = 0f
