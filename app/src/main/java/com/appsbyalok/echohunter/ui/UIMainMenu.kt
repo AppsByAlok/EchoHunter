@@ -532,11 +532,13 @@ class UIMainMenu(private val context: Context) {
                         }
                     }
                 } else {
-                    if (connectedMode == -1 && animatingToPort == -1) {
+                    if (animatingToPort == -1) {
                         for (i in 0..2) {
                             val dx = vx - portX[i]
                             val dy = vy - portY[i]
                             if (dx * dx + dy * dy < (scale * 0.15f) * (scale * 0.15f)) {
+                                if (connectedMode == i) return true
+                                connectedMode = -1
                                 animatingToPort = i
                                 targetPlugX = portX[i]
                                 targetPlugY = portY[i]
@@ -548,6 +550,7 @@ class UIMainMenu(private val context: Context) {
                 }
             }
         }
-        return true
+        val returnValue = true
+        return returnValue
     }
 }
