@@ -452,9 +452,7 @@ class GameView(context: Context) : View(context) {
                         if (SaveManager.isAutoNextLevelEnabled) {
                             changeState(0) // Return to Main Menu
                         } else {
-                            gs.currentLevel++
-                            gs.resetGame()
-                            changeState(1)
+                            startGame(0, gs.currentLevel + 1)
                         }
                         return true
                     }
