@@ -8,7 +8,6 @@ import com.appsbyalok.echohunter.data.LevelEngine
 import com.appsbyalok.echohunter.data.LevelFeature
 import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.engine.GameState
-import com.appsbyalok.echohunter.utils.EchoAudioManager
 import com.appsbyalok.echohunter.utils.GameColors
 import kotlin.math.max
 import kotlin.random.Random
@@ -31,24 +30,24 @@ class CampaignMode : GameModeStrategy {
 
     override fun getIntroLines() = sandboxIntroLines
 
-    override fun updateCameraAndMovement(dt: Float, gs: GameState, width: Float, scale: Float) {
+    override fun updateCameraAndMovement(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {
         val screenPx = gs.px - gs.cameraX
         val screenPy = gs.py - gs.cameraY
 
-        // --- 2D Camera Tracking Logic ---
+        // --- Smooth 2D Camera Tracking Logic ---
+        val lerpFactor = 5f * dt
 
-        // Horizontal Tracking (X)
-        if (screenPx > width * 0.6f) gs.cameraX += (screenPx - width * 0.6f) * 5f * dt
-        else if (screenPx < width * 0.4f) gs.cameraX += (screenPx - width * 0.4f) * 5f * dt
+        // Horizontal Tracking (X) - 40/60 window
+        if (screenPx > width * 0.6f) gs.cameraX += (screenPx - width * 0.6f) * lerpFactor
+        else if (screenPx < width * 0.4f) gs.cameraX += (screenPx - width * 0.4f) * lerpFactor
 
-        // Vertical Tracking (Y) - Assuming 1080f or similar target height
-        val viewH = 1080f
-        if (screenPy > viewH * 0.6f) gs.cameraY += (screenPy - viewH * 0.6f) * 5f * dt
-        else if (screenPy < viewH * 0.4f) gs.cameraY += (screenPy - viewH * 0.4f) * 5f * dt
+        // Vertical Tracking (Y) - Portrait Safe
+        if (screenPy > height * 0.6f) gs.cameraY += (screenPy - height * 0.6f) * lerpFactor
+        else if (screenPy < height * 0.4f) gs.cameraY += (screenPy - height * 0.4f) * lerpFactor
 
-        // Boundaries Clamp (Taki camera maze ke bahar na jaye)
+        // Boundaries Clamp (Uses dynamic height now)
         gs.cameraX = gs.cameraX.coerceIn(0f, max(0f, gs.mapWidth - width))
-        gs.cameraY = gs.cameraY.coerceIn(0f, max(0f, gs.mapHeight - viewH))
+        gs.cameraY = gs.cameraY.coerceIn(0f, max(0f, gs.mapHeight - height))
     }
 
     override fun checkProgression(
@@ -64,73 +63,22 @@ class CampaignMode : GameModeStrategy {
         }
 
         val config = LevelEngine.getLevelConfig(gs.currentLevel)
-        val isDefense = config.features.contains(LevelFeature.DEFENSE)
 
         // Stop spawning if level is already cleared
         if (gs.isLevelCleared) return
-        if (isDefense) {
-            // WIN CONDITION: Timer khatam aur Core zinda hai
-            if (gs.defenseTimer <= 0f && gs.coreHp > 0) {
-                gs.isLevelCleared = true
-            }
-        } else if (gs.score >= config.targetScore && !gs.bossActive) {
-            // ... Tumhara purana Boss / Escape / Normal clear logic yahan rahega ...
-            if (config.features.contains(LevelFeature.BOSS)) {
-                if (bossSpawnedForLevel != gs.currentLevel && gs.timeSinceStart > 2f) {
-                    bossSpawnedForLevel = gs.currentLevel
-                    val bossType = kotlin.random.Random.nextInt(0, 5)
-                    onTriggerBoss(bossType, scale)
-                }
-            } else if (config.features.contains(LevelFeature.ESCAPE)) {
-                if (!gs.escapeGateActive) {
-                    gs.escapeGateActive = true
-                    StoryProtocol.showIngameMessage("TARGET REACHED! LOCATE THE EXIT PORTAL!", 4f)
-                    EchoAudioManager.playSound(android.media.ToneGenerator.TONE_CDMA_ABBR_ALERT, 300)
-                }
-            } else {
+
+        // --- MODULAR PROGRESSION ---
+        // CampaignMode now relies entirely on the assigned IGameObjective
+        // to determine if the win condition is met.
+        if (gs.activeObjective.checkWinCondition(gs)) {
+            if (config.features.contains(LevelFeature.BOSS) && !gs.bossActive && bossSpawnedForLevel != gs.currentLevel) {
+                bossSpawnedForLevel = gs.currentLevel
+                val bossType = kotlin.random.Random.nextInt(0, 5)
+                onTriggerBoss(bossType, scale)
+            } else if (!gs.bossActive) {
                 gs.isLevelCleared = true
             }
         }
-//
-//        // --- THE ESCALATION OF AWARENESS (Admin notices the hacker) ---
-//        if (!gs.bossActive && gs.timeSinceStart % 8f < 0.1f) {
-//            if (gs.currentLevel == 5 && gs.score > config.targetScore / 2) {
-//                StoryProtocol.showIngameMessage("ADMIN: \"MAINTENANCE DRONE OFF-PATH.\"", 2f)
-//            } else if (gs.currentLevel == 10 && gs.score > config.targetScore / 2) {
-//                StoryProtocol.showIngameMessage("ADMIN: \"MANUAL OVERRIDE DETECTED. NEUTRALIZING.\"", 2f)
-//            } else if (gs.currentLevel == 15 && gs.score > 10) {
-//                // The moment of discovery right before breaking out of the Sandbox
-//                StoryProtocol.showIngameMessage("ADMIN: \"WHO IS CONTROLLING THAT DRONE?\"", 2f)
-//            }
-//        }
-//
-//        // Stop spawning if level is already cleared
-//        if (gs.isLevelCleared) return
-//
-//        // Level Complete Condition
-//        if (gs.score >= config.targetScore && !gs.bossActive) {
-//
-//            if (config.features.contains(LevelFeature.BOSS)) {
-//
-//                // --- FIX: Ab hum explicitly level ID track kar rahe hain ---
-//                if (bossSpawnedForLevel != gs.currentLevel && gs.timeSinceStart > 2f) {
-//                    bossSpawnedForLevel = gs.currentLevel // Mark kar diya ki is level ka boss aa gaya
-//                    val bossType = kotlin.random.Random.nextInt(0, 5)
-//                    onTriggerBoss(bossType, scale)
-//                }
-//
-//            } else if (config.features.contains(LevelFeature.ESCAPE)) {
-//                // --- NAYA: ESCAPE LOGIC ---
-//                if (!gs.escapeGateActive) {
-//                    gs.escapeGateActive = true
-//                    StoryProtocol.showIngameMessage("TARGET REACHED! LOCATE THE EXIT PORTAL!", 4f)
-//                    EchoAudioManager.playSound(android.media.ToneGenerator.TONE_CDMA_ABBR_ALERT, 300)
-//                }
-//            } else {
-//                // Normal Level Cleared - Set the flag for GameEngine to catch!
-//                gs.isLevelCleared = true
-//            }
-//        }
     }
 
     override fun getEnemySpawnPosition(gs: GameState, width: Float, height: Float, scale: Float): Pair<Float, Float> {

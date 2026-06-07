@@ -95,7 +95,7 @@ class CollisionSystem(
                         onScoreAdd(5); gs.collectedDataKB += LevelEngine.getKillRewardKB(
                             gs.currentLevel, isBoss = false
                         )
-                        enemySystem.spawn(j, gs, width, height)
+                        enemySystem.killEnemy(j, gs, width, height)
                     }
                 }
                 if (gs.bossActive) {
@@ -208,7 +208,7 @@ class CollisionSystem(
                             EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 50)
 
                             if (!gs.bossActive || enemySystem.type[i] == 1) {
-                                enemySystem.spawn(i, gs, width, height)
+                                enemySystem.killEnemy(i, gs, width, height)
                             }
                             break
                         }
@@ -244,7 +244,7 @@ class CollisionSystem(
                     gs.chromaticIntensity = max(gs.chromaticIntensity, 0.6f)
 
                     // Dushman core se takra kar fanaa ho jayega
-                    enemySystem.spawn(i, gs, width, height)
+                    enemySystem.killEnemy(i, gs, width, height)
 
                     // Agar core ki HP khatam ho gayi, toh seedha Death trigger karo
                     if (gs.coreHp <= 0) {
@@ -312,7 +312,7 @@ class CollisionSystem(
                     )
                 }
 
-                enemySystem.spawn(i, gs, width, height)
+                enemySystem.killEnemy(i, gs, width, height)
             }
         }
 

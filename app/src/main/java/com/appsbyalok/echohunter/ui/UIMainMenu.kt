@@ -28,7 +28,6 @@ class UIMainMenu(private val context: Context) {
         typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
     }
 
-//    private val stringCache = SparseArray<String>()
 
     private val stringCache = SparseArray<String>()
     private val cablePath = Path()

@@ -42,9 +42,10 @@ class WorldRenderer(
     }
 
     fun drawGrid(c: Canvas, scale: Float, gs: GameState, targetW: Float, targetH: Float) {
-        p.color = if (gs.difficulty == 1) 0xFF330A0A.toInt() else GameColors.GRID
-        p.strokeWidth = 2f
-        val gap = scale / 8f
+        p.style = Paint.Style.STROKE
+        p.color = if (gs.difficulty == 1) 0xFF441010.toInt() else 0xFF1A1C2E.toInt()
+        p.strokeWidth = max(1f, scale * 0.002f)
+        val gap = scale / 8.5f
         val parallaxX = gs.cameraX * 0.5f
         val parallaxY = gs.cameraY * 0.5f
 
@@ -62,6 +63,7 @@ class WorldRenderer(
     }
 
     fun drawCRTOverlay(c: Canvas, gs: GameState, targetW: Float, targetH: Float) {
+        p.style = Paint.Style.STROKE
         p.color = 0x22000000
         p.strokeWidth = 2f
         var yLine = (gs.timeSinceStart * 20f) % 8f
@@ -221,7 +223,8 @@ class WorldRenderer(
             }
         }
 
-        if (gs.state == 1) enemySys.drawEntities(c, gs, targetW, scale)
+        // --- FIX: Enemies draw in Gameplay AND Core Merge states ---
+        if (gs.state == 1 || gs.state == 8 || gs.state == 9) enemySys.drawEntities(c, gs, targetW, scale)
 
         effectSys.drawTrails(c, gs.cameraX, gs.cameraY, scale, currentPlayerColor)
 
@@ -310,7 +313,7 @@ class WorldRenderer(
         }
 
         // --- 3. PREMIUM CORE BASE RENDERING MATRIX ---
-        if (gs.coreRadius > 0f && gs.state != 9) {
+        if (gs.coreRadius > 0f) {
 
             when {
                 // A. DEFENSE MODE VISUALS (Purple Pulsing Shield & HP Bar)
@@ -428,50 +431,6 @@ class WorldRenderer(
                 }
             }
 
-            // --- 4. TARGET DIRECTIONAL ARROW (Global UI Tracker Helper) ---
-//            if (gs.state == 8 || (isEscape && gs.escapeGateActive)) {
-//                val dx = gs.coreX - gs.px
-//                val dy = gs.coreY - gs.py
-//                val distSq = dx * dx + dy * dy
-//                val hideRadius = min(targetW, targetH) * 0.4f
-//
-//                if (distSq > hideRadius * hideRadius) {
-//                    val angle = kotlin.math.atan2(dy, dx)
-//                    val arrowDist = min(targetW, targetH) * 0.35f
-//
-//                    val arrowX = targetW / 2f + cos(angle) * arrowDist
-//                    val arrowY = targetH / 2f + sin(angle) * arrowDist
-//
-//                    val alpha = (abs(sin(gs.timeSinceStart * 5f)) * 155 + 100).toInt()
-//                    val arrowColor = if (gs.state == 8) GameColors.YELLOW else GameColors.HP
-//
-//                    p.style = Paint.Style.FILL
-//                    p.color = (alpha shl 24) or (arrowColor and 0xFFFFFF)
-//
-//                    arrowPath.reset()
-//                    arrowPath.moveTo(
-//                        arrowX + cos(angle) * scale * 0.04f,
-//                        arrowY + sin(angle) * scale * 0.04f
-//                    )
-//                    arrowPath.lineTo(
-//                        arrowX + cos(angle + 2.5f) * scale * 0.03f,
-//                        arrowY + sin(angle + 2.5f) * scale * 0.03f
-//                    )
-//                    arrowPath.lineTo(
-//                        arrowX + cos(angle - 2.5f) * scale * 0.03f,
-//                        arrowY + sin(angle - 2.5f) * scale * 0.03f
-//                    )
-//                    arrowPath.close()
-//                    c.drawPath(arrowPath, p)
-//
-//                    pText.color = (alpha shl 24) or (arrowColor and 0xFFFFFF)
-//                    pText.textSize = scale * 0.035f
-//                    pText.textAlign = Paint.Align.CENTER
-//                    val dist = (sqrt(distSq) / scale * 10).toInt()
-//                    c.drawText("$dist M", arrowX, arrowY - scale * 0.04f, pText)
-//                }
-//            }
-
             // --- 5. DOTTED DATA EXTRACTOR TETHER (Story Mode Merges) ---
             if (gs.state == 8) {
                 val dx = screenCoreX - screenPlayerX
@@ -479,6 +438,7 @@ class WorldRenderer(
                 val dist = sqrt(dx * dx + dy * dy)
 
                 if (dist > scale * 0.2f) {
+                    pDash.style = Paint.Style.STROKE
                     pDash.strokeWidth = scale * 0.005f
                     c.drawLine(screenPlayerX, screenPlayerY, screenCoreX, screenCoreY, pDash)
                 }

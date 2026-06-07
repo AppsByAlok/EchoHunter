@@ -27,11 +27,27 @@ class UIDecompiler {
     private var lastTouchY = 0f
     private var isDragging = false
 
+    private var scrollVelocity = 0f
+    private var lastTouchTime = 0L
+
     private val buyButtons = mutableMapOf<UpgradeType, RectF>()
     private val closeBtnRect = RectF()
 
     fun draw(c: Canvas, targetW: Float, targetH: Float, scale: Float) {
         c.drawColor(0xEE020A05.toInt()) // Terminal Dark Greenish BG
+
+        if (!isDragging && abs(scrollVelocity) > 0.5f) {
+            scrollY += scrollVelocity
+            scrollVelocity *= 0.97f
+
+            if (scrollY > 0f) {
+                scrollY = 0f
+                scrollVelocity = 0f
+            } else if (scrollY < -maxScroll) {
+                scrollY = -maxScroll
+                scrollVelocity = 0f
+            }
+        }
 
         // --- Header ---
         pText.textAlign = Paint.Align.CENTER
@@ -130,24 +146,42 @@ class UIDecompiler {
         when (action) {
             MotionEvent.ACTION_DOWN -> {
                 lastTouchY = y
+                lastTouchTime = System.currentTimeMillis()
+                scrollVelocity = 0f
                 isDragging = false
-
-                if (closeBtnRect.contains(x, y)) {
-                    EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
-                    onBack()
-                    return true
-                }
             }
             MotionEvent.ACTION_MOVE -> {
+                val currentTime = System.currentTimeMillis()
+                val dt = currentTime - lastTouchTime
                 val dy = y - lastTouchY
+
                 if (abs(dy) > scale * 0.02f) isDragging = true
+                if (dt > 0) {
+                    val rawVelocity = (dy / dt.toFloat()) * 20f
+                    scrollVelocity = (scrollVelocity * 0.4f) + (rawVelocity * 0.6f)
+                }
+
                 scrollY += dy
-                if (scrollY > 0f) scrollY = 0f
-                if (scrollY < -maxScroll) scrollY = -maxScroll
+                if (scrollY > 0f) {
+                    scrollY = 0f
+                    scrollVelocity = 0f
+                }
+                if (scrollY < -maxScroll) {
+                    scrollY = -maxScroll
+                    scrollVelocity = 0f
+                }
+
                 lastTouchY = y
+                lastTouchTime = currentTime
             }
             MotionEvent.ACTION_UP -> {
                 if (!isDragging) {
+                    if (closeBtnRect.contains(x, y)) {
+                        EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
+                        onBack()
+                        return true
+                    }
+
                     for ((type, rect) in buyButtons) {
                         if (rect.contains(x, y)) {
                             if (UpgradeSystem.purchaseUpgrade(type)) {
@@ -161,8 +195,13 @@ class UIDecompiler {
                         }
                     }
                 }
+                isDragging = false
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                isDragging = false
             }
         }
-        return true
+        val returnValue = true
+        return returnValue
     }
 }

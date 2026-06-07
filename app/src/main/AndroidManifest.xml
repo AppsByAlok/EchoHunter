@@ -15,7 +15,7 @@
             android:name="com.appsbyalok.echohunter.MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:exported="true">
-<!-- Maybe add this when release but not now   android:screenOrientation="landscape"-->
+<!-- Maybe add this when release but not now or maybe not anyway because game becomes responsive now    android:screenOrientation="landscape"-->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

@@ -1,0 +1,293 @@
+package com.appsbyalok.echohunter.statemachine
+
+import android.graphics.Canvas
+import android.media.ToneGenerator
+import android.view.MotionEvent
+import com.appsbyalok.echohunter.data.SaveManager
+import com.appsbyalok.echohunter.data.StoryProtocol
+import com.appsbyalok.echohunter.engine.GameState
+import com.appsbyalok.echohunter.utils.EchoAudioManager
+import com.appsbyalok.echohunter.view.GameView
+import kotlin.math.sin
+
+// Blueprint (Interface) for every state
+interface IAppState {
+    fun onEnter(gs: GameState)
+    fun onExit(gs: GameState)
+    fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float)
+    fun draw(c: Canvas, gs: GameState, width: Float, height: Float, scale: Float, dt: Float)
+    fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean
+    fun onBackPressed(gs: GameState): Boolean
+}
+
+// Parent State Manager
+class AppStateManager(val view: GameView, private val gs: GameState) {
+    var currentState: IAppState? = null
+        private set
+
+    val mainMenuState = MainMenuState(this)
+    val gameplayState = GameplayState(this)
+    val pauseState = PauseState(this)
+    val helpState = HelpState(this)
+    val storyState = StoryCutsceneState(this)
+    val victoryState = VictoryState(this)
+    val subMenuState = SubMenuState(this)
+
+    fun changeState(newState: IAppState) {
+        currentState?.onExit(gs)
+        currentState = newState
+        currentState?.onEnter(gs)
+    }
+
+    fun update(dt: Float, width: Float, height: Float, scale: Float) {
+        currentState?.update(dt, gs, width, height, scale)
+    }
+
+    fun draw(c: Canvas, width: Float, height: Float, scale: Float, dt: Float) {
+        currentState?.draw(c, gs, width, height, scale, dt)
+    }
+
+    fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, scale: Float, targetW: Float, targetH: Float): Boolean {
+        return currentState?.onTouch(e, vx, vy, action, gs, scale, targetW, targetH) ?: false
+    }
+
+    fun onBackPressed(): Boolean {
+        return currentState?.onBackPressed(gs) ?: false
+    }
+}
+
+// ---------------------------------------------------------
+// STATE CLASSES
+// ---------------------------------------------------------
+
+class MainMenuState(private val manager: AppStateManager) : IAppState {
+    override fun onEnter(gs: GameState) {
+        manager.view.uiMainMenu.disconnect()
+    }
+    override fun onExit(gs: GameState) {}
+    override fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {
+        manager.view.uiMainMenu.update(dt, width, height, manager.view, manager.view.effectSys, gs, manager.view.onMenuRoute)
+        manager.view.worldRenderer.updateDashEffect(scale)
+    }
+    override fun draw(c: Canvas, gs: GameState, width: Float, height: Float, scale: Float, dt: Float) {
+        c.drawColor(0xFF050A0F.toInt()) // Deep Dark Background
+        manager.view.worldRenderer.drawGrid(c, scale, gs, width, height)
+        manager.view.uiMainMenu.draw(c, scale, gs, width, height, manager.view.effectSys)
+    }
+    override fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean {
+        if (action == MotionEvent.ACTION_DOWN && vx > targetW - scale * 0.15f && vy < scale * 0.15f) {
+            manager.view.modMenu.isOpen = true
+            EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 100)
+            return true
+        }
+        return manager.view.uiMainMenu.onTouch(vx, vy, action, scale, targetW, targetH, manager.view, gs, manager.view.onDifficultyToggle, manager.view.onHelpOpen, manager.view.onMenuRoute)
+    }
+    override fun onBackPressed(gs: GameState): Boolean = false
+}
+
+class GameplayState(private val manager: AppStateManager) : IAppState {
+    override fun onEnter(gs: GameState) {}
+    override fun onExit(gs: GameState) {}
+    override fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {}
+    override fun draw(c: Canvas, gs: GameState, width: Float, height: Float, scale: Float, dt: Float) {
+        c.drawColor(0xFF050A0F.toInt()) // Base Background
+        manager.view.worldRenderer.drawGrid(c, scale, gs, width, height) // GRID RESTORED
+
+        c.save()
+        if (gs.slowMoTimer > 0f) {
+            val zoom = 1.05f + sin(gs.timeSinceStart * 8.0).toFloat() * 0.015f
+            c.scale(zoom, zoom, width / 2f, height / 2f)
+        } else if (gs.state == 9) {
+            val zoom = 1f + (gs.mergeTimer * 0.5f)
+            c.scale(zoom, zoom, gs.coreX - gs.cameraX, gs.coreY - gs.cameraY)
+        }
+
+        manager.view.worldRenderer.drawMaze(c, gs, scale, width, height)
+        manager.view.worldRenderer.drawGamePlay(c, scale, gs, width, height)
+        c.restore()
+
+        if (gs.empFlashTimer <= 0.8f && gs.state != 9) manager.view.hudRenderer.drawHUD(c, scale, gs, width, height)
+        if (gs.showOverclockTextTimer > 0f) manager.view.hudRenderer.renderOverclockText(c, scale, width, height)
+    }
+    override fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean {
+        return manager.view.touchController.handleTouch(e, 0f, 0f, 1f, targetW, targetH, scale)
+    }
+    override fun onBackPressed(gs: GameState): Boolean {
+        manager.view.pauseGame()
+        return true
+    }
+}
+
+class PauseState(private val manager: AppStateManager) : IAppState {
+    override fun onEnter(gs: GameState) {}
+    override fun onExit(gs: GameState) {}
+    override fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {}
+    override fun draw(c: Canvas, gs: GameState, width: Float, height: Float, scale: Float, dt: Float) {
+        manager.gameplayState.draw(c, gs, width, height, scale, dt)
+        manager.view.menuRenderer.drawPause(c, scale, gs, width, height)
+    }
+    override fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean {
+        if (action == MotionEvent.ACTION_UP && gs.stateTimer > 0.2f) {
+            if (manager.view.menuRenderer.pauseModRect.contains(vx, vy)) {
+                manager.view.modMenu.isOpen = true
+                EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 100)
+            } else if (manager.view.menuRenderer.pauseDiscRect.contains(vx, vy)) {
+                manager.view.disconnectCable()
+            } else if (manager.view.menuRenderer.pauseAutoRect.contains(vx, vy)) {
+                gs.isAutoPilotActive = !gs.isAutoPilotActive
+                EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100)
+            } else if (manager.view.menuRenderer.pauseRestartRect.contains(vx, vy)) {
+                EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 150)
+                manager.view.resetGame()
+            } else if (manager.view.menuRenderer.pauseResumeRect.contains(vx, vy) || (vx > targetW - scale * 0.15f && vy < scale * 0.15f)) {
+                if (gs.isRotationWarning) {
+                    EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
+                } else {
+                    // FIX: Ensure we return to the correct sub-gameplay state (Normal or Merge)
+                    val returnState = if (gs.state == 8 || (gs.coreX > 0f && gs.bossHp <= 0 && gs.gameMode == 1 && gs.currentSector >= 8)) 8 else 1
+                    manager.view.changeState(returnState)
+                    manager.view.lastFrameTime = System.nanoTime()
+                }
+            }
+        }
+        return true
+    }
+    override fun onBackPressed(gs: GameState): Boolean {
+        manager.view.changeState(0)
+        return true
+    }
+}
+
+class HelpState(private val manager: AppStateManager) : IAppState {
+    override fun onEnter(gs: GameState) {}
+    override fun onExit(gs: GameState) {}
+    override fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {}
+    override fun draw(c: Canvas, gs: GameState, width: Float, height: Float, scale: Float, dt: Float) {
+        manager.view.uiHelpMenu.draw(c, scale, width, height, gs)
+    }
+    override fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean {
+        return manager.view.uiHelpMenu.onTouch(vx, vy, action, scale, gs, manager.view, manager.view.effectSys, manager.view.onHelpClose)
+    }
+    override fun onBackPressed(gs: GameState): Boolean {
+        manager.view.changeState(0)
+        return true
+    }
+}
+
+class VictoryState(private val manager: AppStateManager) : IAppState {
+    override fun onEnter(gs: GameState) {}
+    override fun onExit(gs: GameState) {}
+    override fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {
+        if (SaveManager.isAutoNextLevelEnabled && gs.gameMode == 0 && gs.stateTimer > 2.0f) {
+            manager.view.startGame(0, gs.currentLevel + 1)
+        }
+    }
+    override fun draw(c: Canvas, gs: GameState, width: Float, height: Float, scale: Float, dt: Float) {
+        manager.gameplayState.draw(c, gs, width, height, scale, dt)
+        manager.view.menuRenderer.drawLevelVictory(c, scale, gs, width, height)
+    }
+    override fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean {
+        if (action == MotionEvent.ACTION_UP && gs.stateTimer > 0.3f) {
+            if (manager.view.menuRenderer.victoryNextRect.contains(vx, vy)) {
+                EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 150)
+                manager.view.startGame(0, gs.currentLevel + 1)
+                return true
+            } else if (manager.view.menuRenderer.victoryHomeRect.contains(vx, vy)) {
+                EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
+                manager.view.disconnectCable()
+                return true
+            }
+        }
+        return true
+    }
+    override fun onBackPressed(gs: GameState): Boolean {
+        manager.view.disconnectCable()
+        return true
+    }
+}
+
+class StoryCutsceneState(private val manager: AppStateManager) : IAppState {
+    override fun onEnter(gs: GameState) {}
+    override fun onExit(gs: GameState) {}
+    override fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {}
+    override fun draw(c: Canvas, gs: GameState, width: Float, height: Float, scale: Float, dt: Float) {
+        c.drawColor(0xFF050A0F.toInt())
+        val lines = if (gs.state == 4) StoryProtocol.badEndingLines else manager.view.currentStoryLines
+        manager.view.storyStep = manager.view.menuRenderer.drawStory(c, lines, scale, gs, width, height, manager.view.storyStep)
+    }
+    override fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean {
+        if (action == MotionEvent.ACTION_UP) {
+            val activeLines = if (gs.state == 4) StoryProtocol.badEndingLines else manager.view.currentStoryLines
+            
+            // Agar typing khatam nahi hui toh typing skip karo, warna next line
+            if (manager.view.storyStep < activeLines.size) {
+                manager.view.storyStep++
+            } else {
+                // Transition logic
+                if (gs.stateTimer < 0.8f) return true
+                when (gs.state) {
+                    5, 7 -> {
+                        // Intro or Mid-story -> Start Gameplay
+                        val targetState = if (gs.nextStateAfterStory != -1) gs.nextStateAfterStory else 1
+                        manager.view.changeState(targetState)
+                    }
+                    6 -> {
+                        // Ending -> Save Progress and back to Menu
+                        if (gs.isPerfectEnd) {
+                            SaveManager.addData(10000) // Perfect Bonus
+                            SaveManager.updateStoryStreak(true, gs.difficulty == 1, gs.selectedStoryAct)
+                        } else {
+                            SaveManager.addData(2000) // Neutral Bonus
+                        }
+                        manager.view.disconnectCable()
+                    }
+                    else -> manager.view.disconnectCable()
+                }
+            }
+        }
+        return true
+    }
+    override fun onBackPressed(gs: GameState): Boolean {
+        if (gs.state == 5 || gs.state == 7) {
+            manager.view.changeState(0)
+            return true
+        }
+        return true
+    }
+}
+
+class SubMenuState(private val manager: AppStateManager) : IAppState {
+    override fun onEnter(gs: GameState) {}
+    override fun onExit(gs: GameState) {}
+    override fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {}
+    override fun draw(c: Canvas, gs: GameState, width: Float, height: Float, scale: Float, dt: Float) {
+        c.drawColor(0xFF050A0F.toInt())
+        when (gs.state) {
+            10 -> manager.view.uiDecompiler.draw(c, width, height, scale)
+            11 -> manager.view.uiArchives.draw(c, width, height, gs, scale)
+            13 -> manager.view.uiArsenal.draw(c, width, height, scale, gs)
+            14 -> manager.view.uiNanoOS.draw(c, width, height, scale, gs.timeSinceStart)
+        }
+    }
+    override fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean {
+        return when (gs.state) {
+            10 -> manager.view.uiDecompiler.onTouch(vx, vy, action, scale, gs, manager.view.onAppClose)
+            11 -> manager.view.uiArchives.onTouch(vx, vy, action, scale, gs, manager.view.onArchiveSelect, manager.view.onAppClose)
+            13 -> manager.view.uiArsenal.onTouch(vx, vy, action, gs, manager.view.onAppClose)
+            14 -> manager.view.uiNanoOS.onTouch(vx, vy, action, { appIndex ->
+                manager.view.menuReturnState = 14
+                when (appIndex) {
+                    0 -> manager.view.changeState(10)
+                    1 -> manager.view.changeState(13)
+                    2 -> manager.view.changeState(11)
+                }
+            }, manager.view.onDisconnect)
+            else -> true
+        }
+    }
+    override fun onBackPressed(gs: GameState): Boolean {
+        if (gs.state == 10 || gs.state == 11 || gs.state == 13) manager.view.onAppClose()
+        else if (gs.state == 14) manager.view.disconnectCable()
+        return true
+    }
+}

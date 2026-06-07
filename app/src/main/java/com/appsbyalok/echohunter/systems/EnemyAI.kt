@@ -3,64 +3,58 @@ package com.appsbyalok.echohunter.systems
 import com.appsbyalok.echohunter.engine.GameState
 import kotlin.math.sqrt
 
-// EnemyAI: Modular class strictly for Pathfinding and Line-of-Sight math
 class EnemyAI {
-    private var heatMap: Array<IntArray>? = null
-   // private val MAX_QUEUE = 65000  // Private property name 'MAX_QUEUE' should not contain underscores in the middle or the end
+    private var playerHeatMap: Array<IntArray>? = null
+    private var coreHeatMap: Array<IntArray>? = null
+    private var alertHeatMap: Array<IntArray>? = null
+
     companion object { private const val MAX_QUEUE = 65000 }
     private val qX = IntArray(MAX_QUEUE)
     private val qY = IntArray(MAX_QUEUE)
 
-    fun updateHeatMap(gs: GameState) {
-        val grid = gs.gridMap ?: return
+    fun updatePlayerHeatMap(gs: GameState) {
+        val targetX = if (gs.isDecoyActive) gs.decoyX else gs.px
+        val targetY = if (gs.isDecoyActive) gs.decoyY else gs.py
+        if (gs.isCamouflaged && !gs.isDecoyActive) return
+        playerHeatMap = buildHeatMap(gs, targetX, targetY, playerHeatMap)
+    }
+
+    fun updateCoreHeatMap(gs: GameState) {
+        if (gs.coreRadius <= 0f) return
+        coreHeatMap = buildHeatMap(gs, gs.coreX, gs.coreY, coreHeatMap)
+    }
+
+    private fun buildHeatMap(gs: GameState, targetX: Float, targetY: Float, existingMap: Array<IntArray>?): Array<IntArray>? {
+        val grid = gs.gridMap ?: return null
         val w = grid.size; val h = grid[0].size
 
-        if (heatMap == null || heatMap!!.size != w || heatMap!![0].size != h) {
-            heatMap = Array(w) { IntArray(h) }
+        var map = existingMap
+        if (map == null || map.size != w || map[0].size != h) {
+            map = Array(w) { IntArray(h) }
         }
 
-        // Initialize with high distance (9999)
-        for(x in 0 until w) for(y in 0 until h) heatMap!![x][y] = 9999
+        for(x in 0 until w) for(y in 0 until h) map!![x][y] = 9999
 
         val ts = gs.tileSize
-
-        // --- NAYA: CHECK IF IT IS A DEFENSE LEVEL ---
-        val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
-        val isDefense = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE)
-
-        // Agar Defense mode hai, toh target Core hoga, warna Decoy/Player.
-        val targetX = if (isDefense) gs.coreX else if (gs.isDecoyActive) gs.decoyX else gs.px
-        val targetY = if (isDefense) gs.coreY else if (gs.isDecoyActive) gs.decoyY else gs.py
-
-        // Agar Camouflage active hai aur decoy nahi hai, lekin DEFENSE mode chal raha hai,
-        // toh dushman ruka nahi rahega, wo seedha Core par attack karne bhagega!
-        if (gs.isCamouflaged && !gs.isDecoyActive && !isDefense) return
-
         val pxC = (targetX / ts).toInt().coerceIn(0, w - 1)
         val pyC = (targetY / ts).toInt().coerceIn(0, h - 1)
 
-        // Agar Camouflage (Invisibility) active hai aur decoy nahi hai, toh dushman tumhe nahi dhoondh payenge
-        if (gs.isCamouflaged && !gs.isDecoyActive) return
-
-
         var head = 0; var tail = 0
         qX[tail] = pxC; qY[tail] = pyC; tail++
-        heatMap!![pxC][pyC] = 0
+        map!![pxC][pyC] = 0
 
         val dirsX = intArrayOf(0, 0, -1, 1)
         val dirsY = intArrayOf(-1, 1, 0, 0)
 
-        // Breadth-First Search (Flow Field logic)
         while (head < tail) {
             val cx = qX[head]; val cy = qY[head]; head++
-            val dist = heatMap!![cx][cy]
+            val dist = map[cx][cy]
 
             for (d in 0..3) {
                 val nx = cx + dirsX[d]; val ny = cy + dirsY[d]
                 if (nx in 0 until w && ny in 0 until h && grid[nx][ny] != 1) {
-                    if (heatMap!![nx][ny] > dist + 1) {
-                        heatMap!![nx][ny] = dist + 1
-
+                    if (map[nx][ny] > dist + 1) {
+                        map[nx][ny] = dist + 1
                         if (tail < MAX_QUEUE) {
                             qX[tail] = nx; qY[tail] = ny; tail++
                         }
@@ -68,31 +62,89 @@ class EnemyAI {
                 }
             }
         }
-
+        return map
     }
 
-    fun steerByHeatMap(ex: Float, ey: Float, evx: Float, evy: Float, speed: Float, gs: GameState): Pair<Float, Float> {
-        val hm = heatMap ?: return Pair(evx, evy)
+    fun steerByPlayerHeatMap(ex: Float, ey: Float, evx: Float, evy: Float, speed: Float, gs: GameState): Pair<Float, Float> {
+        return steerByMap(playerHeatMap, ex, ey, evx, evy, speed, gs)
+    }
+
+    fun steerByCoreHeatMap(ex: Float, ey: Float, evx: Float, evy: Float, speed: Float, gs: GameState): Pair<Float, Float> {
+        return steerByMap(coreHeatMap, ex, ey, evx, evy, speed, gs)
+    }
+
+    fun updateAlertHeatMap(gs: GameState, targetX: Float, targetY: Float) {
+        val grid = gs.gridMap ?: return
+        val w = grid.size; val h = grid[0].size
+
+        var map = alertHeatMap
+        if (map == null || map.size != w || map[0].size != h) {
+            map = Array(w) { IntArray(h) }
+            for (x in 0 until w) for (y in 0 until h) map[x][y] = 9999
+            alertHeatMap = map
+        }
+
+        val ts = gs.tileSize
+        val pxC = (targetX / ts).toInt().coerceIn(0, w - 1)
+        val pyC = (targetY / ts).toInt().coerceIn(0, h - 1)
+
+        val radiusTiles = 35
+        val startX = kotlin.math.max(0, pxC - radiusTiles)
+        val endX = kotlin.math.min(w - 1, pxC + radiusTiles)
+        val startY = kotlin.math.max(0, pyC - radiusTiles)
+        val endY = kotlin.math.min(h - 1, pyC + radiusTiles)
+
+        for (x in startX..endX) {
+            for (y in startY..endY) {
+                map[x][y] = 9999
+            }
+        }
+
+        var head = 0; var tail = 0
+        qX[tail] = pxC; qY[tail] = pyC; tail++
+        map[pxC][pyC] = 0
+
+        val dirsX = intArrayOf(0, 0, -1, 1)
+        val dirsY = intArrayOf(-1, 1, 0, 0)
+
+        while (head < tail) {
+            val cx = qX[head]; val cy = qY[head]; head++
+            val dist = map[cx][cy]
+            if (dist > radiusTiles) continue
+
+            for (d in 0..3) {
+                val nx = cx + dirsX[d]; val ny = cy + dirsY[d]
+                if (nx in startX..endX && ny in startY..endY && grid[nx][ny] != 1) {
+                    if (map[nx][ny] > dist + 1) {
+                        map[nx][ny] = dist + 1
+                        if (tail < MAX_QUEUE) {
+                            qX[tail] = nx; qY[tail] = ny; tail++
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun steerByAlertHeatMap(ex: Float, ey: Float, evx: Float, evy: Float, speed: Float, gs: GameState): Pair<Float, Float> {
+        return steerByMap(alertHeatMap, ex, ey, evx, evy, speed, gs)
+    }
+
+    private fun steerByMap(hm: Array<IntArray>?, ex: Float, ey: Float, evx: Float, evy: Float, speed: Float, gs: GameState): Pair<Float, Float> {
+        if (hm == null) return Pair(evx, evy)
         val ts = gs.tileSize
         val cx = (ex / ts).toInt()
         val cy = (ey / ts).toInt()
 
         if (cx !in hm.indices || cy !in hm[0].indices) return Pair(evx, evy)
 
-        // --- NAYA: AI INTELLIGENCE CHECK ---
         val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
-
-        // Agar AI galti karta hai (Intelligence check fail), toh wo random direction me move karega
         if (kotlin.random.Random.nextFloat() > config.aiIntelligence) {
-            val rx = evx + (kotlin.random.Random.nextFloat() - 0.5f) * speed * 0.5f
-            val ry = evy + (kotlin.random.Random.nextFloat() - 0.5f) * speed * 0.5f
-            return Pair(rx, ry)
+            return Pair(evx + (kotlin.random.Random.nextFloat() - 0.5f) * speed * 0.5f, evy + (kotlin.random.Random.nextFloat() - 0.5f) * speed * 0.5f)
         }
 
-        // Agar AI smart hai, toh perfect Heatmap use karega
         var bestVal = hm[cx][cy]
-        var targetX = ex
-        var targetY = ey
+        var targetX = ex; var targetY = ey
 
         val dirsX = intArrayOf(0, 0, -1, 1)
         val dirsY = intArrayOf(-1, 1, 0, 0)
@@ -108,27 +160,23 @@ class EnemyAI {
 
         val dx = targetX - ex; val dy = targetY - ey
         val dist = sqrt(dx * dx + dy * dy)
-        return if (dist > 0f) {
-            Pair((evx * 0.8f) + ((dx / dist) * speed * 0.2f), (evy * 0.8f) + ((dy / dist) * speed * 0.2f))
-        } else Pair(evx, evy)
+        return if (dist > 0f) Pair((evx * 0.8f) + ((dx / dist) * speed * 0.2f), (evy * 0.8f) + ((dy / dist) * speed * 0.2f))
+        else Pair(evx, evy)
     }
 
     fun hasLineOfSight(x0: Float, y0: Float, x1: Float, y1: Float, gs: GameState): Boolean {
-        // STEALTH: Invisible player cannot be seen
         if (gs.isCamouflaged) return false
-
         val grid = gs.gridMap ?: return true
         val ts = gs.tileSize
         val steps = 15
         val dx = (x1 - x0) / steps
         val dy = (y1 - y0) / steps
 
-        // Raycasting to check walls
         for (i in 0..steps) {
             val cx = ((x0 + dx * i) / ts).toInt()
             val cy = ((y0 + dy * i) / ts).toInt()
             if (cx in grid.indices && cy in grid[0].indices) {
-                if (grid[cx][cy] == 1) return false // Wall is blocking the view!
+                if (grid[cx][cy] == 1) return false
             }
         }
         return true

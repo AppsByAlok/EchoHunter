@@ -20,6 +20,7 @@ class UIModMenu {
     private var maxScrollY = 0f
     private var lastTouchY = 0f
     private var isDragging = false
+    private var isCloseTapValid = false
 
     // Hold Matrix Tracking variables
     private var holdingLevelDir = 0 // -1 for DOWN, 1 for UP, 0 for None, 2 for DATA hold
@@ -31,6 +32,7 @@ class UIModMenu {
         fun onTriggerCoreMerge()
         fun onForceEMP()
     }
+    var listener: ModMenuListener? = null
 
     private val p = Paint().apply { isAntiAlias = true }
     private val pText = Paint().apply {
@@ -68,7 +70,7 @@ class UIModMenu {
                         EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 20)
                     }
                     2 -> { // Data Add Fast Engine (Hold System)
-                        // Hold duration ke base par dynamic data multiplier multiplier (100MB up to 1GB per tick)
+                        // Hold duration ke base par dynamic data multiplier (100MB up to 1GB per tick)
                         val dataMultiplier = when {
                             holdDuration > 3000L -> 10 // 1 GB per tick!
                             holdDuration > 1500L -> 5  // 500 MB per tick
@@ -85,7 +87,7 @@ class UIModMenu {
         }
     }
 
-    fun drawModMenu(c: Canvas, scale: Float, targetW: Float, targetH: Float, gs: GameState) {
+    fun draw(c: Canvas, scale: Float, targetW: Float, targetH: Float, gs: GameState) {
         if (!isOpen) return
 
         updateHoldLogic(gs) // Frame loop engine trigger
@@ -106,14 +108,15 @@ class UIModMenu {
         val items = listOf(
             "God Mode (HP <= 1): " + if(gs.modGodMode) "ON" else "OFF",
             "Infinite Overclock: " + if(gs.modInfiniteOvr) "ON" else "OFF",
-            "Add +100 MB Data",                        // Index 2 (Holdable)
-            "Level UP (+1) [Cur: ${gs.currentLevel}]", // Index 3 (Holdable)
-            "Level DOWN (-1)",                        // Index 4 (Holdable)
+            "Full Visibility: " + if(gs.modFullVisibility) "ON" else "OFF",
+            "Add +100 MB Data",                        // Index 3 (Holdable)
+            "Level UP (+1) [Cur: ${gs.currentLevel}]", // Index 4 (Holdable)
+            "Level DOWN (-1)",                        // Index 5 (Holdable)
             "Instant Boss Spawn",
             "Trigger Core Merge",
             "Force EMP Blast",
-            "[ CRITICAL: RESET ALL DATA ]",           // Index 8
-            "Close Menu"                              // Index 9
+            "[ CRITICAL: RESET ALL DATA ]",           // Index 9
+            "Close Menu"                              // Index 10
         )
 
         val totalHeight = items.size * (itemHeight + gap)
@@ -127,18 +130,18 @@ class UIModMenu {
 
             p.style = Paint.Style.FILL
             p.color = when {
-                i == 2 && holdingLevelDir == 2 -> 0xFF333333.toInt()
-                i == 3 && holdingLevelDir == 1 -> 0xFF333333.toInt()
-                i == 4 && holdingLevelDir == -1 -> 0xFF333333.toInt()
-                i < 2 && ((i==0 && gs.modGodMode) || (i==1 && gs.modInfiniteOvr)) -> 0xFF114411.toInt()
-                i == 8 -> 0xFF2A0505.toInt()
+                i == 3 && holdingLevelDir == 2 -> 0xFF333333.toInt()
+                i == 4 && holdingLevelDir == 1 -> 0xFF333333.toInt()
+                i == 5 && holdingLevelDir == -1 -> 0xFF333333.toInt()
+                i < 3 && ((i==0 && gs.modGodMode) || (i==1 && gs.modInfiniteOvr) || (i==2 && gs.modFullVisibility)) -> 0xFF114411.toInt()
+                i == 9 -> 0xFF2A0505.toInt()
                 else -> 0xFF1A1A1A.toInt()
             }
             c.drawRoundRect(rect, scale * 0.03f, scale * 0.03f, p)
 
             p.style = Paint.Style.STROKE
             p.color = when(i) {
-                8 -> GameColors.RED
+                9 -> GameColors.RED
                 items.lastIndex -> GameColors.YELLOW
                 else -> GameColors.PULSE
             }
@@ -147,7 +150,7 @@ class UIModMenu {
 
             p.style = Paint.Style.FILL
             pText.textSize = scale * 0.045f
-            pText.color = if (i == 8 || i == items.lastIndex) GameColors.RED else GameColors.CLARITY
+            pText.color = if (i == 9 || i == items.lastIndex) GameColors.RED else GameColors.CLARITY
             c.drawText(item, targetW / 2f, y + itemHeight * 0.65f, pText)
         }
 
@@ -159,7 +162,7 @@ class UIModMenu {
         }
     }
 
-    fun handleModMenuTouch(vx: Float, vy: Float, action: Int, scale: Float, targetW: Float, targetH: Float, gs: GameState, listener: ModMenuListener? = null): Boolean {
+    fun onTouch(vx: Float, vy: Float, action: Int, scale: Float, targetW: Float, targetH: Float, gs: GameState, listener: ModMenuListener? = null): Boolean {
         if (!isOpen) return false
 
         val startY = targetH * 0.25f + scrollY
@@ -172,13 +175,15 @@ class UIModMenu {
                 lastTouchY = vy
                 isDragging = false
 
+                isCloseTapValid = (vx > targetW - scale * 0.15f && vy < scale * 0.15f)
+
                 val clickedIndex = ((vy - startY) / (itemHeight + gap)).toInt()
                 val itemYStart = startY + clickedIndex * (itemHeight + gap)
 
                 if (vy >= itemYStart && vy <= itemYStart + itemHeight && vx >= targetW / 2f - btnW / 2f && vx <= targetW / 2f + btnW / 2f) {
                     // Instant single-click execution on touch down + activate loop holding state
                     when (clickedIndex) {
-                        2 -> {
+                        3 -> {
                             holdingLevelDir = 2
                             holdStartTime = System.currentTimeMillis()
                             lastLevelChangeTime = holdStartTime
@@ -187,7 +192,7 @@ class UIModMenu {
                             SaveManager.addData(dataToAdd)
                             EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 100)
                         }
-                        3 -> {
+                        4 -> {
                             holdingLevelDir = 1
                             holdStartTime = System.currentTimeMillis()
                             lastLevelChangeTime = holdStartTime
@@ -195,7 +200,7 @@ class UIModMenu {
                             SaveManager.debugSetLevel(gs.currentLevel)
                             EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 60)
                         }
-                        4 -> {
+                        5 -> {
                             if (gs.currentLevel > 1) {
                                 holdingLevelDir = -1
                                 holdStartTime = System.currentTimeMillis()
@@ -226,23 +231,32 @@ class UIModMenu {
 
                 // Trigger click blocks only if user wasn't holding or scrolling layout
                 if (!isDragging && !wasHolding && action != MotionEvent.ACTION_CANCEL) {
+                    if (isCloseTapValid && vx > targetW - scale * 0.15f && vy < scale * 0.15f) {
+                        EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 100)
+                        isOpen = false
+                        isDragging = false
+                        isCloseTapValid = false
+                        return true
+                    }
+
                     val clickedIndex = ((vy - startY) / (itemHeight + gap)).toInt()
                     val itemYStart = startY + clickedIndex * (itemHeight + gap)
 
-                    if (clickedIndex in 0..9 && vy >= itemYStart && vy <= itemYStart + itemHeight && vx >= targetW / 2f - btnW / 2f && vx <= targetW / 2f + btnW / 2f) {
+                    if (clickedIndex in 0..10 && vy >= itemYStart && vy <= itemYStart + itemHeight && vx >= targetW / 2f - btnW / 2f && vx <= targetW / 2f + btnW / 2f) {
                         when (clickedIndex) {
                             0 -> { EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100); gs.modGodMode = !gs.modGodMode }
                             1 -> { EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100); gs.modInfiniteOvr = !gs.modInfiniteOvr }
-                            5 -> { EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100); listener?.onForceBossSpawn(); isOpen = false }
-                            6 -> { EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100); listener?.onTriggerCoreMerge(); isOpen = false }
-                            7 -> { EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100); listener?.onForceEMP(); isOpen = false }
-                            8 -> {
+                            2 -> { EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100); gs.modFullVisibility = !gs.modFullVisibility }
+                            6 -> { EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100); listener?.onForceBossSpawn(); isOpen = false }
+                            7 -> { EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100); listener?.onTriggerCoreMerge(); isOpen = false }
+                            8 -> { EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100); listener?.onForceEMP(); isOpen = false }
+                            9 -> {
                                 SaveManager.clearAllData()
                                 gs.currentLevel = 1
                                 EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 600)
                                 isOpen = false
                             }
-                            9 -> { EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100); isOpen = false }
+                            10 -> { EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100); isOpen = false }
                         }
                     }
                 }
@@ -250,19 +264,5 @@ class UIModMenu {
             }
         }
         return true
-    }
-
-    fun drawDebugHitboxes(c: Canvas, scale: Float, gs: GameState) {
-        val pDebug = Paint().apply { isAntiAlias = true; style = Paint.Style.STROKE; strokeWidth = 3f }
-        pDebug.color = android.graphics.Color.RED
-        c.drawCircle(gs.uiAtkX, gs.uiAtkY, gs.uiBtnRadius * 1.5f, pDebug)
-        pDebug.color = android.graphics.Color.GREEN
-        c.drawCircle(gs.uiOvrX, gs.uiOvrY, gs.uiBtnRadius * 1.5f, pDebug)
-        pDebug.color = android.graphics.Color.BLUE
-        c.drawCircle(gs.uiTrapX, gs.uiTrapY, gs.uiBtnRadius * 1.5f, pDebug)
-        pDebug.color = android.graphics.Color.CYAN
-        c.drawCircle(gs.uiPulseX, gs.uiPulseY, gs.uiBtnRadius * 1.5f, pDebug)
-        pDebug.color = android.graphics.Color.YELLOW
-        c.drawCircle(gs.uiPauseX, gs.uiPauseY, gs.uiBtnRadius * 1.5f, pDebug)
     }
 }

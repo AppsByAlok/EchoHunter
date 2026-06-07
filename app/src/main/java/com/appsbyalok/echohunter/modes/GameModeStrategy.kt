@@ -12,7 +12,7 @@ interface GameModeStrategy {
     // Resource IDs
     fun getIntroLines(): IntArray
 
-    fun updateCameraAndMovement(dt: Float, gs: GameState, width: Float, scale: Float)
+    fun updateCameraAndMovement(dt: Float, gs: GameState, width: Float, height: Float, scale: Float)
 
     // Wave progress, Sector progress, ya Popup show
     fun checkProgression(

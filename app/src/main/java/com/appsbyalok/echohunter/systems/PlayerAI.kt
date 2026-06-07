@@ -239,7 +239,7 @@ class PlayerAI(private val gs: GameState, private val enemySys: EnemySystem) {
             val framesMoved = sqrt((gs.px - lastPx) * (gs.px - lastPx) + (gs.py - lastPy) * (gs.py - lastPy))
             if (framesMoved < scale * 0.04f * dt) stuckTimer += dt else stuckTimer = 0f
 
-            if (stuckTimer > 0.12f) {
+            if (stuckTimer > 0.5f) { // FIX: Increased from 0.12f to 0.5f to prevent corner jitter
                 dirX += (Random.nextFloat() - 0.5f) * 2f
                 dirY += (Random.nextFloat() - 0.5f) * 2f
                 val length = sqrt(dirX * dirX + dirY * dirY)

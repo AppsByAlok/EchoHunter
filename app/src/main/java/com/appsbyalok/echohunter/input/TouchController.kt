@@ -27,8 +27,8 @@ class TouchController(private val gs: GameState) {
         val pointerIndex = e.actionIndex
         val pointerId = e.getPointerId(pointerIndex)
 
-        val vx = (e.getX(pointerIndex) - offsetX) / gameScale
-        val vy = (e.getY(pointerIndex) - offsetY) / gameScale
+        val vx = e.getX(pointerIndex) - offsetX
+        val vy = e.getY(pointerIndex) - offsetY
 
         gs.lastTouchX = vx
         gs.lastTouchY = vy
@@ -70,17 +70,17 @@ class TouchController(private val gs: GameState) {
                         onPauseClicked?.invoke()
                     }
                     // Check PULSE Button
-                    else if (isInsideCircle(vx, vy, pulseX, pulseY, btnRadius * 1.5f)) {
+                    else if (isInsideCircle(vx, vy, pulseX, pulseY, btnRadius * 1.2f)) {
                         onPulseTriggered?.invoke()
                     }
                     // Check TRAP Button
-                    else if (isInsideCircle(vx, vy, trapX, trapY, btnRadius * 1.5f)) {
+                    else if (isInsideCircle(vx, vy, trapX, trapY, btnRadius * 1.2f)) {
                         gs.isTrapPressed = true
                         gs.isAttackPressed = false
                         gs.isOverclockPressed = false
                     }
                     // Check OVERCLOCK Button
-                    else if (isInsideCircle(vx, vy, gs.uiOvrX, gs.uiOvrY, btnRadius * 1.5f)) {
+                    else if (isInsideCircle(vx, vy, gs.uiOvrX, gs.uiOvrY, btnRadius * 1.2f)) {
                         if (gs.overclockMeter >= 100f && !gs.isOverclocked) {
                             gs.isOverclockPressed = true // Trigger trigger trigger!
                             EchoAudioManager.playSound(android.media.ToneGenerator.TONE_SUP_CONFIRM, 150)
@@ -89,7 +89,7 @@ class TouchController(private val gs: GameState) {
                         }
                     }
                     // Check ATTACK Button (Fallback for bottom right area)
-                    else if (isInsideCircle(vx, vy, atkX, atkY, btnRadius * 1.5f)) {
+                    else if (isInsideCircle(vx, vy, atkX, atkY, btnRadius * 1.2f)) {
                         gs.isAttackPressed = true
                         gs.isOverclockPressed = false
                         gs.isTrapPressed = false
@@ -99,8 +99,8 @@ class TouchController(private val gs: GameState) {
 
             MotionEvent.ACTION_MOVE -> {
                 for (i in 0 until e.pointerCount) {
-                    val mx = (e.getX(i) - offsetX) / gameScale
-                    val my = (e.getY(i) - offsetY) / gameScale
+                    val mx = e.getX(i) - offsetX
+                    val my = e.getY(i) - offsetY
                     val id = e.getPointerId(i)
 
                     if (id == joyPointerId) {
@@ -122,15 +122,15 @@ class TouchController(private val gs: GameState) {
                         }
                     } else if (mx > targetW / 2f && my > targetH / 2f) {
                         // DYNAMIC COMBAT SLIDING
-                        if (isInsideCircle(mx, my, trapX, trapY, btnRadius * 1.5f)) {
+                        if (isInsideCircle(mx, my, trapX, trapY, btnRadius * 1.2f)) {
                             gs.isTrapPressed = true
                             gs.isAttackPressed = false
                             gs.isOverclockPressed = false
-                        } else if (isInsideCircle(mx, my, ovrX, ovrY, btnRadius * 1.5f)) {
+                        } else if (isInsideCircle(mx, my, ovrX, ovrY, btnRadius * 1.2f)) {
                             gs.isOverclockPressed = true
                             gs.isAttackPressed = false
                             gs.isTrapPressed = false
-                        } else if (isInsideCircle(mx, my, atkX, atkY, btnRadius * 1.5f)) {
+                        } else if (isInsideCircle(mx, my, atkX, atkY, btnRadius * 1.2f)) {
                             gs.isAttackPressed = true
                             gs.isOverclockPressed = false
                             gs.isTrapPressed = false
@@ -152,7 +152,7 @@ class TouchController(private val gs: GameState) {
                 // Agar ACTION_UP (poori finger up) ya CANCEL event hua,
                 // ya fir jo finger uthi hai wo right-half (combat side) par thi,
                 // toh bina kisi condition ke attack aur trap states ko clear (false) karo!
-                val upX = (e.getX(pointerIndex) - offsetX) / gameScale
+                val upX = e.getX(pointerIndex) - offsetX
                 if (upX > targetW / 2f || action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
                     gs.isAttackPressed = false
                     gs.isOverclockPressed = false

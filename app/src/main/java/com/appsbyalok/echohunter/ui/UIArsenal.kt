@@ -6,9 +6,9 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.media.ToneGenerator
 import android.view.MotionEvent
-import com.appsbyalok.echohunter.utils.GameColors
 import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.utils.EchoAudioManager
+import com.appsbyalok.echohunter.utils.GameColors
 import kotlin.math.sin
 
 class UIArsenal {
@@ -25,7 +25,7 @@ class UIArsenal {
 
     // 0 = Main OS, 1 = Weapons Folder, 2 = Traps Folder
     private var currentTab = 0
-    private val itemRects = mutableMapOf<Int, RectF>()
+    private val itemReacts = mutableMapOf<Int, RectF>()
 
     fun draw(c: Canvas, targetW: Float, targetH: Float, scale: Float, gs: GameState) {
         c.drawColor(0xEE051015.toInt()) // Dark Cyan-ish Terminal BG
@@ -40,40 +40,48 @@ class UIArsenal {
         c.drawText("root@probe-7:/mnt/arsenal_loadout ~", scale * 0.05f, headerHeight * 0.65f, pText)
 
         // Route to active tab
-        if (currentTab == 0) {
-            drawMainScreen(c, targetW, targetH, scale, gs)
-        } else if (currentTab == 1) {
-            drawWeaponFolder(c, targetW, targetH, scale, gs)
-        } else if (currentTab == 2) {
-            drawTrapFolder(c, targetW, targetH, scale, gs)
+        when (currentTab) {
+            0 -> {
+                drawMainScreen(c, targetW, targetH, scale, gs)
+            }
+
+            1 -> {
+                drawWeaponFolder(c, targetW, targetH, scale, gs)
+            }
+
+            2 -> {
+                drawTrapFolder(c, targetW, targetH, scale, gs)
+            }
+
+            // --- DISCONNECT / BACK BUTTON (Responsive Footer) ---
+            else -> {
+                pText.textAlign = Paint.Align.CENTER
+                val isPortrait = targetH > targetW
+                val btnWidth = if (isPortrait) targetW * 0.7f else scale * 0.4f
+                val btnHeight = scale * 0.09f
+                val btnBottomMargin = scale * 0.05f
+
+                closeBtnRect.set(
+                    targetW / 2f - btnWidth / 2f,
+                    targetH - btnHeight - btnBottomMargin,
+                    targetW / 2f + btnWidth / 2f,
+                    targetH - btnBottomMargin
+                )
+
+                p.style = Paint.Style.FILL; p.color = 0xFF330000.toInt()
+                c.drawRoundRect(closeBtnRect, scale * 0.02f, scale * 0.02f, p)
+                p.style = Paint.Style.STROKE; p.color = GameColors.RED; p.strokeWidth = scale * 0.005f
+                c.drawRoundRect(closeBtnRect, scale * 0.02f, scale * 0.02f, p)
+
+                pText.color = GameColors.RED; pText.textSize = scale * 0.045f
+                c.drawText(
+                    if (currentTab == 0) "DISCONNECT" else "< BACK",
+                    closeBtnRect.centerX(),
+                    closeBtnRect.centerY() + scale * 0.015f,
+                    pText
+                )
+            }
         }
-
-        // --- DISCONNECT / BACK BUTTON (Responsive Footer) ---
-        pText.textAlign = Paint.Align.CENTER
-        val isPortrait = targetH > targetW
-        val btnWidth = if (isPortrait) targetW * 0.7f else scale * 0.4f
-        val btnHeight = scale * 0.09f
-        val btnBottomMargin = scale * 0.05f
-
-        closeBtnRect.set(
-            targetW / 2f - btnWidth / 2f,
-            targetH - btnHeight - btnBottomMargin,
-            targetW / 2f + btnWidth / 2f,
-            targetH - btnBottomMargin
-        )
-
-        p.style = Paint.Style.FILL; p.color = 0xFF330000.toInt()
-        c.drawRoundRect(closeBtnRect, scale * 0.02f, scale * 0.02f, p)
-        p.style = Paint.Style.STROKE; p.color = GameColors.RED; p.strokeWidth = scale * 0.005f
-        c.drawRoundRect(closeBtnRect, scale * 0.02f, scale * 0.02f, p)
-
-        pText.color = GameColors.RED; pText.textSize = scale * 0.045f
-        c.drawText(
-            if(currentTab == 0) "DISCONNECT" else "< BACK",
-            closeBtnRect.centerX(),
-            closeBtnRect.centerY() + scale * 0.015f,
-            pText
-        )
     }
 
     private fun drawMainScreen(c: Canvas, targetW: Float, targetH: Float, scale: Float, gs: GameState) {
@@ -153,11 +161,11 @@ class UIArsenal {
         val boxWidth = if (isPortrait) targetW * 0.85f else targetW * 0.6f
         val startX = (targetW - boxWidth) / 2f
 
-        itemRects.clear()
+        itemReacts.clear()
 
         for (i in items.indices) {
             val rect = RectF(startX, startY, startX + boxWidth, startY + itemHeight)
-            itemRects[i] = rect
+            itemReacts[i] = rect
 
             val isActive = (i == currentActive)
             p.style = Paint.Style.FILL; p.color = if (isActive) 0xFF003333.toInt() else 0xFF111111.toInt()
@@ -203,7 +211,7 @@ class UIArsenal {
                     return true
                 }
             } else {
-                for ((index, rect) in itemRects) {
+                for ((index, rect) in itemReacts) {
                     if (rect.contains(x, y)) {
                         EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 150)
                         if (currentTab == 1) {
@@ -220,7 +228,8 @@ class UIArsenal {
                 }
             }
         }
-        return true
+        val returnValue = true
+        return returnValue
     }
 
     private fun getWeaponName(id: Int) = when(id) { 1 -> "Shotgun"; 2 -> "Sniper"; else -> "Blaster" }

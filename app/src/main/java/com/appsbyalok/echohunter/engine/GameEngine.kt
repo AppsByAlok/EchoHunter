@@ -28,7 +28,6 @@ class GameEngine(
     var onBossTrigger: ((Int, Float) -> Unit)? = null
     var onStoryState: ((IntArray, Int) -> Unit)? = null
 
-    // NAYA: Arsenal System instance
     private val arsenalSys = ArsenalSystem(gs, effectSys)
     private val playerAI = PlayerAI(gs, enemySys)
 
@@ -43,7 +42,6 @@ class GameEngine(
         }
 
         if (gs.state == 3) return
-
         if (gs.state != 1 && gs.state != 8 && gs.state != 9) return
 
         if (gs.hitStopTimer > 0f) {
@@ -54,10 +52,9 @@ class GameEngine(
         gs.updateTimers(dt, scale)
         val simDt = if (gs.slowMoTimer > 0f) dt * 0.15f else dt
 
-        // MOD: Infinite Overclock
         if (gs.modInfiniteOvr) {
             gs.overclockMeter = 100f
-            if (gs.isOverclocked) gs.overclockTimer = 5f // Hamesha active rakhega
+            if (gs.isOverclocked) gs.overclockTimer = 5f
         }
 
         if (gs.state == 1 || gs.state == 8) {
@@ -78,20 +75,8 @@ class GameEngine(
 
             gs.updatePlayerMovement(simDt, targetW, targetH, scale)
 
-            if (gs.gridMap == null) {
-                gs.updateCameraAndMovement(simDt, targetW, scale)
-            }
-
-            // --- NAYA: ESCAPE GATE COLLISION ---
-            if (gs.state == 1 && gs.escapeGateActive) {
-                val cdx = gs.px - gs.coreX
-                val cdy = gs.py - gs.coreY
-                // Agar player portal ke collision radius me aa gaya
-                if (cdx * cdx + cdy * cdy < gs.coreRadius * gs.coreRadius) {
-                    gs.isLevelCleared = true
-                    gs.escapeGateActive = false // Reset for next loop
-                }
-            }
+            // --- FIX: Camera update should always follow ModeStrategy ---
+            gs.updateCameraAndMovement(simDt, targetW, targetH ,scale)
 
             if (gs.state == 8) {
                 val cdx = gs.px - gs.coreX
@@ -112,12 +97,9 @@ class GameEngine(
             gs.px += (gs.coreX - gs.px) * 2.5f * dt
             gs.py += (gs.coreY - gs.py) * 2.5f * dt
             gs.mergeTimer += dt
-
             gs.shakeAmount = scale * 0.04f
 
-            if (gs.mergeTimer > 2.5f) {
-                gs.whiteFlash += dt * 0.5f
-            }
+            if (gs.mergeTimer > 2.5f) gs.whiteFlash += dt * 0.5f
             if (gs.whiteFlash >= 1f) {
                 onStoryState?.invoke(if (gs.isPerfectEnd) StoryProtocol.storyPerfectEnding else StoryProtocol.storyNeutralEnding, 6)
                 gs.whiteFlash = 0f
@@ -127,16 +109,27 @@ class GameEngine(
         gs.updateVisibilityMath(scale, targetW * 0.75f)
         gs.updatePulseRadius(simDt, targetW * 0.75f)
 
-        if (gs.isLevelCleared && gs.state == 1) {
-            gs.isLevelCleared = false
+//        if (gs.isLevelCleared && gs.state == 1) {
+//            gs.isLevelCleared = false
+//            val config = LevelEngine.getLevelConfig(gs.currentLevel)
+//            var finalReward = config.clearRewardKB
+//            if (gs.currentLevel < SaveManager.maxCampaignLevel) finalReward /= 2
+//            finalReward += (finalReward * UpgradeSystem.getRewardBonusPercent()).toLong()
+//
+//            gs.collectedDataKB += finalReward
+//            SaveManager.addData(finalReward)
+//            SaveManager.updateCampaignProgress(gs.currentLevel)
+//
+//            EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 500)
+//            onChangeState?.invoke(12)
+//            return
+//        }
 
+        if (gs.isLevelCleared && gs.state == 1 && gs.gameMode == 0) {
+            gs.isLevelCleared = false
             val config = LevelEngine.getLevelConfig(gs.currentLevel)
             var finalReward = config.clearRewardKB
-
-            if (gs.currentLevel < SaveManager.maxCampaignLevel) {
-                finalReward /= 2
-            }
-
+            if (gs.currentLevel < SaveManager.maxCampaignLevel) finalReward /= 2
             finalReward += (finalReward * UpgradeSystem.getRewardBonusPercent()).toLong()
 
             gs.collectedDataKB += finalReward
@@ -151,13 +144,25 @@ class GameEngine(
         effectSys.recordTrail(gs.px, gs.py)
         effectSys.update(simDt, scale)
 
-        if (gs.state == 1) {
+        if (gs.state == 1 || gs.state == 8) {
+            // --- NAYA: MODULAR OBJECTIVE CALL ---
+            // Updates timers and dynamic logic (like Core activation in Story Mode)
+            gs.activeObjective.updateObjective(simDt, gs, enemySys, targetW, targetH)
+
+            // --- CRITICAL: WIN CONDITION CHECK ---
+            // Modular objectives determine if the level is cleared (Campaign Mode)
+            if (gs.gameMode == 0 && !gs.isLevelCleared && gs.activeObjective.checkWinCondition(gs)) {
+                gs.isLevelCleared = true
+            }
+
             enemySys.updateEnemies(simDt, gs, targetW, targetH, scale)
             enemySys.updateBoss(simDt, gs, scale)
             enemySys.updatePowerups(simDt, gs, targetW, targetH)
 
             collisionSys.checkCollisions(targetW, targetH, scale, onDamage!!, onScore!!, onCoreUnlock!!)
-            gs.modeStrategy.checkProgression(context, gs, scale, onBossTrigger!!, onStoryState!!)
+            
+            // Boss Spawns & Sector Story triggers only in main gameplay
+            if (gs.state == 1) gs.modeStrategy.checkProgression(context, gs, scale, onBossTrigger!!, onStoryState!!)
 
             handleAudioBeats(simDt)
         }
@@ -183,10 +188,7 @@ class GameEngine(
 
     fun generateLevelMaze(targetW: Float, targetH: Float, scale: Float) {
         val seed = 1000 + gs.currentLevel
-
-        gs.gridMap = com.appsbyalok.echohunter.data.MazeGenerator.generateLevelMap(
-            gs.currentLevel, gs.gameMode, gs.difficulty, seed, gs.selectedStoryAct
-        )
+        gs.gridMap = com.appsbyalok.echohunter.data.MazeGenerator.generateLevelMap(gs.currentLevel, gs.gameMode, gs.difficulty, seed, gs.selectedStoryAct)
 
         val columns = gs.gridMap!!.size
         val rows = gs.gridMap!![0].size
@@ -195,18 +197,15 @@ class GameEngine(
         gs.mapWidth = columns * gs.tileSize
         gs.mapHeight = rows * gs.tileSize
 
-        var pCol = 2; var pRow = 2
-        var dCol = columns - 3; var dRow = rows - 3
+        var pCol = 2; var pRow = 2; var dCol = columns - 3; var dRow = rows - 3
 
         for (x in 0 until columns) {
             for (y in 0 until rows) {
                 if (gs.gridMap!![x][y] == com.appsbyalok.echohunter.data.MazeGenerator.PLAYER_SPAWN) {
-                    pCol = x
-                    pRow = y
+                    pCol = x; pRow = y
                     gs.gridMap!![x][y] = com.appsbyalok.echohunter.data.MazeGenerator.PATH
                 } else if (gs.gridMap!![x][y] == com.appsbyalok.echohunter.data.MazeGenerator.DEST_NODE) {
-                    dCol = x
-                    dRow = y
+                    dCol = x; dRow = y
                 }
             }
         }
@@ -214,27 +213,36 @@ class GameEngine(
         gs.px = pCol * gs.tileSize + (gs.tileSize / 2f)
         gs.py = pRow * gs.tileSize + (gs.tileSize / 2f)
 
-        // --- NAYA: CORE SIRF TABHI SPAWN HOGA JAB ZAROORAT HO --- TODO ise theek karna hai. avi v story mode me core suru me nahi aana chaahiye magar aa raha hai. story mode core defecce ban jaa raha hai.
         val config = LevelEngine.getLevelConfig(gs.currentLevel)
-        if (config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE) ||
-            config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ESCAPE)) {
+
+        // --- NAYA: OBJECTIVE ASSIGNMENT ---
+        gs.activeObjective = when {
+            gs.gameMode == 1 -> com.appsbyalok.echohunter.modes.StoryObjective() // <--- YE LINE ADD KI
+            config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE) && gs.gameMode == 0 -> com.appsbyalok.echohunter.modes.DefenseObjective()
+            config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ESCAPE) && gs.gameMode == 0 -> com.appsbyalok.echohunter.modes.EscapeObjective()
+            else -> com.appsbyalok.echohunter.modes.StandardObjective()
+        }
+
+        val hasCampaignCore = gs.gameMode == 0 &&
+            (config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE) ||
+                config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ESCAPE))
+        val hasStoryCoreTarget = gs.gameMode == 1
+
+        if (hasCampaignCore || hasStoryCoreTarget) {
             gs.coreX = dCol * gs.tileSize + (gs.tileSize / 2f)
             gs.coreY = dRow * gs.tileSize + (gs.tileSize / 2f)
-            gs.coreRadius = scale * 0.08f
+            gs.coreRadius = if (hasCampaignCore) scale * 0.08f else 0f
 
-            // --- NAYA: DEFENSE MODE SETUP ---
-            if (config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE)) {
-                gs.defenseTimer = LevelEngine.getDefenseTimer(gs.currentLevel)
-                gs.maxDefenseTimer = gs.defenseTimer
-                // HP gently scale hogi, par 25 se upar nahi jayegi
-                gs.coreMaxHp = kotlin.math.min(25, 10 + (gs.currentLevel / 15))
-                gs.coreHp = gs.coreMaxHp
+            if (config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE) && gs.gameMode == 0) {
+                gs.px = gs.coreX
+                gs.py = gs.coreY + gs.tileSize * 1.2f
             }
         } else {
-            gs.coreX = -9999f
-            gs.coreY = -9999f
-            gs.coreRadius = 0f
+            gs.coreX = -9999f; gs.coreY = -9999f; gs.coreRadius = 0f
         }
+
+        // Set up the specific objective timers, HP, and logic
+        gs.activeObjective.setupObjective(gs, targetW, targetH, scale)
 
         gs.cameraX = gs.px - targetW / 2f
         gs.cameraY = gs.py - targetH / 2f

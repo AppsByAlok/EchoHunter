@@ -8,14 +8,18 @@ import android.graphics.Typeface
 import android.media.ToneGenerator
 import android.util.SparseArray
 import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
 import android.view.View
 import com.appsbyalok.echohunter.R
+import com.appsbyalok.echohunter.data.LevelFeature
 import com.appsbyalok.echohunter.data.SaveManager
 import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.systems.EffectSystem
 import com.appsbyalok.echohunter.utils.EchoAudioManager
 import com.appsbyalok.echohunter.utils.GameColors
+import com.appsbyalok.echohunter.utils.LevelIcons
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
@@ -32,6 +36,10 @@ class UIHelpMenu(private val context: Context) {
     private var lastTouchY = 0f
     private var isDragging = false
 
+    // --- NAYA: MOMENTUM SCROLL VARIABLES ---
+    private var scrollVelocity = 0f
+    private var lastTouchTime = 0L
+
     private val backBtnRect = RectF()
     private val repairBtnRect = RectF()
 
@@ -43,6 +51,7 @@ class UIHelpMenu(private val context: Context) {
         "> INITIATING OVERRIDE...",
         "> FLUSHING CORRUPTED CACHE...",
         "> BYPASSING ADMIN FIREWALL...",
+        "> RECONSTRUCTING DATA NODES...",
         "> SECURING UPLINK PORT..."
     )
 
@@ -72,7 +81,22 @@ class UIHelpMenu(private val context: Context) {
     }
 
     fun draw(c: Canvas, scale: Float, targetW: Float, targetH: Float, gs: GameState) {
-        c.drawColor(0xEE05050A.toInt()) // Dark Background
+        val bgColor = 0xEE05050A.toInt()
+        c.drawColor(bgColor) // Dark Hacker Background
+
+        // --- NAYA: MOMENTUM / FLING PHYSICS ---
+        if (!isDragging && abs(scrollVelocity) > 0.5f) {
+            scrollY += scrollVelocity
+            scrollVelocity *= 0.96f
+
+            if (scrollY > 0f) {
+                scrollY = 0f
+                scrollVelocity = 0f
+            } else if (scrollY < -maxScroll) {
+                scrollY = -maxScroll
+                scrollVelocity = 0f
+            }
+        }
 
         val isPortrait = targetW < targetH
         val btnW = if (isPortrait) scale * 0.45f else scale * 0.3f
@@ -113,7 +137,10 @@ class UIHelpMenu(private val context: Context) {
                 val linesToShow = (progress * (bootLogs.size + 1)).toInt()
 
                 for (i in 0 until min(linesToShow, bootLogs.size)) {
-                    c.drawText(bootLogs[i], targetW * 0.2f, logY, pText)
+                    // Small random X offset for a "glitchy" boot feel
+                    val glitchOffsetX =
+                        if (Math.random() > 0.8) (Math.random() * scale * 0.01f).toFloat() else 0f
+                    c.drawText(bootLogs[i], targetW * 0.2f + glitchOffsetX, logY, pText)
                     logY += scale * 0.05f
                 }
 
@@ -165,7 +192,6 @@ class UIHelpMenu(private val context: Context) {
 
                 pText.color = GameColors.HP
                 pText.setShadowLayer(15f, 0f, 0f, GameColors.HP)
-                // Center text vertically inside button
                 c.drawText(btnStr, targetW / 2f, ry + btnTextSize * 0.35f, pText)
                 pText.clearShadowLayer()
             }
@@ -189,22 +215,58 @@ class UIHelpMenu(private val context: Context) {
         pText.clearShadowLayer()
 
         c.save()
-        c.clipRect(0f, targetH * 0.18f, targetW, targetH * 0.78f)
+        // Clip view so text doesn't overlap the header and footer
+        c.clipRect(0f, targetH * 0.15f, targetW, targetH * 0.85f)
 
-        var sy = targetH * 0.25f + scrollY
+        var sy = targetH * 0.22f + scrollY
         val lh = scale * 0.045f
         val headerH = scale * 0.07f
 
         // Responsive margins
         val leftMargin = if (isPortrait) targetW * 0.08f else targetW * 0.25f
-        val maxTextW = targetW - (leftMargin * 2f) // Keeps text centered-ish
+        val baseMaxTextW = targetW - (leftMargin * 2f)
 
         pText.textAlign = Paint.Align.LEFT
 
-        // Auto-wrapping logic for any screen size
-        fun drawLine(text: String, color: Int, isHeader: Boolean = false) {
+        fun drawLine(
+            text: String,
+            color: Int,
+            isHeader: Boolean = false,
+            featureIcon: LevelFeature? = null,
+        ) {
             pText.color = color
-            pText.textSize = if (isHeader) scale * 0.04f else scale * 0.03f
+            pText.textSize = if (isHeader) scale * 0.045f else scale * 0.032f
+
+            var currentX = leftMargin
+            var textMaxW = baseMaxTextW
+
+            // If an icon is provided, draw it and indent the text
+            if (featureIcon != null) {
+                val iconSize = scale * 0.045f
+                val iconRect = RectF(
+                    leftMargin, sy - iconSize * 0.85f, leftMargin + iconSize, sy + iconSize * 0.15f
+                )
+
+                // Fetch the exact feature color
+                p.color = when (featureIcon) {
+                    LevelFeature.CLASSIC -> GameColors.PULSE
+                    LevelFeature.MAZE -> GameColors.TEXT
+                    LevelFeature.DEFENSE -> GameColors.SHIELD
+                    LevelFeature.BOSS -> GameColors.BOSS
+                    LevelFeature.ESCAPE -> GameColors.YELLOW
+                    LevelFeature.ELIMINATION -> GameColors.RED
+                    LevelFeature.SPECIAL -> GameColors.OVERCLOCK
+                    LevelFeature.ADMIN_BONUS -> GameColors.HP
+                }
+
+                // Draw icon using utility (bgColor matches the terminal background)
+                LevelIcons.drawMicroIcon(c, featureIcon, iconRect, p, bgColor)
+
+                // Shift text to the right of the icon
+                val indent = iconSize + scale * 0.03f
+                currentX += indent
+                textMaxW -= indent
+            }
 
             val words = text.split(" ")
             var currentLine = ""
@@ -213,85 +275,144 @@ class UIHelpMenu(private val context: Context) {
                 val testLine = if (currentLine.isEmpty()) word else "$currentLine $word"
                 val textWidth = pText.measureText(testLine)
 
-                if (textWidth > maxTextW && currentLine.isNotEmpty()) {
-                    c.drawText(currentLine, leftMargin, sy, pText)
-                    sy += lh // Body wraps just move down by standard line height
+                if (textWidth > textMaxW && currentLine.isNotEmpty()) {
+                    c.drawText(currentLine, currentX, sy, pText)
+                    sy += lh // Move down for wrap
 
-                    // Maintain bullet indentation on new wrapped lines
-                    val indent = if (text.startsWith("- ") && !isHeader) "  " else ""
-                    currentLine = indent + word
+                    // Maintain bullet indentation on new wrapped lines (if it's not a header)
+                    val indentStr = if (text.startsWith("- ") && !isHeader) "  " else ""
+                    currentLine = indentStr + word
                 } else {
                     currentLine = testLine
                 }
             }
 
-            // Draw remainder of the line
+            // Draw remainder
             if (currentLine.isNotEmpty()) {
-                c.drawText(currentLine, leftMargin, sy, pText)
+                c.drawText(currentLine, currentX, sy, pText)
                 sy += if (isHeader) headerH else lh
             }
         }
 
+        // --- THE EXPANDED LORE AND HELP CONTENT ---
+
         drawLine("MISSION DIRECTIVE", GameColors.YELLOW, true)
-        drawLine("- You are remotely hijacking maintenance drone PROBE-7.", GameColors.TEXT)
-        drawLine("- Extract Corrupted Data (KB) without alerting the Admin.", GameColors.TEXT)
-        sy += lh * 0.5f
-
-        drawLine("1. THE SANDBOX (Rings 1-14)", GameColors.PULSE, true)
         drawLine(
-            "- A quarantined test zone. Reach Ring 15 to breach the Mainframe.", GameColors.TEXT
-        )
+            "- You are remotely hijacking maintenance drone PROBE-7.", GameColors.TEXT
+        ); sy += lh * 0.2f
+        drawLine("- Extract Kilobytes (KB) without alerting the System Admin.", GameColors.TEXT)
         sy += lh * 0.5f
 
-        drawLine("2. TACTICAL CONTROLS", GameColors.SHIELD, true)
-        drawLine("- LEFT JOYSTICK: Move drone.", GameColors.TEXT)
-        drawLine("- SONAR [Pulse]: Reveal map and enemy patrols.", GameColors.TEXT)
-        drawLine("- ATK [Spike]: Fire Malware. Hits build Overclock.", GameColors.TEXT)
+        drawLine("1. TACTICAL CONTROLS", GameColors.PULSE, true)
+        drawLine("- LEFT JOYSTICK: Move drone.", GameColors.TEXT); sy += lh * 0.2f
+        drawLine("- SONAR [Pulse]: Reveal map and enemy patrols.", GameColors.TEXT); sy += lh * 0.2f
+        drawLine(
+            "- ATK [Spike]: Fire Malware. Hits build Overclock.", GameColors.TEXT
+        ); sy += lh * 0.2f
         drawLine("- OVR [Overclock]: Ultimate. Ram enemies to destroy them!", GameColors.TEXT)
         sy += lh * 0.5f
 
-        drawLine("3. WARDENS & SECURITY", GameColors.RED, true)
-        drawLine("- Multiples of 5: Warden Encounter (Boss).", GameColors.TEXT)
-        drawLine("- Avoid direct contact unless Overclock is active.", GameColors.TEXT)
+        // --- NAYA: THREAT IDENTIFICATION (ICONS LEGEND) ---
+        drawLine("2. NODE IDENTIFICATION (LEGEND)", GameColors.SHIELD, true)
+        drawLine(
+            "CLASSIC: Standard kilobyte payload extraction.",
+            GameColors.TEXT,
+            featureIcon = LevelFeature.CLASSIC
+        ); sy += lh * 0.2f
+        drawLine(
+            "MAZE: High-density firewall routing. Tight corners.",
+            GameColors.TEXT,
+            featureIcon = LevelFeature.MAZE
+        ); sy += lh * 0.2f
+        drawLine(
+            "QUARANTINE: Defend the central core from override.",
+            GameColors.TEXT,
+            featureIcon = LevelFeature.DEFENSE
+        ); sy += lh * 0.2f
+        drawLine(
+            "WARDEN: High-threat Admin entity encounter.",
+            GameColors.TEXT,
+            featureIcon = LevelFeature.BOSS
+        ); sy += lh * 0.2f
+        drawLine(
+            "EXTRACTION: Secure target data, then locate exit portal.",
+            GameColors.TEXT,
+            featureIcon = LevelFeature.ESCAPE
+        ); sy += lh * 0.2f
+        drawLine(
+            "TERMINATION: Hunt and destroy priority security targets.",
+            GameColors.TEXT,
+            featureIcon = LevelFeature.ELIMINATION
+        ); sy += lh * 0.2f
+        drawLine(
+            "ANOMALY: Unstable memory sector. Unexpected behavior.",
+            GameColors.TEXT,
+            featureIcon = LevelFeature.SPECIAL
+        ); sy += lh * 0.2f
+        drawLine(
+            "ROOT ACCESS: Admin stash discovered. Massive payload.",
+            GameColors.TEXT,
+            featureIcon = LevelFeature.ADMIN_BONUS
+        )
         sy += lh * 0.5f
 
-        drawLine("4. DECOMPILER (Upgrades)", GameColors.COOLANT, true)
-        drawLine("- Use stolen Data to patch your Firmware.", GameColors.TEXT)
-        drawLine("- Upgrades persist across all runs.", GameColors.TEXT)
+        drawLine("3. DECOMPILER (Upgrades)", GameColors.COOLANT, true)
+        drawLine(
+            "- Use stolen KB to patch your Firmware in the OS.", GameColors.TEXT
+        ); sy += lh * 0.2f
+        drawLine("- All upgrades persist across simulation runs.", GameColors.TEXT)
         sy += lh * 0.5f
 
-        drawLine("5. BLACKOUT PROTOCOL (APT)", GameColors.OVERCLOCK, true)
-        drawLine("- Breach the Mainframe 4 times in a row to become an APT.", GameColors.TEXT)
+        drawLine("4. BLACKOUT PROTOCOL (APT)", GameColors.OVERCLOCK, true)
+        drawLine(
+            "- Breach the Mainframe 3 times in a row to become an APT.", GameColors.TEXT
+        ); sy += lh * 0.2f
         drawLine("- Unlocks HARD MODE: Extreme Admin hostility & fast fade.", GameColors.TEXT)
         sy += lh
 
         val isHardModeUnlocked = SaveManager.isHardModeUnlocked
         drawLine(
-            "HARD MODE: ${if (isHardModeUnlocked) "UNLOCKED" else "LOCKED"}",
+            "HARD MODE STATUS: ${if (isHardModeUnlocked) "[ UNLOCKED ]" else "[ LOCKED ]"}",
             if (isHardModeUnlocked) GameColors.RED else GameColors.HP
         )
 
         c.restore()
 
-        val totalHeight = sy - (targetH * 0.25f + scrollY)
-        val viewableArea = (targetH * 0.78f) - (targetH * 0.25f)
+        val totalHeight = sy - (targetH * 0.22f + scrollY)
+        val viewableArea = (targetH * 0.85f) - (targetH * 0.15f)
         maxScroll = max(0f, totalHeight - viewableArea + targetH * 0.05f)
 
-        // Draw Fixed Back Button
+        // Draw Fixed Back Button (Footer)
+
+
+        // --- FOOTER BUTTON AUR SPACING CODE ---
+        p.style = Paint.Style.STROKE
+        p.color = (0x33 or (GameColors.RED and 0xFFFFFF)) // 20% alpha red
+        p.strokeWidth = scale * 0.002f
+        c.drawLine(0f, targetH * 0.84f, targetW, targetH * 0.84f, p)
+        backBtnRect.set(
+            targetW / 2f - btnW / 2f,
+            targetH * 0.91f - btnH / 2f,
+            targetW / 2f + btnW / 2f,
+            targetH * 0.91f + btnH / 2f
+        )
         p.style = Paint.Style.FILL
-        p.color = 0xFF330000.toInt()
+        p.color = 0xFF1A0000.toInt()
         c.drawRoundRect(backBtnRect, scale * 0.02f, scale * 0.02f, p)
         p.style = Paint.Style.STROKE
         p.color = GameColors.RED
         p.strokeWidth = scale * 0.005f
         c.drawRoundRect(backBtnRect, scale * 0.02f, scale * 0.02f, p)
-
         pText.textAlign = Paint.Align.CENTER
         pText.color = GameColors.RED
         pText.textSize = scale * 0.04f
+
+        pText.setShadowLayer(10f, 0f, 0f, GameColors.RED)
+        val textHeightOffset = (pText.descent() + pText.ascent()) / 2f
         c.drawText(
-            "DISCONNECT", backBtnRect.centerX(), backBtnRect.centerY() + scale * 0.012f, pText
+            "DISCONNECT", backBtnRect.centerX(), backBtnRect.centerY() - textHeightOffset, pText
         )
+        pText.clearShadowLayer()
     }
 
     fun onTouch(
@@ -305,23 +426,35 @@ class UIHelpMenu(private val context: Context) {
         onClose: () -> Unit,
     ): Boolean {
         when (action) {
-            android.view.MotionEvent.ACTION_DOWN -> {
+            MotionEvent.ACTION_DOWN -> {
                 lastTouchY = y
+                lastTouchTime = System.currentTimeMillis()
+                scrollVelocity = 0f
                 isDragging = false
             }
 
-            android.view.MotionEvent.ACTION_MOVE -> {
+            MotionEvent.ACTION_MOVE -> {
                 val dy = y - lastTouchY
-                if (kotlin.math.abs(dy) > scale * 0.02f) isDragging = true
+                val currentTime = System.currentTimeMillis()
+                val dt = currentTime - lastTouchTime
+
+                if (abs(dy) > scale * 0.02f) isDragging = true
+
+                // Calculate momentum
+                if (dt > 0) {
+                    val rawVelocity = (dy / dt.toFloat()) * 16f
+                    scrollVelocity = (scrollVelocity * 0.3f) + (rawVelocity * 0.7f)
+                }
 
                 scrollY += dy
                 if (scrollY > 0f) scrollY = 0f
                 if (scrollY < -maxScroll) scrollY = -maxScroll
 
                 lastTouchY = y
+                lastTouchTime = currentTime
             }
 
-            android.view.MotionEvent.ACTION_UP -> {
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 if (!isDragging && gs.stateTimer > 0.2f) {
                     if (StoryProtocol.isGlitchActive && repairFadeTimer <= 0f) {
                         if (repairBtnRect.contains(x, y)) {
@@ -341,6 +474,7 @@ class UIHelpMenu(private val context: Context) {
                         onClose()
                     }
                 }
+                isDragging = false
             }
         }
         return true

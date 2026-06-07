@@ -7,13 +7,15 @@ import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.data.UpgradeSystem
 import com.appsbyalok.echohunter.modes.CampaignMode
 import com.appsbyalok.echohunter.modes.GameModeStrategy
+import com.appsbyalok.echohunter.modes.IGameObjective
+import com.appsbyalok.echohunter.modes.StandardObjective
 import com.appsbyalok.echohunter.modes.StoryMode
 import com.appsbyalok.echohunter.utils.EchoAudioManager
 import kotlin.math.max
 import kotlin.math.min
 
 class GameState {
-
+    var activeObjective: IGameObjective = StandardObjective()
     var modeStrategy: GameModeStrategy = CampaignMode()
     var gameMode = 0
         set(value) {
@@ -70,9 +72,9 @@ class GameState {
     // NAYA: MOD MENU FLAGS
     var modGodMode = false
     var modInfiniteOvr = false
+    var modFullVisibility = false
 
     // --- VISUAL DEBUGGER VARIABLES ---
-    var showDebugHitboxes = false
     var lastTouchX = -100f
     var lastTouchY = -100f
 
@@ -110,6 +112,12 @@ class GameState {
     var maxDefenseTimer = 0f
     var coreHp = 10
     var coreMaxHp = 10
+    var defWaveCurrent = 1
+    var defWaveMax = 1
+    var defWaveState = 0 // 0 = Start Buffer, 1 = Wave Active, 2 = Wave Cooldown
+    var defWaveTimer = 0f
+    var defEnemiesToSpawn = 0
+    var defEnemiesAlive = 0
 
     var escapeGateActive = false
 
@@ -185,7 +193,6 @@ class GameState {
 
     var cameraX = 0f
     var cameraY = 0f
-    var baseWorldSpeed = 0f
 
     var damageFlash = 0f
     var sectorFlash = 0f
@@ -419,11 +426,9 @@ class GameState {
             val nextPy = py + vy
             if (!isCollidingWithWall(px, nextPy, playerRadius)) py = nextPy
 
-            cameraX += ((px - width / 2f) - cameraX) * 5f * dt
-            cameraY += ((py - height / 2f) - cameraY) * 5f * dt
-
-            cameraX = max(0f, min(cameraX, mapWidth - width))
-            cameraY = max(0f, min(cameraY, mapHeight - height))
+            // FIX: Ensure player is strictly clamped to Map Bounds
+            px = max(playerRadius, min(px, mapWidth - playerRadius))
+            py = max(playerRadius, min(py, mapHeight - playerRadius))
         } else {
             px += vx
             py += vy
@@ -453,16 +458,16 @@ class GameState {
         return false
     }
 
-    fun updateCameraAndMovement(dt: Float, width: Float, scale: Float) {
-        modeStrategy.updateCameraAndMovement(dt, this, width, scale)
+    fun updateCameraAndMovement(dt: Float, width: Float, height: Float, scale: Float) {
+        modeStrategy.updateCameraAndMovement(dt, this, width, height, scale)
     }
 
     fun updateVisibilityMath(scale: Float, maxRad: Float) {
-        val passiveAuraRadius = scale * 0.12f
+        val passiveAuraRadius = if (modFullVisibility) scale * 100f else scale * 0.12f
         passiveAuraRadiusSq = passiveAuraRadius * passiveAuraRadius
 
         val baseFade = if (difficulty == 1) 0.65f else 0.85f
-        fadeMultiplier = min(0.99f, baseFade + 0.16f * visionClarity)
+        fadeMultiplier = if (modFullVisibility) 1.0f else min(0.99f, baseFade + 0.16f * visionClarity)
 
         val echoThickness = maxRad * 0.05f
         if (pulse) {

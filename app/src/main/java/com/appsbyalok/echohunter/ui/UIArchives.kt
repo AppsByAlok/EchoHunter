@@ -28,6 +28,9 @@ class UIArchives {
     private var lastTouchY = 0f
     private var isDragging = false
 
+    private var scrollVelocity = 0f
+    private var lastTouchTime = 0L
+
     private val levelButtons = mutableMapOf<Int, RectF>()
     private val closeBtnRect = RectF()
     private var cachedList = mutableListOf<Int>()
@@ -47,16 +50,16 @@ class UIArchives {
         lastMaxLevel = maxLvl
 
         cachedList.add(maxLvl)
-        val minRecent = max(1, maxLvl - 50)
+        val minRecent = max(1, maxLvl - 150)
         for (i in maxLvl - 1 downTo minRecent) cachedList.add(i)
 
         var importantCount = 0
         for (i in minRecent - 1 downTo 1) {
             val config = LevelEngine.getLevelConfig(i)
-            if (config.features.contains(LevelFeature.BOSS) || config.features.contains(LevelFeature.DEFENSE)) {
+            if (config.features.contains(LevelFeature.BOSS) || config.features.contains(LevelFeature.DEFENSE) || config.features.contains(LevelFeature.ESCAPE) || config.features.contains(LevelFeature.ELIMINATION)) {
                 cachedList.add(i)
                 importantCount++
-                if (importantCount >= 25) break
+                if (importantCount >= 50) break
             }
         }
     }
@@ -85,6 +88,19 @@ class UIArchives {
 
     fun draw(c: Canvas, width: Float, height: Float, gs: GameState, scale: Float) {
         c.drawColor(0xEE050508.toInt()) // Dark cyber hacking base background
+
+        if (!isDragging && abs(scrollVelocity) > 0.5f) {
+            scrollY += scrollVelocity
+            scrollVelocity *= 0.96f
+
+            if (scrollY > 0f) {
+                scrollY = 0f
+                scrollVelocity = 0f
+            } else if (scrollY < -maxScroll) {
+                scrollY = -maxScroll
+                scrollVelocity = 0f
+            }
+        }
 
         if (SaveManager.maxCampaignLevel != lastMaxLevel || cachedList.isEmpty()) generateNodeList()
 
@@ -173,19 +189,18 @@ class UIArchives {
                 p.color = if (isNextNode) GameColors.HP else mixColorsManual(0x22FFFFFF, mixedColor, 0.4f)
                 c.drawRoundRect(reusableRect, scale * 0.015f, scale * 0.015f, p)
 
-                // --- 2. MICRO-CHIP BADGES ROW LAYOUT ---
+                // --- 2. MICRO-CHIP ICONS ROW LAYOUT ---
                 if (colorCount > 0) {
-                    val badgeW = boxSize * 0.12f
-                    val badgeH = boxSize * 0.05f
-                    val badgeGap = boxSize * 0.04f
-                    val totalBadgesW = (colorCount * badgeW) + ((colorCount - 1) * badgeGap)
+                    val badgeSize = boxSize * 0.25f // Square size for icons
+                    val badgeGap = boxSize * 0.05f
+                    val totalBadgesW = (colorCount * badgeSize) + ((colorCount - 1) * badgeGap)
 
                     var currentBadgeX = reusableRect.centerX() - (totalBadgesW / 2f)
-                    val badgeY = reusableRect.bottom - boxSize * 0.16f
+                    val badgeY = reusableRect.bottom - boxSize * 0.32f
 
-                    p.style = Paint.Style.FILL
                     for (f in featureEnumValues) {
                         if (config.features.contains(f)) {
+                            // Assign unique color for the icon
                             p.color = when (f) {
                                 LevelFeature.CLASSIC -> GameColors.PULSE
                                 LevelFeature.MAZE -> GameColors.TEXT
@@ -196,9 +211,11 @@ class UIArchives {
                                 LevelFeature.SPECIAL -> GameColors.OVERCLOCK
                                 LevelFeature.ADMIN_BONUS -> GameColors.HP
                             }
-                            badgeRect.set(currentBadgeX, badgeY, currentBadgeX + badgeW, badgeY + badgeH)
-                            c.drawRoundRect(badgeRect, scale * 0.002f, scale * 0.002f, p)
-                            currentBadgeX += badgeW + badgeGap
+
+                            badgeRect.set(currentBadgeX, badgeY, currentBadgeX + badgeSize, badgeY + badgeSize)
+                            com.appsbyalok.echohunter.utils.LevelIcons.drawMicroIcon(c, f, badgeRect, p, finalBgColor)
+
+                            currentBadgeX += badgeSize + badgeGap
                         }
                     }
                 }
@@ -229,15 +246,39 @@ class UIArchives {
 
     fun onTouch(x: Float, y: Float, action: Int, scale: Float, gs: GameState, onSelect: (Int) -> Unit, onBack: () -> Unit): Boolean {
         when (action) {
-            MotionEvent.ACTION_DOWN -> { lastTouchY = y; isDragging = false }
-            MotionEvent.ACTION_MOVE -> {
-                val dy = y - lastTouchY
-                if (abs(dy) > scale * 0.02f) isDragging = true
-                scrollY += dy
-                if (scrollY > 0f) scrollY = 0f
-                if (scrollY < -maxScroll) scrollY = -maxScroll
+            MotionEvent.ACTION_DOWN -> {
                 lastTouchY = y
+                lastTouchTime = System.currentTimeMillis()
+                scrollVelocity = 0f
+                isDragging = false
             }
+            MotionEvent.ACTION_MOVE -> {
+                val currentTime = System.currentTimeMillis()
+                val dt = currentTime - lastTouchTime
+                val dy = y - lastTouchY
+
+                if (abs(dy) > scale * 0.02f) isDragging = true
+
+                // VELOCITY CALCULATION
+                if (dt > 0) {
+                    val rawVelocity = (dy / dt.toFloat()) * 20f
+                    scrollVelocity = (scrollVelocity * 0.4f) + (rawVelocity * 0.6f)
+                }
+                scrollY += dy
+                // Hard stops check
+                if (scrollY > 0f) {
+                    scrollY = 0f
+                    scrollVelocity = 0f
+                }
+                if (scrollY < -maxScroll) {
+                    scrollY = -maxScroll
+                    scrollVelocity = 0f
+                }
+
+                lastTouchY = y
+                lastTouchTime = currentTime
+            }
+
             MotionEvent.ACTION_UP -> {
                 if (!isDragging) {
                     if (closeBtnRect.contains(x, y)) {
@@ -269,6 +310,10 @@ class UIArchives {
                         }
                     }
                 }
+                isDragging = false
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                isDragging = false
             }
         }
         val returnValue = true

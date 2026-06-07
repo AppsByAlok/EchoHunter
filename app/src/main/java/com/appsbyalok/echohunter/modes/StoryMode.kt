@@ -5,8 +5,9 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import com.appsbyalok.echohunter.data.SaveManager
 import com.appsbyalok.echohunter.data.StoryProtocol
-import com.appsbyalok.echohunter.utils.GameColors
 import com.appsbyalok.echohunter.engine.GameState
+import com.appsbyalok.echohunter.utils.GameColors
+import kotlin.math.max
 import kotlin.random.Random
 
 // Game Mode 1: Story / Mainframe Salvation (The Infiltration)
@@ -18,17 +19,18 @@ class StoryMode : GameModeStrategy {
 
     override fun getIntroLines() = StoryProtocol.storyIntroLines
 
-    override fun updateCameraAndMovement(dt: Float, gs: GameState, width: Float, scale: Float) {
+    override fun updateCameraAndMovement(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {
         val screenPx = gs.px - gs.cameraX
 
         // Camera smooth follow logic
         if (screenPx > width * 0.6f) gs.cameraX += (screenPx - width * 0.6f) * 5f * dt
         else if (screenPx < width * 0.2f && gs.cameraX > 0f) gs.cameraX += (screenPx - width * 0.2f) * 5f * dt
 
-        // Prevent camera from moving past the left boundary
-        if (gs.cameraX < 0f) gs.cameraX = 0f
+        // Boundaries Clamp
+        gs.cameraX = gs.cameraX.coerceIn(0f, max(0f, gs.mapWidth - width))
+        gs.cameraY = gs.cameraY.coerceIn(0f, max(0f, gs.mapHeight - height))
 
-        // Clamp the player within the visible screen
+        // Clamp the player within the visible screen (Story Mode restriction)
         if (gs.px < gs.cameraX) gs.px = gs.cameraX
         if (gs.px > gs.cameraX + width) gs.px = gs.cameraX + width
     }

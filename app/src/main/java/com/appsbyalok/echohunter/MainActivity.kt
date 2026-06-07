@@ -52,7 +52,12 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         super.onPause()
-        gameView.pauseGame()
+        gameView.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        gameView.onResume()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

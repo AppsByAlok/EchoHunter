@@ -24,22 +24,24 @@ class EnemySystem {
         typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
         textAlign = Paint.Align.CENTER
     }
-
     private val entityPath = Path()
 
-    // AI Module Link
-    private val ai = EnemyAI()
+    val ai = EnemyAI()
     private var heatTimer = 0f
 
     val n = 25
+    val enemyBrains = Array<IEnemyBehavior>(n) { PatrolBehavior } // MODULAR BRAIN ARRAY
+
     val ex = FloatArray(n)
     val ey = FloatArray(n)
     val evx = FloatArray(n)
     val evy = FloatArray(n)
     val vis = FloatArray(n)
     val type = IntArray(n)
-    val eState = IntArray(n) // 0=Patrol, 1=Alert, 2=Hunt/Investigate
+    val eState = IntArray(n)
     val investigateTimer = FloatArray(n)
+    val invX = FloatArray(n)
+    val invY = FloatArray(n)
 
     val pwn = 4
     val pwX = FloatArray(pwn)
@@ -51,20 +53,38 @@ class EnemySystem {
 
     fun respawnAll(gs: GameState, width: Float, height: Float) {
         for (i in 0 until pwn) pwActive[i] = false
-        for (i in 0 until n) spawn(i, gs, width, height)
+        val isDefense = gs.coreRadius > 0f && gs.activeObjective is com.appsbyalok.echohunter.modes.DefenseObjective
+
+        for (i in 0 until n) {
+            if (isDefense) {
+                ex[i] = -9999f
+                ey[i] = -9999f
+            } else {
+                spawn(i, gs, width, height)
+            }
+        }
+    }
+
+    fun killEnemy(i: Int, gs: GameState, width: Float, height: Float) {
+        if (ex[i] < -1000f) return
+        ex[i] = -9999f
+        ey[i] = -9999f
+
+        if (gs.activeObjective is com.appsbyalok.echohunter.modes.DefenseObjective) {
+            gs.defEnemiesAlive--
+            if (gs.defEnemiesAlive < 0) gs.defEnemiesAlive = 0
+        } else {
+            spawn(i, gs, width, height)
+        }
     }
 
     fun spawn(i: Int, gs: GameState, width: Float, height: Float) {
         val scale = min(width, height)
         val isSwarm = gs.bossActive && (gs.bossType == 1 || gs.bossType == 4)
 
-        // --- FIX 1: STRICT PATH SPAWNING FOR ENEMIES ---
         if (gs.gridMap != null) {
-            val w = gs.gridMap!!.size
-            val h = gs.gridMap!![0].size
+            val w = gs.gridMap!!.size; val h = gs.gridMap!![0].size
             var placed = false
-
-            // Find a safe path near the player
             val pCol = (gs.px / gs.tileSize).toInt().coerceIn(1, w - 2)
             val pRow = (gs.py / gs.tileSize).toInt().coerceIn(1, h - 2)
 
@@ -72,34 +92,22 @@ class EnemySystem {
                 val rx = pCol + Random.nextInt(-12, 13)
                 val ry = pRow + Random.nextInt(-12, 13)
 
-                // != 1 means it's not a wall (can be path, dest, or guard spawn)
                 if (rx in 1 until w - 1 && ry in 1 until h - 1 && gs.gridMap!![rx][ry] != 1) {
                     val tryX = rx * gs.tileSize + gs.tileSize / 2f
                     val tryY = ry * gs.tileSize + gs.tileSize / 2f
+                    val dx = tryX - gs.px; val dy = tryY - gs.py
 
-                    val dx = tryX - gs.px
-                    val dy = tryY - gs.py
-
-                    // Keep some safe distance from player
                     if (dx * dx + dy * dy > (scale * 0.5f) * (scale * 0.5f) || gs.timeSinceStart == 0f) {
-                        ex[i] = tryX
-                        ey[i] = tryY
+                        ex[i] = tryX; ey[i] = tryY
                         placed = true
                         break
                     }
                 }
             }
-
-            // Fallback just in case
-            if (!placed) {
-                ex[i] = gs.px
-                ey[i] = gs.py
-            }
+            if (!placed) { ex[i] = gs.px; ey[i] = gs.py }
         } else {
-            // Endless Mode Fallback
             val spawnPos = gs.modeStrategy.getEnemySpawnPosition(gs, width, height, scale)
-            ex[i] = spawnPos.first
-            ey[i] = spawnPos.second
+            ex[i] = spawnPos.first; ey[i] = spawnPos.second
         }
 
         val diffSpeedMult = if (gs.difficulty == 0) 0.65f else 1.0f
@@ -110,50 +118,38 @@ class EnemySystem {
         } * diffSpeedMult
 
         val sp = (scale * 0.3f * speedMult) + Random.nextFloat() * (scale * 0.2f)
-
         val angle = Random.nextFloat() * 6.28f
-        evx[i] = cos(angle) * sp
-        evy[i] = sin(angle) * sp
+        evx[i] = cos(angle) * sp; evy[i] = sin(angle) * sp
 
-        val hunterProbability = if (gs.score < 10) 0.0f else min(0.65f, (gs.score - 10) * 0.015f)
-
-        // --- NAYA: ELIMINATION & DEFENSE MODE SPAWN LOGIC ---
         val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
-        val isElimination = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ELIMINATION) && gs.gameMode == 0
-        val isDefense = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE) && gs.gameMode == 0
+        val isElimination = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ELIMINATION)
+        val isDefense = gs.activeObjective is com.appsbyalok.echohunter.modes.DefenseObjective
+        val hunterProb = if (gs.score < 10) 0.0f else min(0.65f, (gs.score - 10) * 0.015f)
 
+        // --- BRAIN ASSIGNMENT ---
         if (isSwarm) {
-            type[i] = 1
+            type[i] = 1; enemyBrains[i] = HunterBehavior
         } else if (isElimination && i < 5) {
-            type[i] = 3
+            type[i] = 3; enemyBrains[i] = PatrolBehavior
         } else if (isDefense) {
-            type[i] = 1
-        } else if (gs.gameMode == 2) {
-            type[i] = if (Random.nextFloat() < hunterProbability) 1 else if (Random.nextFloat() > 0.7f) 2 else 0
+            type[i] = 2; enemyBrains[i] = KamikazeBehavior
         } else {
-            type[i] = if (Random.nextFloat() < hunterProbability) 1 else 0
+            type[i] = if (Random.nextFloat() < hunterProb) 1 else 0
+            enemyBrains[i] = if (type[i] == 1) HunterBehavior else PatrolBehavior
         }
 
-        vis[i] = 1f
-        eState[i] = 0
-        investigateTimer[i] = 0f
+        vis[i] = 1f; eState[i] = 0; investigateTimer[i] = 0f
     }
 
     fun updateEnemies(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {
         gs.isEnemyNear = false
         gs.isEnemyVeryNear = false
 
-        // --- NAYA FIX: config ko function ke start me declare karo ---
-        val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
-        val isDefense = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE) && gs.gameMode == 0
-
-        val hitDistSq = (scale * 0.045f) * (scale * 0.045f)
-        val speed = scale * (if (gs.difficulty == 0) 0.25f else 0.4f)
-
         if (gs.gridMap != null) {
             heatTimer -= dt
             if (heatTimer <= 0f) {
-                ai.updateHeatMap(gs)
+                ai.updatePlayerHeatMap(gs)
+                if (gs.coreRadius > 0f) ai.updateCoreHeatMap(gs)
                 heatTimer = 0.5f
             }
         }
@@ -161,85 +157,23 @@ class EnemySystem {
         val enemyRadius = scale * 0.02f
 
         for (i in 0 until n) {
+            if (ex[i] < -1000f) continue
             val nextEx = ex[i] + evx[i] * dt
-            if (!isCollidingWithWall(nextEx, ey[i], enemyRadius, gs)) {
-                ex[i] = nextEx
-            } else {
-                evx[i] = -evx[i]
-            }
+            if (!isCollidingWithWall(nextEx, ey[i], enemyRadius, gs)) ex[i] = nextEx
+            else evx[i] = -evx[i]
 
             val nextEy = ey[i] + evy[i] * dt
-            if (!isCollidingWithWall(ex[i], nextEy, enemyRadius, gs)) {
-                ey[i] = nextEy
-            } else {
-                evy[i] = -evy[i]
-            }
+            if (!isCollidingWithWall(ex[i], nextEy, enemyRadius, gs)) ey[i] = nextEy
+            else evy[i] = -evy[i]
 
-            // 1. TARGET FIX: Defense mode mein sab Core par attack karenge!
-            val targetX = if (isDefense) gs.coreX else if (gs.isDecoyActive) gs.decoyX else gs.px
-            val targetY = if (isDefense) gs.coreY else if (gs.isDecoyActive) gs.decoyY else gs.py
-            val tdx = targetX - ex[i]
-            val tdy = targetY - ey[i]
-            val td2 = tdx * tdx + tdy * tdy
+            // DELEGATE TO MODULAR AI BRAIN
+            enemyBrains[i].updateBehavior(i, dt, gs, this, ai, width, height, scale)
 
             val d2 = (gs.px - ex[i]) * (gs.px - ex[i]) + (gs.py - ey[i]) * (gs.py - ey[i])
-
             val hitByPulse = (gs.pulse && d2 in gs.innerRSq..gs.outerRSq)
 
-            // --- YELLOW PATROLS INVESTIGATE LOGIC ---
-            if (type[i] == 0) {
-                if (hitByPulse || (gs.localAttackAlert && td2 < (scale * 1.5f) * (scale * 1.5f))) {
-                    eState[i] = 2 // 2 = Suspicious/Investigate
-                    investigateTimer[i] = 3.0f
-                }
-
-                if (eState[i] == 2) {
-                    investigateTimer[i] -= dt
-
-                    if (investigateTimer[i] <= 0f) {
-                        eState[i] = 0
-                    } else {
-                        if (gs.gridMap != null) {
-                            val (nvx, nvy) = ai.steerByHeatMap(ex[i], ey[i], evx[i], evy[i], speed * 0.8f, gs)
-                            evx[i] = nvx; evy[i] = nvy
-                        }
-
-                        // THE TWIST: Agar investigate time enemy in rang to (Line of sight!)
-                        val inLoS = ai.hasLineOfSight(ex[i], ey[i], targetX, targetY, gs)
-                        if (inLoS && td2 < hitDistSq * 50f) {
-                            type[i] = 1 // Ab ban gaya ye permanent Red Hunter!
-                            eState[i] = 1
-                            EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 50)
-                        }
-                    }
-                }
-            }
-
-            // Red Hunters Tracking
             if (type[i] == 1) {
-                if (hitByPulse) {
-                    eState[i] = 2
-                } else if (gs.localAttackAlert && td2 < (scale * 1.5f) * (scale * 1.5f)) {
-                    eState[i] = 2
-                }
-
-                val inLoS = ai.hasLineOfSight(ex[i], ey[i], targetX, targetY, gs)
-
-                if (inLoS && td2 < hitDistSq * 50f) {
-                    eState[i] = 1
-                    val eDist = kotlin.math.sqrt(td2)
-                    val chaseSpeed = speed * (if (gs.isOverclocked && !gs.isDecoyActive) -0.5f else 1.2f)
-                    evx[i] = (evx[i] * 0.9f) + ((tdx / eDist) * chaseSpeed * 0.1f)
-                    evy[i] = (evy[i] * 0.9f) + ((tdy / eDist) * chaseSpeed * 0.1f)
-                } else if (eState[i] == 1) {
-                    eState[i] = 2
-                }
-
-                if (eState[i] == 2 && gs.gridMap != null) {
-                    val (nvx, nvy) = ai.steerByHeatMap(ex[i], ey[i], evx[i], evy[i], speed, gs)
-                    evx[i] = nvx; evy[i] = nvy
-                }
-
+                val hitDistSq = (scale * 0.045f) * (scale * 0.045f)
                 if (d2 < hitDistSq * 15f) gs.isEnemyNear = true
                 if (d2 < hitDistSq * 4f) gs.isEnemyVeryNear = true
             }
@@ -247,16 +181,8 @@ class EnemySystem {
             if (hitByPulse || d2 < gs.passiveAuraRadiusSq) vis[i] = 1f
             vis[i] *= gs.fadeMultiplier
 
-            // 2. SMART ANTI-DESPAWN:
-            val maxAllowedDistSq = if (isDefense || gs.bossActive) {
-                (width * 1.5f) * (width * 1.5f) // Tight Leash for Arena
-            } else {
-                (width * 4.0f) * (width * 4.0f) // Loose Leash for Maze Explorer
-            }
-
-            if (d2 > maxAllowedDistSq) {
-                spawn(i, gs, width, height)
-            }
+            val maxAllowedDistSq = if (gs.bossActive || gs.coreRadius > 0f) (width * 1.5f) * (width * 1.5f) else (width * 4.0f) * (width * 4.0f)
+            if (d2 > maxAllowedDistSq) spawn(i, gs, width, height)
         }
         gs.globalSonarAlert = false
         gs.localAttackAlert = false
@@ -267,10 +193,8 @@ class EnemySystem {
         val ts = gs.tileSize
         val hitbox = radius * 0.8f
 
-        val left = ((cx - hitbox) / ts).toInt()
-        val right = ((cx + hitbox) / ts).toInt()
-        val top = ((cy - hitbox) / ts).toInt()
-        val bottom = ((cy + hitbox) / ts).toInt()
+        val left = ((cx - hitbox) / ts).toInt(); val right = ((cx + hitbox) / ts).toInt()
+        val top = ((cy - hitbox) / ts).toInt(); val bottom = ((cy + hitbox) / ts).toInt()
 
         for (x in left..right) {
             for (y in top..bottom) {
@@ -291,62 +215,45 @@ class EnemySystem {
     fun updateBoss(dt: Float, gs: GameState, scale: Float) {
         if (!gs.bossActive) return
 
-        val bdx = gs.px - gs.bossX
-        val bdy = gs.py - gs.bossY
+        val bdx = gs.px - gs.bossX; val bdy = gs.py - gs.bossY
         val bDistSq = bdx * bdx + bdy * bdy
         val bDist = sqrt(bDistSq)
 
         var bSpeed = scale * (if (gs.bossType == 3 || gs.bossType == 4) 0.6f else 0.3f) * (if (gs.difficulty == 0) 0.7f else 1.0f)
         if (gs.isBossRage) bSpeed *= 2.0f
 
-
         if (bDist > 0f) {
-            var vx: Float
-            var vy: Float
-
-            // --- NAYA: BOSS USES A* HEATMAP AI ---
+            var vx: Float; var vy: Float
             if (gs.gridMap != null) {
-                val (nvx, nvy) = ai.steerByHeatMap(gs.bossX, gs.bossY, 0f, 0f, bSpeed * 5f, gs)
-                vx = nvx
-                vy = nvy
+                val (nvx, nvy) = ai.steerByPlayerHeatMap(gs.bossX, gs.bossY, 0f, 0f, bSpeed * 5f, gs)
+                vx = nvx; vy = nvy
             } else {
-                vx = (bdx / bDist) * bSpeed
-                vy = (bdy / bDist) * bSpeed
+                vx = (bdx / bDist) * bSpeed; vy = (bdy / bDist) * bSpeed
             }
 
             val rageMult = if (gs.isBossRage) 2.0f else 1.0f
-            // Special Boss Movement Patterns (Dash, Jiggle, etc.)
             when (gs.bossType) {
-                1 -> vy += sin(gs.timeSinceStart * (4f * rageMult)) * scale * 0.4f // Faster oscillation
-                2 -> if (gs.timeSinceStart % (2.5f / rageMult) < 0.2f) { vx *= 4.5f; vy *= 4.5f } // More frequent dashes
+                1 -> vy += sin(gs.timeSinceStart * (4f * rageMult)) * scale * 0.4f
+                2 -> if (gs.timeSinceStart % (2.5f / rageMult) < 0.2f) { vx *= 4.5f; vy *= 4.5f }
                 3 -> { vx += (Random.nextFloat() - 0.5f) * scale * 0.8f * rageMult; vy += (Random.nextFloat() - 0.5f) * scale * 0.8f * rageMult }
                 4 -> { vy += cos(gs.timeSinceStart * (5f * rageMult)) * scale * 0.6f; vx += sin(gs.timeSinceStart * (3f * rageMult)) * scale * 0.3f }
             }
 
-            // --- BOSS STRICT WALL SLIDING ---
             val bossRadius = scale * 0.08f
             val nextBx = gs.bossX + vx * dt
-            if (!isCollidingWithWall(nextBx, gs.bossY, bossRadius * 0.8f, gs)) {
-                gs.bossX = nextBx
-            }
+            if (!isCollidingWithWall(nextBx, gs.bossY, bossRadius * 0.8f, gs)) gs.bossX = nextBx
             val nextBy = gs.bossY + vy * dt
-            if (!isCollidingWithWall(gs.bossX, nextBy, bossRadius * 0.8f, gs)) {
-                gs.bossY = nextBy
-            }
+            if (!isCollidingWithWall(gs.bossX, nextBy, bossRadius * 0.8f, gs)) gs.bossY = nextBy
         }
 
-        // Visibility Logic
         if (gs.difficulty == 1) {
-            if ((gs.pulse && bDistSq in gs.innerRSq..gs.outerRSq) || bDistSq < gs.passiveAuraRadiusSq) {
-                gs.bossVis = 1.0f
-            }
+            if ((gs.pulse && bDistSq in gs.innerRSq..gs.outerRSq) || bDistSq < gs.passiveAuraRadiusSq) gs.bossVis = 1.0f
             gs.bossVis *= gs.fadeMultiplier
             if (gs.bossVis < 0.05f) gs.bossVis = 0.05f
         } else {
             gs.bossVis = 1.0f
         }
 
-        // EMP Boss Mechanic
         if ((gs.bossType == 2 || gs.bossType == 4) && Random.nextFloat() < 0.6f * dt) {
             gs.empFlashTimer = 1.0f
             EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
