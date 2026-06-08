@@ -4,11 +4,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Typeface
-import android.media.ToneGenerator
-import com.appsbyalok.echohunter.R
-import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.engine.GameState
-import com.appsbyalok.echohunter.utils.EchoAudioManager
 import com.appsbyalok.echohunter.utils.GameColors
 import kotlin.math.cos
 import kotlin.math.max
@@ -215,49 +211,45 @@ class EnemySystem {
     fun updateBoss(dt: Float, gs: GameState, scale: Float) {
         if (!gs.bossActive) return
 
+        val behavior = when (gs.bossType) {
+            1 -> GuardianBossBehavior
+            2 -> StalkerBossBehavior
+            3 -> GlitchBossBehavior
+            4 -> OmegaBossBehavior
+            else -> GuardianBossBehavior // Type 0 is also Guardian
+        }
+
         val bdx = gs.px - gs.bossX; val bdy = gs.py - gs.bossY
         val bDistSq = bdx * bdx + bdy * bdy
         val bDist = sqrt(bDistSq)
 
-        var bSpeed = scale * (if (gs.bossType == 3 || gs.bossType == 4) 0.6f else 0.3f) * (if (gs.difficulty == 0) 0.7f else 1.0f)
-        if (gs.isBossRage) bSpeed *= 2.0f
+        val bSpeed = scale * (if (gs.bossType == 3 || gs.bossType == 4) 0.6f else 0.3f) * (if (gs.difficulty == 0) 0.7f else 1.0f) * (if (gs.isBossRage) 2.0f else 1.0f)
 
         if (bDist > 0f) {
-            var vx: Float; var vy: Float
-            if (gs.gridMap != null) {
-                val (nvx, nvy) = ai.steerByPlayerHeatMap(gs.bossX, gs.bossY, 0f, 0f, bSpeed * 5f, gs)
-                vx = nvx; vy = nvy
+            val (vx, vy) = if (gs.gridMap != null) {
+                ai.steerByPlayerHeatMap(gs.bossX, gs.bossY, 0f, 0f, bSpeed * 5f, gs)
             } else {
-                vx = (bdx / bDist) * bSpeed; vy = (bdy / bDist) * bSpeed
+                Pair((bdx / bDist) * bSpeed, (bdy / bDist) * bSpeed)
             }
 
-            val rageMult = if (gs.isBossRage) 2.0f else 1.0f
-            when (gs.bossType) {
-                1 -> vy += sin(gs.timeSinceStart * (4f * rageMult)) * scale * 0.4f
-                2 -> if (gs.timeSinceStart % (2.5f / rageMult) < 0.2f) { vx *= 4.5f; vy *= 4.5f }
-                3 -> { vx += (Random.nextFloat() - 0.5f) * scale * 0.8f * rageMult; vy += (Random.nextFloat() - 0.5f) * scale * 0.8f * rageMult }
-                4 -> { vy += cos(gs.timeSinceStart * (5f * rageMult)) * scale * 0.6f; vx += sin(gs.timeSinceStart * (3f * rageMult)) * scale * 0.3f }
-            }
+            val (finalVx, finalVy) = behavior.applyMovementPattern(vx, vy, dt, gs, scale)
 
             val bossRadius = scale * 0.08f
-            val nextBx = gs.bossX + vx * dt
+            val nextBx = gs.bossX + finalVx * dt
             if (!isCollidingWithWall(nextBx, gs.bossY, bossRadius * 0.8f, gs)) gs.bossX = nextBx
-            val nextBy = gs.bossY + vy * dt
+            val nextBy = gs.bossY + finalVy * dt
             if (!isCollidingWithWall(gs.bossX, nextBy, bossRadius * 0.8f, gs)) gs.bossY = nextBy
         }
 
+        behavior.updateSpecial(dt, gs, this, scale)
+
+        // Visibility handling
         if (gs.difficulty == 1) {
             if ((gs.pulse && bDistSq in gs.innerRSq..gs.outerRSq) || bDistSq < gs.passiveAuraRadiusSq) gs.bossVis = 1.0f
             gs.bossVis *= gs.fadeMultiplier
             if (gs.bossVis < 0.05f) gs.bossVis = 0.05f
         } else {
             gs.bossVis = 1.0f
-        }
-
-        if ((gs.bossType == 2 || gs.bossType == 4) && Random.nextFloat() < 0.6f * dt) {
-            gs.empFlashTimer = 1.0f
-            EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
-            StoryProtocol.showIngameMessage(R.string.msg_emp_detected, 1f)
         }
     }
 

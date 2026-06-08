@@ -49,12 +49,12 @@ class HUDRenderer(private val context: Context) {
 
         // --- 2. CENTER TOP UI (Dynamic Stacking for NO OVERLAPS) ---
         var currentY = scale * 0.16f // Moved down to avoid overlap with Top Notification Toast
+        pText.textAlign = Paint.Align.CENTER
 
         // A. Autopilot Tag (Only if active)
         if (gs.isAutoPilotActive) {
             pText.color = GameColors.PULSE
             pText.textSize = scale * 0.025f
-            pText.textAlign = Paint.Align.CENTER
             c.drawText("AUTOPILOT ACTIVE", targetW / 2f, currentY, pText)
             currentY += scale * 0.03f
         } else {
@@ -74,27 +74,37 @@ class HUDRenderer(private val context: Context) {
 
         currentY += barH + scale * 0.045f
 
-        // C. Defense Mode Uplink Timer (If applicable)
+        // C. Defense Mode Custom UI Header
         val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
         if (config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE) && gs.gameMode == 0) {
-            val secondsLeft = kotlin.math.max(0, gs.defenseTimer.toInt())
-
-            // Defence Timer text
-            if (secondsLeft > 0) {
-                pText.color = when {
-                    secondsLeft <= 5 -> GameColors.SHIELD
-                    secondsLeft <= 10 -> GameColors.YELLOW
-                    else -> GameColors.CLARITY
+            
+            pText.textAlign = Paint.Align.CENTER
+            
+            when (gs.defWaveState) {
+                1 -> { // ACTIVE WAVE: Fighting Phase
+                    pText.textSize = scale * 0.045f
+                    pText.color = GameColors.RED
+                    val enemiesLeft = gs.defEnemiesToSpawn + gs.defEnemiesAlive
+                    c.drawText("ENEMIES LEFT: $enemiesLeft", targetW / 2f, currentY, pText)
+                    
+                    // Sub-header
+                    pText.textSize = scale * 0.025f
+                    pText.color = GameColors.TEXT
+                    c.drawText("WAVE ${gs.defWaveCurrent} / ${gs.defWaveMax}", targetW / 2f, currentY + scale * 0.035f, pText)
                 }
+                0, 2 -> { // BUFFER / COOLDOWN: Waiting Phase
+                    pText.textSize = scale * 0.045f
+                    pText.color = GameColors.SHIELD
+                    val secondsLeft = kotlin.math.max(0, gs.defWaveTimer.toInt())
+                    c.drawText("NEXT WAVE IN: ${secondsLeft}s", targetW / 2f, currentY, pText)
 
-                pText.textSize = scale * 0.04f
-                if (secondsLeft <= 5) {
-                    c.drawText("UPLINK SECURES IN: ${secondsLeft}s", targetW / 2f, currentY, pText)
-                } else {
-                    c.drawText("UPLINK STABLE: ${secondsLeft}s", targetW / 2f, currentY, pText)
+                    // Sub-header
+                    pText.textSize = scale * 0.025f
+                    pText.color = GameColors.CLARITY
+                    c.drawText("PREPARING WAVE ${gs.defWaveCurrent} / ${gs.defWaveMax}", targetW / 2f, currentY + scale * 0.035f, pText)
                 }
             }
-       }
+        }
 
 
         // --- 3. VIRTUAL JOYSTICK ---

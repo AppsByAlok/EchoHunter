@@ -68,14 +68,8 @@ object StoryProtocol {
         if (score > 150 && Random.nextDouble() < 0.05) {
             isGlitchActive = true
             showIngameMessage("ADMIN: \"I FOUND YOUR IP.\"", 2f)
-        } else { // player ko kuch karna hoga controll theek karne ke liye
-            isGlitchActive = false // glitch ka off kab larna hai ye sochna hai
-            areControlsInverted = false
         }
 
-//        if (){
-//            areControlsInverted = false
-//        }
         // Inverse Controls Glitch (Admin tries to mess with the Hacker's controller)
         val isAPT = SaveManager.unlockedStoryStreak >= 3 || gameMode == 1
         val invertedChance = if (difficulty == 1 || isAPT) 0.15 else 0.02

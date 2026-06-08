@@ -179,7 +179,7 @@ class GameView(context: Context) : View(context) {
             gs.chromaticIntensity = 0f
             gs.sectorFlash = 0f
         }
-        gs.resetGame()
+//        gs.resetGame()
         uiMainMenu.disconnect()
         changeState(0)
         EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)

@@ -151,7 +151,7 @@ object MazeGenerator {
         }
     }
 
-    class Room(val x: Int, val y: Int, val w: Int, val h: Int) {
+    data class Room(val x: Int, val y: Int, val w: Int, val h: Int) {
         val centerX: Int get() = x + w / 2
         val centerY: Int get() = y + h / 2
     }
@@ -160,7 +160,7 @@ object MazeGenerator {
         val numRooms = max(3, (w * h) / 100)
         val rooms = mutableListOf<Room>()
 
-        for (i in 0 until numRooms) {
+        repeat(numRooms) {
             val rw = rand.nextInt(5, 13)
             val rh = rand.nextInt(5, 13)
             val rx = rand.nextInt(1, max(2, w - rw - 1))
@@ -174,8 +174,7 @@ object MazeGenerator {
                 }
             }
 
-            if (rooms.isNotEmpty()) {
-                val prev = rooms.last()
+            rooms.lastOrNull()?.let { prev ->
                 carveThickCorridor(grid, prev.centerX, prev.centerY, room.centerX, room.centerY, w, h, rand)
             }
             rooms.add(room)

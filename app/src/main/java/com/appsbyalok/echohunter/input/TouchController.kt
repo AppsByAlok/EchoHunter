@@ -16,7 +16,6 @@ class TouchController(private val gs: GameState) {
         e: MotionEvent,
         offsetX: Float,
         offsetY: Float,
-        gameScale: Float,
         targetW: Float,
         targetH: Float,
         scale: Float

@@ -34,15 +34,15 @@ class StandardObjective : IGameObjective {
 class DefenseObjective : IGameObjective {
     override fun setupObjective(gs: GameState, targetW: Float, targetH: Float, scale: Float) {
         gs.defWaveMax = when {
-            gs.currentLevel < 5 -> 1
-            gs.currentLevel < 25 -> 2
-            gs.currentLevel < 125 -> 3
-            gs.currentLevel < 250 -> 4
+            gs.currentLevel <= 15 -> 1
+            gs.currentLevel <= 50 -> 2
+            gs.currentLevel <= 100 -> 3
+            gs.currentLevel <= 250 -> 4
             else -> 5
         }
         gs.defWaveCurrent = 1
         gs.defWaveState = 0 // Buffer phase
-        gs.defWaveTimer = 5f // 5 seconds pause
+        gs.defWaveTimer = 5f // 5 seconds initial pause
 
         val totalTime = LevelEngine.getDefenseTimer(gs.currentLevel)
         gs.maxDefenseTimer = totalTime / gs.defWaveMax
@@ -53,39 +53,52 @@ class DefenseObjective : IGameObjective {
     }
 
     override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, targetW: Float, targetH: Float) {
-        if (gs.defenseTimer < 2f) gs.defenseTimer = 2f
+        // Background timer for overall level progression
+        if (gs.defWaveState == 1) {
+            // During active combat, timer slows down or stays at 2s to ensure all enemies are killed
+            if (gs.defenseTimer < 2f) gs.defenseTimer = 2f
+        } else {
+            // During buffer/cooldown, timer can continue normally
+            gs.defenseTimer -= dt
+        }
 
         when (gs.defWaveState) {
-            0, 2 -> { // Buffer ya Cooldown Phase
+            0, 2 -> { // Buffer or Cooldown Phase
                 gs.defWaveTimer -= dt
                 if (gs.defWaveTimer <= 0f) {
                     gs.defWaveState = 1
-                    gs.defEnemiesToSpawn = 8 + (gs.currentLevel * 3)
+                    // BALANCING: Reduced enemy count per wave for better manageability
+                    gs.defEnemiesToSpawn = 5 + (gs.currentLevel * 2)
                     gs.defEnemiesAlive = 0
                     StoryProtocol.showIngameMessage("WAVE ${gs.defWaveCurrent} / ${gs.defWaveMax} INCOMING!", 2f)
                     EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 200)
                 }
             }
             1 -> { // Fighting Phase (Wave Injection)
-                for (i in 0 until enemySys.n) {
-                    if (enemySys.ex[i] < -1000f && gs.defEnemiesToSpawn > 0) {
-                        if (Random.nextFloat() < 0.1f) {
-                            gs.defEnemiesToSpawn--
-                            gs.defEnemiesAlive++
-                            enemySys.spawn(i, gs, targetW, targetH)
+                // Cap active enemies on screen to prevent extreme swarming (Max 15)
+                var currentlyActive = 0
+                for (i in 0 until enemySys.n) if (enemySys.ex[i] > -1000f) currentlyActive++
+
+                if (currentlyActive < 15) {
+                    for (i in 0 until enemySys.n) {
+                        if (enemySys.ex[i] < -1000f && gs.defEnemiesToSpawn > 0) {
+                            if (Random.nextFloat() < 0.15f) { // Slightly faster injection
+                                gs.defEnemiesToSpawn--
+                                gs.defEnemiesAlive++
+                                enemySys.spawn(i, gs, targetW, targetH)
+                            }
                         }
                     }
                 }
 
-                // Win Condition for Current Wave
                 if (gs.defEnemiesAlive <= 0 && gs.defEnemiesToSpawn <= 0) {
                     if (gs.defWaveCurrent >= gs.defWaveMax) {
                         gs.defenseTimer = 0f // Final Signal to end level
                     } else {
                         gs.defWaveCurrent++
                         gs.defWaveState = 2
-                        gs.defWaveTimer = 5f
-                        StoryProtocol.showIngameMessage("WAVE CLEARED. RELOADING...", 2f)
+                        gs.defWaveTimer = 7f // More breathing time between waves
+                        StoryProtocol.showIngameMessage("WAVE CLEAR! REGROUPING...", 2f)
                     }
                 }
             }

@@ -110,7 +110,7 @@ class GameplayState(private val manager: AppStateManager) : IAppState {
         if (gs.showOverclockTextTimer > 0f) manager.view.hudRenderer.renderOverclockText(c, scale, width, height)
     }
     override fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean {
-        return manager.view.touchController.handleTouch(e, 0f, 0f, 1f, targetW, targetH, scale)
+        return manager.view.touchController.handleTouch(e, 0f, 0f, targetW, targetH, scale)
     }
     override fun onBackPressed(gs: GameState): Boolean {
         manager.view.pauseGame()
@@ -216,13 +216,14 @@ class StoryCutsceneState(private val manager: AppStateManager) : IAppState {
         manager.view.storyStep = manager.view.menuRenderer.drawStory(c, lines, scale, gs, width, height, manager.view.storyStep)
     }
     override fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean {
+        // Story skipping ONLY works in the bottom half of the screen
         if (action == MotionEvent.ACTION_UP) {
             val activeLines = if (gs.state == 4) StoryProtocol.badEndingLines else manager.view.currentStoryLines
             
             // Agar typing khatam nahi hui toh typing skip karo, warna next line
             if (manager.view.storyStep < activeLines.size) {
                 manager.view.storyStep++
-            } else {
+            } else if ( vy > targetH * 0.5f) {
                 // Transition logic
                 if (gs.stateTimer < 0.8f) return true
                 when (gs.state) {
