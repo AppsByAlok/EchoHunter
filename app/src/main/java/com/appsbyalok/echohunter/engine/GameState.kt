@@ -111,8 +111,6 @@ class GameState {
     var currentWeapon = 1 // Index of equipped weapon (0: Blaster, 1: Shotgun, 2: Sniper)
     var currentTrap = 2   // Index of selected trap (0: Camouflage, 1: Decoy, 2: EMP Mine)
 
-    var defenseTimer = 0f // Countdown for the current defense objective phase
-    var maxDefenseTimer = 0f // Total duration defined for the defense phase
     var coreHp = 10 // Current health of the core being defended
     var coreMaxHp = 10 // Maximum possible health of the core
     var defWaveCurrent = 1 // Current wave number in defense mode
@@ -385,7 +383,6 @@ class GameState {
         if (slowMoTimer > 0f) slowMoTimer -= dt
         if (bossDeathTimer > 0f) bossDeathTimer -= dt
         if (attackCooldown > 0f) attackCooldown -= dt
-        if (defenseTimer > 0f) defenseTimer -= dt
 
         val target = targetClarity
         val visionUpdateRate = if (difficulty == 1) 0.04f else 0.8f

@@ -113,13 +113,6 @@ object LevelEngine {
         )
     }
 
-    fun getDefenseTimer(level: Int): Float {
-        val minTime = 10f
-        val maxTime = 300f
-        val curveConstant = 250f
-        return minTime + (maxTime - minTime) * (level.toFloat() / (level.toFloat() + curveConstant))
-    }
-
     fun getKillRewardKB(level: Int, isBoss: Boolean): Long {
         val base = if (isBoss) 400L + (level * 15L) else 5L + (level / 6L)
         return base + (base * UpgradeSystem.getRewardBonusPercent()).toLong()
