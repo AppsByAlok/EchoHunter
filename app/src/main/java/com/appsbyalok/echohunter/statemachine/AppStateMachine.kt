@@ -88,7 +88,9 @@ class MainMenuState(private val manager: AppStateManager) : IAppState {
 class GameplayState(private val manager: AppStateManager) : IAppState {
     override fun onEnter(gs: GameState) {}
     override fun onExit(gs: GameState) {}
-    override fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {}
+    override fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {
+        manager.view.uiHelpMenu.update(dt)
+    }
     override fun draw(c: Canvas, gs: GameState, width: Float, height: Float, scale: Float, dt: Float) {
         c.drawColor(0xFF050A0F.toInt()) // Base Background
         manager.view.worldRenderer.drawGrid(c, scale, gs, width, height) // GRID RESTORED
@@ -121,7 +123,9 @@ class GameplayState(private val manager: AppStateManager) : IAppState {
 class PauseState(private val manager: AppStateManager) : IAppState {
     override fun onEnter(gs: GameState) {}
     override fun onExit(gs: GameState) {}
-    override fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {}
+    override fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {
+        manager.view.uiHelpMenu.update(dt)
+    }
     override fun draw(c: Canvas, gs: GameState, width: Float, height: Float, scale: Float, dt: Float) {
         manager.gameplayState.draw(c, gs, width, height, scale, dt)
         manager.view.menuRenderer.drawPause(c, scale, gs, width, height)
@@ -161,7 +165,9 @@ class PauseState(private val manager: AppStateManager) : IAppState {
 class HelpState(private val manager: AppStateManager) : IAppState {
     override fun onEnter(gs: GameState) {}
     override fun onExit(gs: GameState) {}
-    override fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {}
+    override fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {
+        manager.view.uiHelpMenu.update(dt)
+    }
     override fun draw(c: Canvas, gs: GameState, width: Float, height: Float, scale: Float, dt: Float) {
         manager.view.uiHelpMenu.draw(c, scale, width, height, gs)
     }
@@ -209,7 +215,9 @@ class VictoryState(private val manager: AppStateManager) : IAppState {
 class StoryCutsceneState(private val manager: AppStateManager) : IAppState {
     override fun onEnter(gs: GameState) {}
     override fun onExit(gs: GameState) {}
-    override fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {}
+    override fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {
+        manager.view.uiHelpMenu.update(dt)
+    }
     override fun draw(c: Canvas, gs: GameState, width: Float, height: Float, scale: Float, dt: Float) {
         c.drawColor(0xFF050A0F.toInt())
         val lines = if (gs.state == 4) StoryProtocol.badEndingLines else manager.view.currentStoryLines
@@ -260,7 +268,9 @@ class StoryCutsceneState(private val manager: AppStateManager) : IAppState {
 class SubMenuState(private val manager: AppStateManager) : IAppState {
     override fun onEnter(gs: GameState) {}
     override fun onExit(gs: GameState) {}
-    override fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {}
+    override fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {
+        manager.view.uiHelpMenu.update(dt)
+    }
     override fun draw(c: Canvas, gs: GameState, width: Float, height: Float, scale: Float, dt: Float) {
         c.drawColor(0xFF050A0F.toInt())
         when (gs.state) {

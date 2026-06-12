@@ -5,12 +5,14 @@ import kotlin.math.pow
 
 // Represents individual gameplay components that can overlap cleanly
 enum class LevelFeature {
-    CLASSIC,       // Baseline Default: Score/Data collect to win (%2 uses this layout)
-    MAZE,          // Structural Variation: Tight/Complex path layout (%4 secondary modifier)
-    DEFENSE,       // Prime 3: Protect the central core protocol
+    CLASSIC,       // Baseline Default: Score/Data collect to win
+    MAZE,          // Structural Variation: Tight/Complex path layout (% 6)
+    DARKNESS,      // Environmental Modifier: Lights out, Sonar needed (% 8)
     BOSS,          // Prime 5: Warden Arena entity encounter
-    ESCAPE,        // Prime 7: Secure target threshold then locate escape gate
-    ELIMINATION,   // Prime 11: Terminate high-value target security arrays
+    ELIMINATION,   // Prime 7: Terminate high-value target security arrays
+    ESCAPE,        // Prime 11: Secure target threshold then locate escape gate
+    DEFENSE,       // Prime 13: Protect the central core protocol
+    BOMB,          // Prime 17: Plant a Logic Bomb and defend it
     SPECIAL,       // Narrative anomaly elements
     ADMIN_BONUS    // Level 100 Easter Egg override
 }
@@ -28,33 +30,44 @@ data class LevelConfig(
 object LevelEngine {
 
     /**
-     * Rearranged Frequencies using Prime distribution with optimized structural weights.
+     * Algorithmic Generation using Prime (Objectives) and Even (Modifiers) Matrix.
      */
     private fun determineLevelFeatures(level: Int): Set<LevelFeature> {
+        // Core Easter Egg
         if (level % 100 == 0) return setOf(LevelFeature.ADMIN_BONUS)
+
+        // Level 1 is always a safe tutorial infiltration
+        if (level == 1) return setOf(LevelFeature.CLASSIC)
 
         val activeFeatures = mutableSetOf<LevelFeature>()
 
-        // 1. Structural Modifiers & Core Prime Assignments
-        if (level % 3 == 0)  activeFeatures.add(LevelFeature.DEFENSE)
+        // --- 1. THE PRIME PROTOCOL (Primary Objectives) ---
         if (level % 5 == 0)  activeFeatures.add(LevelFeature.BOSS)
-        if (level % 7 == 0)  activeFeatures.add(LevelFeature.ESCAPE)
-        if (level % 11 == 0) activeFeatures.add(LevelFeature.ELIMINATION)
+        if (level % 7 == 0)  activeFeatures.add(LevelFeature.ELIMINATION)
+        if (level % 11 == 0) activeFeatures.add(LevelFeature.ESCAPE)
+        if (level % 13 == 0) activeFeatures.add(LevelFeature.DEFENSE)
+        if (level % 17 == 0) activeFeatures.add(LevelFeature.BOMB)
 
-        // %2 is now clean Classic template. MAZE is restricted to rare %4 logic for variety
-        if (level % 4 == 0 && !activeFeatures.contains(LevelFeature.BOSS)) {
-            activeFeatures.add(LevelFeature.MAZE)
-        }
+        // --- 2. THE EVEN PROTOCOL (Environmental Modifiers) ---
+        if (level % 6 == 0) activeFeatures.add(LevelFeature.MAZE)
+        if (level % 8 == 0) activeFeatures.add(LevelFeature.DARKNESS)
 
-        // Conflict Resolution: Boss maps must remain spacious arenas
-        if (activeFeatures.contains(LevelFeature.BOSS)) {
-            activeFeatures.remove(LevelFeature.MAZE)
-        }
+        // --- 3. LOGIC RESOLUTION ---
+        // Boss in a Maze is now ALLOWED! No manual removals.
 
-        // Fallback safety layer
-        if (activeFeatures.isEmpty() || (activeFeatures.size == 1 && activeFeatures.contains(LevelFeature.MAZE))) {
+        // Check if the level has any Main Objective
+        val hasPrimaryObjective = activeFeatures.contains(LevelFeature.BOSS) ||
+                activeFeatures.contains(LevelFeature.ELIMINATION) ||
+                activeFeatures.contains(LevelFeature.ESCAPE) ||
+                activeFeatures.contains(LevelFeature.DEFENSE) ||
+                activeFeatures.contains(LevelFeature.BOMB)
+
+        // If no primary objective exists, the base mode defaults to CLASSIC
+        // This ensures levels like 6 (Maze only) become Classic + Maze
+        if (!hasPrimaryObjective) {
             activeFeatures.add(LevelFeature.CLASSIC)
         }
+
         return activeFeatures
     }
 
@@ -79,6 +92,8 @@ object LevelEngine {
         if (features.contains(LevelFeature.BOSS)) featureMult *= 2.5
         if (features.contains(LevelFeature.DEFENSE)) featureMult *= 1.5
         if (features.contains(LevelFeature.ESCAPE)) featureMult *= 1.3
+        if (features.contains(LevelFeature.BOMB)) featureMult *= 1.8 // Bomb reward modifier
+        if (features.contains(LevelFeature.DARKNESS)) featureMult *= 1.2 // Bonus for playing in the dark
 
         clearReward = (clearReward * featureMult).toLong()
         clearReward += (clearReward * UpgradeSystem.getRewardBonusPercent()).toLong()

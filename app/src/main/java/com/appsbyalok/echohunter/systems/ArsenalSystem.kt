@@ -76,7 +76,9 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
         gs.pulse = true
         gs.pulseR = 0f
         gs.cooldownTimer = 0.25f * UpgradeSystem.getPulseCooldownMultiplier()
-        gs.visionClarity = max(0.0f, gs.visionClarity - 0.25f)
+        if (gs.isDarknessLevel) {
+            gs.visionClarity = max(0.0f, gs.visionClarity - 0.25f)
+        }
         EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 150)
         gs.globalSonarAlert = true
     }

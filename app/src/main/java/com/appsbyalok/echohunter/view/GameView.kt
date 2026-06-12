@@ -344,7 +344,9 @@ class GameView(context: Context) : View(context) {
             gs.pulse = true
             gs.pulseR = 0f
             gs.cooldownTimer = 0.25f * UpgradeSystem.getPulseCooldownMultiplier()
-            gs.visionClarity = max(0.0f, gs.visionClarity - 0.25f)
+            if (gs.isDarknessLevel) {
+                gs.visionClarity = max(0.0f, gs.visionClarity - 0.25f)
+            }
             gs.globalSonarAlert = true
             EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 150)
         } else {

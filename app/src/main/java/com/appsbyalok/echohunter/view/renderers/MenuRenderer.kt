@@ -169,6 +169,8 @@ class MenuRenderer(private val context: Context) {
                 com.appsbyalok.echohunter.data.LevelFeature.ELIMINATION -> GameColors.RED
                 com.appsbyalok.echohunter.data.LevelFeature.SPECIAL -> GameColors.OVERCLOCK
                 com.appsbyalok.echohunter.data.LevelFeature.ADMIN_BONUS -> GameColors.HP
+                com.appsbyalok.echohunter.data.LevelFeature.BOMB -> 0xFFFF0000.toInt()
+                com.appsbyalok.echohunter.data.LevelFeature.DARKNESS -> 0xFF000000.toInt()
             }
             // Passing pseudo-dark color for cutout blending (to match pause bg)
             com.appsbyalok.echohunter.utils.LevelIcons.drawMicroIcon(c, f, iconRect, pIcon, 0xFF1A1C20.toInt())

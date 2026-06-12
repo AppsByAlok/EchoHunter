@@ -171,6 +171,8 @@ class UIArchives {
                             LevelFeature.ELIMINATION -> GameColors.RED
                             LevelFeature.SPECIAL -> GameColors.OVERCLOCK
                             LevelFeature.ADMIN_BONUS -> GameColors.HP
+                            LevelFeature.BOMB -> 0xFFFF0000.toInt()
+                            LevelFeature.DARKNESS -> 0xFF000000.toInt()
                         }
                         mixedColor = if (colorCount == 0) featureColor else mixColorsManual(mixedColor, featureColor, 0.5f)
                         colorCount++
@@ -210,6 +212,8 @@ class UIArchives {
                                 LevelFeature.ELIMINATION -> GameColors.RED
                                 LevelFeature.SPECIAL -> GameColors.OVERCLOCK
                                 LevelFeature.ADMIN_BONUS -> GameColors.HP
+                                LevelFeature.BOMB -> 0xFFFF0000.toInt()
+                                LevelFeature.DARKNESS -> 0xFF000000.toInt()
                             }
 
                             badgeRect.set(currentBadgeX, badgeY, currentBadgeX + badgeSize, badgeY + badgeSize)

@@ -34,10 +34,10 @@ class StandardObjective : IGameObjective {
 class DefenseObjective : IGameObjective {
     override fun setupObjective(gs: GameState, targetW: Float, targetH: Float, scale: Float) {
         gs.defWaveMax = when {
-            gs.currentLevel <= 15 -> 1
-            gs.currentLevel <= 50 -> 2
-            gs.currentLevel <= 100 -> 3
-            gs.currentLevel <= 250 -> 4
+            gs.currentLevel <= 30 -> 1
+            gs.currentLevel <= 70 -> 2
+            gs.currentLevel <= 150 -> 3
+            gs.currentLevel <= 300 -> 4
             else -> 5
         }
         gs.defWaveCurrent = 1

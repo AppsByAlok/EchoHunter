@@ -3,6 +3,9 @@ package com.appsbyalok.echohunter.engine
 import android.media.ToneGenerator
 import android.os.Bundle
 import android.util.Log
+import com.appsbyalok.echohunter.data.LevelEngine
+import com.appsbyalok.echohunter.data.LevelFeature
+import com.appsbyalok.echohunter.data.SaveManager
 import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.data.UpgradeSystem
 import com.appsbyalok.echohunter.modes.CampaignMode
@@ -149,6 +152,19 @@ class GameState {
     var pulseR = 0f // Current radius of the expanding sonar pulse
     var cooldownTimer = 0f // General purpose timer for ability cooldowns
     var visionClarity = 1.0f // Visual factor affecting how much of the map is visible
+
+    // --- DARKNESS LOGIC ---
+    val isDarknessLevel: Boolean get() {
+        val config = LevelEngine.getLevelConfig(currentLevel)
+        val isDarkness = config.features.contains(LevelFeature.DARKNESS)
+        val isStoryBlackout = gameMode == 1 && SaveManager.unlockedStoryStreak >= 3
+        return isDarkness || isStoryBlackout
+    }
+
+    val isHardStoryMode: Boolean get() = gameMode == 1 && SaveManager.unlockedStoryStreak >= 2
+
+    val targetClarity: Float get() = if (isDarknessLevel) (if (isHardStoryMode) 0.0f else 0.15f) else 1.0f
+
     var shieldTimer = 0f // Remaining duration of active invulnerability shield
     var playerIframe = 0f // Temporary invincibility period after being hit
 
@@ -172,7 +188,7 @@ class GameState {
 
                 val pilotType = if (isAutoPilotActive) "AUTOPILOT" else "MANUAL_PLAYER"
                 val targetScore =
-                    com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(currentLevel).targetScore
+                    LevelEngine.getLevelConfig(currentLevel).targetScore
 
                 // Android Studio Logcat logs
                 Log.d(
@@ -371,8 +387,13 @@ class GameState {
         if (attackCooldown > 0f) attackCooldown -= dt
         if (defenseTimer > 0f) defenseTimer -= dt
 
-        if (visionClarity < 1.0f) visionClarity = min(1.0f, visionClarity + 0.1f * dt)
-        else if (visionClarity > 1.0f) visionClarity = max(1.0f, visionClarity - 0.1f * dt)
+        val target = targetClarity
+        val visionUpdateRate = if (difficulty == 1) 0.04f else 0.8f
+        if (visionClarity < target) {
+            visionClarity = min(target, visionClarity + dt * visionUpdateRate)
+        } else if (visionClarity > target) {
+            visionClarity = max(target, visionClarity - dt)
+        }
 
         if (chromaticIntensity > 0f) chromaticIntensity = max(0f, chromaticIntensity - dt * 2f)
         if (shockwaveActive) {
@@ -463,11 +484,18 @@ class GameState {
     }
 
     fun updateVisibilityMath(scale: Float, maxRad: Float) {
-        val passiveAuraRadius = if (modFullVisibility) scale * 100f else scale * 0.12f
+        val applyDarkness = isDarknessLevel
+
+        // Agar darkness hai, toh aura almost 0 (0.015f), else normal (0.12f)
+        val baseAura = if (applyDarkness) scale * 0.015f else scale * 0.12f
+        val passiveAuraRadius = if (modFullVisibility) scale * 100f else baseAura
         passiveAuraRadiusSq = passiveAuraRadius * passiveAuraRadius
 
-        val baseFade = if (difficulty == 1) 0.65f else 0.85f
-        fadeMultiplier = if (modFullVisibility) 1.0f else min(0.99f, baseFade + 0.16f * visionClarity)
+        // Fade multiplier (Background darkness)
+        fadeMultiplier = if (modFullVisibility || !applyDarkness) 1.0f else {
+            val baseFade = if (difficulty == 1 || isHardStoryMode) 0.65f else 0.85f
+            min(0.99f, baseFade + 0.16f * visionClarity)
+        }
 
         val echoThickness = maxRad * 0.05f
         if (pulse) {

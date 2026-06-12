@@ -109,7 +109,7 @@ class UIHelpMenu(private val context: Context) {
         )
 
         // --- Glitch Hijack Check (Easter Egg Repair UI) ---
-        if (StoryProtocol.isGlitchActive || isBooting) {
+        if (StoryProtocol.isGlitchActive || isBooting || repairFadeTimer > 0f) {
             var titleSize = scale * 0.08f
             pText.textSize = titleSize
             val glitchTitle = "UPLINK CORRUPTED"
@@ -257,6 +257,8 @@ class UIHelpMenu(private val context: Context) {
                     LevelFeature.ELIMINATION -> GameColors.RED
                     LevelFeature.SPECIAL -> GameColors.OVERCLOCK
                     LevelFeature.ADMIN_BONUS -> GameColors.HP
+                    LevelFeature.BOMB -> 0xFFFF0000.toInt()
+                    LevelFeature.DARKNESS -> 0xFF000000.toInt()
                 }
 
                 // Draw icon using utility (bgColor matches the terminal background)
@@ -456,7 +458,7 @@ class UIHelpMenu(private val context: Context) {
 
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 if (!isDragging && gs.stateTimer > 0.2f) {
-                    if (StoryProtocol.isGlitchActive && repairFadeTimer <= 0f) {
+                    if (StoryProtocol.isGlitchActive && repairFadeTimer <= 0f && !isBooting) {
                         if (repairBtnRect.contains(x, y)) {
                             isBooting = true
                             bootTimer = 0f

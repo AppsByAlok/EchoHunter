@@ -147,6 +147,18 @@ object LevelIcons {
                 iconPath.close()
                 c.drawPath(iconPath, p)
             }
+            LevelFeature.BOMB -> {
+                // Bomb
+                p.style = Paint.Style.FILL
+                p.color = 0xFFFF0000.toInt()
+                c.drawCircle(cx, cy, r * 0.8f, p)
+            }
+            LevelFeature.DARKNESS -> {
+                // Darkening Circle
+                p.style = Paint.Style.FILL
+                p.color = 0xFF000000.toInt()
+                c.drawCircle(cx, cy, r * 0.8f, p)
+            }
         }
 
         // Restore original paint settings

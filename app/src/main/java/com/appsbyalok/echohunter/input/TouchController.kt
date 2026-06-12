@@ -69,8 +69,11 @@ class TouchController(private val gs: GameState) {
                         onPauseClicked?.invoke()
                     }
                     // Check PULSE Button
-                    else if (isInsideCircle(vx, vy, pulseX, pulseY, btnRadius * 1.2f)) {
-                        onPulseTriggered?.invoke()
+                    val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
+                    val isDarkness = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DARKNESS)
+                    val isStoryBlackout = gs.gameMode == 1 && com.appsbyalok.echohunter.data.SaveManager.unlockedStoryStreak >= 3
+                    if ((isDarkness || isStoryBlackout) && isInsideCircle(vx, vy, pulseX, pulseY, btnRadius * 1.2f)) {
+                            onPulseTriggered?.invoke()
                     }
                     // Check TRAP Button
                     else if (isInsideCircle(vx, vy, trapX, trapY, btnRadius * 1.2f)) {
