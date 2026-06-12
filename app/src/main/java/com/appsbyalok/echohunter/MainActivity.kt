@@ -21,6 +21,7 @@ class MainActivity : Activity() {
 
         gameView = GameView(this)
         setContentView(gameView)
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         savedInstanceState?.let { gameView.restoreState(it) }
 
