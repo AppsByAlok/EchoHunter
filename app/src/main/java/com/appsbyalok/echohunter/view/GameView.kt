@@ -62,7 +62,7 @@ class GameView(context: Context) : View(context) {
     internal var currentStoryLines = StoryProtocol.storyIntroLines
 
     // --- NAYA: THE APP STATE MANAGER HOOK ---
-    internal lateinit var stateManager: AppStateManager
+    internal val stateManager = AppStateManager(this, gs)
 
     var gameScale = 1f
     var lastFrameTime = System.nanoTime()
@@ -135,7 +135,6 @@ class GameView(context: Context) : View(context) {
         touchController.onPulseTriggered = { triggerPulseAction() }
 
         // --- INIT STATE MANAGER ---
-        stateManager = AppStateManager(this, gs)
         syncStateToManager()
 
         // Debug / Mod menu bindings
@@ -206,7 +205,6 @@ class GameView(context: Context) : View(context) {
 
     // --- State Switcher ---
     private fun syncStateToManager() {
-        if (!::stateManager.isInitialized) return
         val newStateObj = when (gs.state) {
             0 -> stateManager.mainMenuState
             1, 8, 9 -> stateManager.gameplayState
