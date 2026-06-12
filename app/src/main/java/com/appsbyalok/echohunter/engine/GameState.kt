@@ -15,9 +15,9 @@ import kotlin.math.max
 import kotlin.math.min
 
 class GameState {
-    var activeObjective: IGameObjective = StandardObjective()
-    var modeStrategy: GameModeStrategy = CampaignMode()
-    var gameMode = 0
+    var activeObjective: IGameObjective = StandardObjective() // Current goal the player needs to fulfill
+    var modeStrategy: GameModeStrategy = CampaignMode() // Logic handler for the active game mode
+    var gameMode = 0 // Identifier for current game mode (0: Campaign/Archives, 1: Story)
         set(value) {
             field = value
             modeStrategy = when (value) {
@@ -26,21 +26,21 @@ class GameState {
             }
         }
 
-    var levelStartTime = 0f
+    var levelStartTime = 0f // Timestamp of when the current level started
 
-    var state = 5
-    var difficulty = 0
-    var stateTimer = 0f
-    var nextStateAfterStory = 0
-    var timeSinceStart = 0f
+    var state = 5 // Current engine state (0: Menu, 1: Playing, 2: Pause, 3: Help, 4: GameOver Story, 5: Intro Story, 6: Ending Story, 7: Mid-story, 8: Core Merge, 9: Perfect End Zoom, 10: Decompiler, 11: Archives, 12: Victory, 13: Arsenal, 14: Nano-OS)
+    var difficulty = 0 // Selected difficulty level (0: Normal/Recruit, 1: Hard/Elite)
+    var stateTimer = 0f // General timer for state-specific durations
+    var nextStateAfterStory = 0 // Target state to transition to after a story sequence
+    var timeSinceStart = 0f // Total elapsed time since the game session began
 
-    var isRotationWarning = false
-    var selectedStoryAct = 0
+    var isRotationWarning = false // Flag to show rotation-related UI warnings
+    var selectedStoryAct = 0 // Index of the currently selected story chapter
 
 
     // --- GLOBAL SNACK BAR / TOAST SYSTEM ---
-    var globalMessage = ""
-    var globalMessageTimer = 0f
+    var globalMessage = "" // Current message text to display in the global snackbar
+    var globalMessageTimer = 0f // Remaining duration for the global message display
 
     fun showGlobalMessage(msg: String, duration: Float = 2f) {
         Log.d("TAG", "showGlobalMessage called: $msg")
@@ -49,121 +49,121 @@ class GameState {
     }
 
     // --- NAYA: CENTRALIZED UI COORDINATES (100% RESPONSIVE MATCH) ---
-    var uiBtnRadius = 0f
-    var uiAtkX = 0f
-    var uiAtkY = 0f
-    var uiOvrX = 0f
-    var uiOvrY = 0f
-    var uiTrapX = 0f
-    var uiTrapY = 0f
-    var uiPulseX = 0f
-    var uiPulseY = 0f
-    var uiPauseX = 0f
-    var uiPauseY = 0f
+    var uiBtnRadius = 0f // Hitbox radius for on-screen control buttons
+    var uiAtkX = 0f // Screen X coordinate for the Attack button
+    var uiAtkY = 0f // Screen Y coordinate for the Attack button
+    var uiOvrX = 0f // Screen X coordinate for the Overclock button
+    var uiOvrY = 0f // Screen Y coordinate for the Overclock button
+    var uiTrapX = 0f // Screen X coordinate for the Trap button
+    var uiTrapY = 0f // Screen Y coordinate for the Trap button
+    var uiPulseX = 0f // Screen X coordinate for the Pulse/Sonar button
+    var uiPulseY = 0f // Screen Y coordinate for the Pulse/Sonar button
+    var uiPauseX = 0f // Screen X coordinate for the Pause button
+    var uiPauseY = 0f // Screen Y coordinate for the Pause button
 
     // --- AUTOPILOT & DOUBLE TAP ---
-    var isAutoPilotActive = false
-    var autoPilotTimer = 0f
-    var isAutoFireLocked = false
-    var isAutoSonarLocked = false
-    var isSonarPressed = false
+    var isAutoPilotActive = false // Whether the AI is currently controlling player movement
+    var autoPilotTimer = 0f // Duration or cooldown tracking for autopilot mode
+    var isAutoFireLocked = false // If the weapon is set to fire automatically
+    var isAutoSonarLocked = false // If sonar pulses are triggered automatically
+    var isSonarPressed = false // Current input state of the sonar button
 
 
     // NAYA: MOD MENU FLAGS
-    var modGodMode = false
-    var modInfiniteOvr = false
-    var modFullVisibility = false
+    var modGodMode = false // Cheat flag for player invincibility
+    var modInfiniteOvr = false // Cheat flag for unlimited overclock meter
+    var modFullVisibility = false // Cheat flag to remove visibility restrictions (fog of war)
 
     // --- VISUAL DEBUGGER VARIABLES ---
-    var lastTouchX = -100f
-    var lastTouchY = -100f
+    var lastTouchX = -100f // Last recorded raw touch X coordinate for debugging
+    var lastTouchY = -100f // Last recorded raw touch Y coordinate for debugging
 
-    var gridMap: Array<IntArray>? = null
-    var tileSize = 100f
-    var mapWidth = 0f
-    var mapHeight = 0f
+    var gridMap: Array<IntArray>? = null // 2D layout representing walls and walkable areas
+    var tileSize = 100f // Size of each grid cell in world units
+    var mapWidth = 0f // Total width of the current map
+    var mapHeight = 0f // Total height of the current map
 
-    var px = 0f
-    var py = 0f
+    var px = 0f // Player's current world X position
+    var py = 0f // Player's current world Y position
 
-    var joyBaseX = 0f
-    var joyBaseY = 0f
-    var joyKnobX = 0f
-    var joyKnobY = 0f
-    var joyDirX = 0f
-    var joyDirY = 0f
-    var isJoyActive = false
-    var lastFacingX = 1f
-    var lastFacingY = 0f
+    var joyBaseX = 0f // Static X position of the joystick base
+    var joyBaseY = 0f // Static Y position of the joystick base
+    var joyKnobX = 0f // Current X position of the interactive joystick knob
+    var joyKnobY = 0f // Current Y position of the interactive joystick knob
+    var joyDirX = 0f // Normalized X direction vector from the joystick
+    var joyDirY = 0f // Normalized Y direction vector from the joystick
+    var isJoyActive = false // Whether the user is currently interacting with the joystick
+    var lastFacingX = 1f // The horizontal direction the player last moved towards
+    var lastFacingY = 0f // The vertical direction the player last moved towards
 
-    val maxSpikes = 12
-    val spikeX = FloatArray(maxSpikes)
-    val spikeY = FloatArray(maxSpikes)
-    val spikeVx = FloatArray(maxSpikes)
-    val spikeVy = FloatArray(maxSpikes)
-    val spikeLife = FloatArray(maxSpikes)
-    val spikeActive = BooleanArray(maxSpikes)
-    val spikeType = IntArray(maxSpikes)
+    val maxSpikes = 12 // Maximum number of active projectiles (spikes) allowed
+    val spikeX = FloatArray(maxSpikes) // X positions of projectiles
+    val spikeY = FloatArray(maxSpikes) // Y positions of projectiles
+    val spikeVx = FloatArray(maxSpikes) // X velocities of projectiles
+    val spikeVy = FloatArray(maxSpikes) // Y velocities of projectiles
+    val spikeLife = FloatArray(maxSpikes) // Remaining life/duration of projectiles
+    val spikeActive = BooleanArray(maxSpikes) // Active status of projectile slots
+    val spikeType = IntArray(maxSpikes) // Type identifier for different projectile effects
 
-    var currentWeapon = 1
-    var currentTrap = 2   // 2 = EMP Mine, 1 = Decoy Hologram, 0 = Camouflage
+    var currentWeapon = 1 // Index of equipped weapon (0: Blaster, 1: Shotgun, 2: Sniper)
+    var currentTrap = 2   // Index of selected trap (0: Camouflage, 1: Decoy, 2: EMP Mine)
 
-    var defenseTimer = 0f
-    var maxDefenseTimer = 0f
-    var coreHp = 10
-    var coreMaxHp = 10
-    var defWaveCurrent = 1
-    var defWaveMax = 1
-    var defWaveState = 0 // 0 = Start Buffer, 1 = Wave Active, 2 = Wave Cooldown
-    var defWaveTimer = 0f
-    var defEnemiesToSpawn = 0
-    var defEnemiesAlive = 0
+    var defenseTimer = 0f // Countdown for the current defense objective phase
+    var maxDefenseTimer = 0f // Total duration defined for the defense phase
+    var coreHp = 10 // Current health of the core being defended
+    var coreMaxHp = 10 // Maximum possible health of the core
+    var defWaveCurrent = 1 // Current wave number in defense mode
+    var defWaveMax = 1 // Total waves to survive in defense mode
+    var defWaveState = 0 // Defense phase state (0: Buffer, 1: Active, 2: Cooldown)
+    var defWaveTimer = 0f // Timer for defense wave transitions
+    var defEnemiesToSpawn = 0 // Number of enemies remaining to spawn in the current wave
+    var defEnemiesAlive = 0 // Number of active enemies currently in the defense arena
 
-    var escapeGateActive = false
+    var escapeGateActive = false // Whether the level exit portal is currently available
 
-    var isAttackPressed = false
-    var isOverclockPressed = false
-    var isTrapPressed = false
+    var isAttackPressed = false // Input state for the attack command
+    var isOverclockPressed = false // Input state for the overclock command
+    var isTrapPressed = false // Input state for the trap command
 
-    var attackCooldown = 0f
-    var trapCooldownTimer = 0f
+    var attackCooldown = 0f // Time remaining before the next attack can be performed
+    var trapCooldownTimer = 0f // Time remaining before the next trap can be deployed
 
-    var globalSonarAlert = false
-    var localAttackAlert = false
+    var globalSonarAlert = false // Flag for high-priority sonar-detected threats
+    var localAttackAlert = false // Flag for immediate proximity threats
 
-    var isCamouflaged = false
-    var camoTimer = 0f
-    var isDecoyActive = false
-    var decoyX = 0f
-    var decoyY = 0f
-    var decoyTimer = 0f
-    var empMineActive = false
-    var empMineX = 0f
-    var empMineY = 0f
+    var isCamouflaged = false // Whether the player is currently hidden from enemies
+    var camoTimer = 0f // Remaining duration for the camouflage effect
+    var isDecoyActive = false // Whether a decoy hologram is currently active
+    var decoyX = 0f // World X position of the active decoy
+    var decoyY = 0f // World Y position of the active decoy
+    var decoyTimer = 0f // Remaining duration for the decoy effect
+    var empMineActive = false // Whether an EMP mine has been deployed
+    var empMineX = 0f // World X position of the EMP mine
+    var empMineY = 0f // World Y position of the EMP mine
 
-    var hp = 3
-    val maxHp: Int get() = 3 + UpgradeSystem.getBonusMaxHp()
-    var isTouching = false
+    var hp = 3 // Current health points of the player
+    val maxHp: Int get() = 3 + UpgradeSystem.getBonusMaxHp() // Derived maximum health including upgrades
+    var isTouching = false // General flag for any screen touch interaction
 
-    var pulse = false
-    var pulseR = 0f
-    var cooldownTimer = 0f
-    var visionClarity = 1.0f
-    var shieldTimer = 0f
-    var playerIframe = 0f
+    var pulse = false // Whether a sonar pulse is currently propagating
+    var pulseR = 0f // Current radius of the expanding sonar pulse
+    var cooldownTimer = 0f // General purpose timer for ability cooldowns
+    var visionClarity = 1.0f // Visual factor affecting how much of the map is visible
+    var shieldTimer = 0f // Remaining duration of active invulnerability shield
+    var playerIframe = 0f // Temporary invincibility period after being hit
 
-    var overclockMeter = 0f
-    var overclockTimer = 0f
-    var showOverclockTextTimer = 0f
-    val isOverclocked: Boolean get() = overclockTimer > 0f
+    var overclockMeter = 0f // Current charge percentage of the overclock ability
+    var overclockTimer = 0f // Remaining duration of the active overclock state
+    var showOverclockTextTimer = 0f // Timer for displaying the "OVERCLOCK" UI announcement
+    val isOverclocked: Boolean get() = overclockTimer > 0f // Derived status of being in overclock mode
 
-    var score = 0
-    var combo = 0
-    var wave = 1
+    var score = 0 // Player's total accumulated score
+    var combo = 0 // Current streak of consecutive hits or actions
+    var wave = 1 // Current wave number in survival or campaign phases
 
-    var currentLevel = 1
-    var collectedDataKB = 0L
-    var isLevelCleared = false
+    var currentLevel = 1 // Index of the level being played
+    var collectedDataKB = 0L // Amount of narrative "data" resource collected
+    var isLevelCleared = false // Flag indicating if the level objective is complete
         set(value) {
             if (value && !field) {
                 val totalDurationSeconds = timeSinceStart - levelStartTime
@@ -187,58 +187,58 @@ class GameState {
             field = value
         }
 
-    var comboBreakTimer = 0f
-    var currentSector = 1
-    var sectorTarget = 30
+    var comboBreakTimer = 0f // Grace period before the combo counter resets
+    var currentSector = 1 // Current subsection of the level (e.g., Sector 1 of 3)
+    var sectorTarget = 30 // Objective target required to clear the current sector
 
-    var cameraX = 0f
-    var cameraY = 0f
+    var cameraX = 0f // Current X offset of the game camera
+    var cameraY = 0f // Current Y offset of the game camera
 
-    var damageFlash = 0f
-    var sectorFlash = 0f
-    var shakeAmount = 0f
-    var empFlashTimer = 0f
-    var timeScale = 1.0f
-    var slowMoTimer = 0f
+    var damageFlash = 0f // Visual effect timer for screen flash when taking damage
+    var sectorFlash = 0f // Visual effect timer for sector transitions
+    var shakeAmount = 0f // Intensity of the camera shake effect
+    var empFlashTimer = 0f // Timer for the visual flash triggered by EMPs
+    var timeScale = 1.0f // Global speed multiplier for game logic (e.g., 0.5f for half-speed)
+    var slowMoTimer = 0f // Remaining duration for slow-motion effects
 
-    var hitStopTimer = 0f
+    var hitStopTimer = 0f // Duration to freeze the game momentarily for impact feedback
 
-    var isPerfectEnd = false
-    var coreX = 0f
-    var coreY = 0f
-    var coreRadius = 0f
-    var mergeTimer = 0f
-    var whiteFlash = 0f
+    var isPerfectEnd = false // Flag if the level was completed without taking damage
+    var coreX = 0f // Target X position for the end-level core sequence
+    var coreY = 0f // Target Y position for the end-level core sequence
+    var coreRadius = 0f // Visual radius of the end-level core
+    var mergeTimer = 0f // Timer for the level-completion "merging" cinematic
+    var whiteFlash = 0f // Intensity of the screen-clearing white flash effect
 
-    var chromaticIntensity = 0f
-    var shockwaveR = 0f
-    var shockwaveX = 0f
-    var shockwaveY = 0f
-    var shockwaveActive = false
+    var chromaticIntensity = 0f // Intensity of the chromatic aberration post-processing effect
+    var shockwaveR = 0f // Current radius of a visual shockwave effect
+    var shockwaveX = 0f // World X origin of a shockwave
+    var shockwaveY = 0f // World Y origin of a shockwave
+    var shockwaveActive = false // Whether a shockwave effect is currently being rendered
 
-    var bossDeathTimer = 0f
-    var bossDeathX = 0f
-    var bossDeathY = 0f
-    var isBossRage = false
+    var bossDeathTimer = 0f // Timer for the boss's defeat cinematic
+    var bossDeathX = 0f // World X position where the boss was defeated
+    var bossDeathY = 0f // World Y position where the boss was defeated
+    var isBossRage = false // Whether the boss is in its high-intensity "rage" phase
 
-    var isEnemyNear = false
-    var isEnemyVeryNear = false
-    var radarPingTimer = 0f
-    var heartbeatTimer = 0f
+    var isEnemyNear = false // Proximity flag for general enemy presence
+    var isEnemyVeryNear = false // Proximity flag for immediate enemy threats
+    var radarPingTimer = 0f // Timer for the periodic radar UI pulse
+    var heartbeatTimer = 0f // Timer for the proximity-based audio "heartbeat" effect
 
-    var bossActive = false
-    var bossHp = 0
-    var bossMaxHp = 0
-    var bossX = -1000f
-    var bossY = -1000f
-    var bossIframe = 0f
-    var bossType = 0
-    var bossVis = 1.0f
+    var bossActive = false // Whether a boss is currently present in the level
+    var bossHp = 0 // Current health points of the boss
+    var bossMaxHp = 0 // Maximum possible health of the boss
+    var bossX = -1000f // World X position of the boss
+    var bossY = -1000f // World Y position of the boss
+    var bossIframe = 0f // Boss's temporary invulnerability period
+    var bossType = 0 // Identifier for the type of boss encountered
+    var bossVis = 1.0f // Visual alpha/visibility factor for the boss
 
-    var innerRSq = 0f
-    var outerRSq = 0f
-    var passiveAuraRadiusSq = 0f
-    var fadeMultiplier = 1f
+    var innerRSq = 0f // Squared inner radius for optimized shader visibility calculations
+    var outerRSq = 0f // Squared outer radius for optimized shader visibility calculations
+    var passiveAuraRadiusSq = 0f // Squared radius of the player's permanent visibility light
+    var fadeMultiplier = 1f // Overall ambient darkness factor applied to the scene
 
     fun saveState(b: Bundle) {
         b.putInt("state", state)
