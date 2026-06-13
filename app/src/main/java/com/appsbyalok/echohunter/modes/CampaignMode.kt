@@ -17,7 +17,6 @@ class CampaignMode : GameModeStrategy {
     override val modeId = 0
     private var lastLevel = -1
     private var levelStr = ""
-    private var targetStr = ""
 
     private var bossSpawnedForLevel = -1
 
@@ -68,15 +67,12 @@ class CampaignMode : GameModeStrategy {
         if (gs.isLevelCleared) return
 
         // --- MODULAR PROGRESSION ---
-        // CampaignMode now relies entirely on the assigned IGameObjective
-        // to determine if the win condition is met.
-        if (gs.activeObjective.checkWinCondition(gs)) {
+        // Use the objective's trigger logic to spawn the boss
+        if (gs.activeObjective.isBossTriggerReady(gs)) {
             if (config.features.contains(LevelFeature.BOSS) && !gs.bossActive && bossSpawnedForLevel != gs.currentLevel) {
                 bossSpawnedForLevel = gs.currentLevel
-                val bossType = kotlin.random.Random.nextInt(0, 5)
+                val bossType = Random.nextInt(0, 5)
                 onTriggerBoss(bossType, scale)
-            } else if (!gs.bossActive) {
-                gs.isLevelCleared = true
             }
         }
     }
@@ -94,25 +90,30 @@ class CampaignMode : GameModeStrategy {
     override fun drawModeSpecificHUD(context: Context, c: Canvas, gs: GameState, width: Float, height: Float, scale: Float, pText: Paint) {
         val config = LevelEngine.getLevelConfig(gs.currentLevel)
 
-        // Only format strings when the level changes to save CPU
+        // Level text logic
         if (gs.currentLevel != lastLevel) {
             levelStr = "SECURITY RING ${gs.currentLevel}"
-            targetStr = "TARGET: ${config.targetScore} KB"
             lastLevel = gs.currentLevel
         }
 
         val topMargin = scale * 0.06f
         val centerY = topMargin + scale * 0.02f
 
-        // Top Header (Current Security Ring)
+        // Top Header
         pText.color = GameColors.CLARITY
         pText.textSize = scale * 0.04f
         c.drawText(levelStr, width / 2f, centerY, pText)
 
-        // Sub Header (Target Score or Admin Warning)
+        // --- NAYA: DYNAMIC SUB-HEADER (TARGETS) ---
         pText.textSize = scale * 0.03f
         pText.color = if (gs.bossActive) GameColors.RED else GameColors.YELLOW
-        val subText = if (gs.bossActive) "ADMIN SECURITY ACTIVE" else targetStr
+
+        val subText = when {
+            gs.bossActive -> "ADMIN SECURITY ACTIVE"
+            gs.escapeGateActive -> "EXIT PORTAL ACTIVE"
+            config.features.contains(LevelFeature.ELIMINATION) -> "TARGETS: ${gs.elimTargetsKilled} / ${gs.elimTargetsRequired}"
+            else -> "TARGET: ${config.targetScore} KB"
+        }
 
         if (gs.bossActive) pText.setShadowLayer(10f, 0f, 0f, GameColors.RED)
         c.drawText(subText, width / 2f, centerY + scale * 0.04f, pText)

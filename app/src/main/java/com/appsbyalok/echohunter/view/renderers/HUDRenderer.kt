@@ -124,13 +124,10 @@ class HUDRenderer(private val context: Context) {
         val trapColor = if (gs.trapCooldownTimer <= 0f) GameColors.YELLOW else 0xFF555555.toInt()
         drawActionButton(c, gs.uiTrapX, gs.uiTrapY, gs.uiBtnRadius, "TRAP", if (gs.isTrapPressed) GameColors.CLARITY else trapColor, false)
 
-//        val pulseColor = if (gs.cooldownTimer <= 0f) GameColors.PULSE else 0xFF555555.toInt()
-//        drawActionButton(c, gs.uiPulseX, gs.uiPulseY, gs.uiBtnRadius, "SONAR", if (gs.isSonarPressed || gs.isAutoSonarLocked) GameColors.CLARITY else pulseColor, gs.isAutoSonarLocked)
-        val isDarknessLevel = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DARKNESS)
-        val isStoryBlackout = gs.gameMode == 1 && SaveManager.unlockedStoryStreak >= 3
-        val isCurrentDarkness = gs.visionClarity < 0.5f
+        // SONAR is only visible when the environment is actually dark
+        val isDarknessActive = gs.isDarknessLevel || StoryProtocol.isBlackoutActive
 
-        if (isDarknessLevel || isStoryBlackout || isCurrentDarkness) {
+        if (isDarknessActive) {
             val pulseColor = if (gs.cooldownTimer <= 0f) GameColors.PULSE else 0xFF555555.toInt()
             drawActionButton(c, gs.uiPulseX, gs.uiPulseY, gs.uiBtnRadius, "SONAR", if (gs.isSonarPressed || gs.isAutoSonarLocked) GameColors.CLARITY else pulseColor, gs.isAutoSonarLocked)
         }

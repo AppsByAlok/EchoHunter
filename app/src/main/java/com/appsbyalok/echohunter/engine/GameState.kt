@@ -5,7 +5,6 @@ import android.os.Bundle
 import android.util.Log
 import com.appsbyalok.echohunter.data.LevelEngine
 import com.appsbyalok.echohunter.data.LevelFeature
-import com.appsbyalok.echohunter.data.SaveManager
 import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.data.UpgradeSystem
 import com.appsbyalok.echohunter.modes.CampaignMode
@@ -122,6 +121,12 @@ class GameState {
 
     var escapeGateActive = false // Whether the level exit portal is currently available
 
+    var elimTargetsKilled = 0
+    var elimTargetsRequired = 0
+
+    // --- NAYA: GLOBAL SPAWNER NODES ---
+    var spawnerNodes = mutableListOf<com.appsbyalok.echohunter.systems.SpawnNode>()
+
     var isAttackPressed = false // Input state for the attack command
     var isOverclockPressed = false // Input state for the overclock command
     var isTrapPressed = false // Input state for the trap command
@@ -153,15 +158,14 @@ class GameState {
 
     // --- DARKNESS LOGIC ---
     val isDarknessLevel: Boolean get() {
+        if (gameMode == 1) return false // Story mode me abhi full visibility rahegi
         val config = LevelEngine.getLevelConfig(currentLevel)
-        val isDarkness = config.features.contains(LevelFeature.DARKNESS)
-        val isStoryBlackout = gameMode == 1 && SaveManager.unlockedStoryStreak >= 3
-        return isDarkness || isStoryBlackout
+        return config.features.contains(LevelFeature.DARKNESS)
     }
 
-    val isHardStoryMode: Boolean get() = gameMode == 1 && SaveManager.unlockedStoryStreak >= 2
+    val isHardStoryMode: Boolean get() = false 
 
-    val targetClarity: Float get() = if (isDarknessLevel) (if (isHardStoryMode) 0.0f else 0.15f) else 1.0f
+    val targetClarity: Float get() = if (isDarknessLevel || StoryProtocol.isBlackoutActive) 0.15f else 1.0f
 
     var shieldTimer = 0f // Remaining duration of active invulnerability shield
     var playerIframe = 0f // Temporary invincibility period after being hit
@@ -369,6 +373,13 @@ class GameState {
         isAutoFireLocked = false
         isAutoSonarLocked = false
 
+        defEnemiesToSpawn = 0
+        defEnemiesAlive = 0
+        elimTargetsKilled = 0
+
+        StoryProtocol.isBlackoutActive = false
+        spawnerNodes.clear()
+
         levelStartTime = timeSinceStart
     }
 
@@ -481,17 +492,16 @@ class GameState {
     }
 
     fun updateVisibilityMath(scale: Float, maxRad: Float) {
-        val applyDarkness = isDarknessLevel
+        val applyDarkness = isDarknessLevel || StoryProtocol.isBlackoutActive
 
-        // Agar darkness hai, toh aura almost 0 (0.015f), else normal (0.12f)
-        val baseAura = if (applyDarkness) scale * 0.015f else scale * 0.12f
-        val passiveAuraRadius = if (modFullVisibility) scale * 100f else baseAura
+        // NAYA: Agar darkness level NAHI hai, toh full visibility (huge aura radius)
+        val passiveAuraRadius = if (modFullVisibility || !applyDarkness) scale * 100f else scale * 0.015f
         passiveAuraRadiusSq = passiveAuraRadius * passiveAuraRadius
 
         // Fade multiplier (Background darkness)
         fadeMultiplier = if (modFullVisibility || !applyDarkness) 1.0f else {
-            val baseFade = if (difficulty == 1 || isHardStoryMode) 0.65f else 0.85f
-            min(0.99f, baseFade + 0.16f * visionClarity)
+            val baseFade = if (difficulty == 1) 0.75f else 0.85f
+            min(0.99f, baseFade + 0.15f * visionClarity)
         }
 
         val echoThickness = maxRad * 0.05f

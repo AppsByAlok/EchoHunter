@@ -11,6 +11,7 @@ import com.appsbyalok.echohunter.systems.CollisionSystem
 import com.appsbyalok.echohunter.systems.EffectSystem
 import com.appsbyalok.echohunter.systems.EnemySystem
 import com.appsbyalok.echohunter.systems.PlayerAI
+import com.appsbyalok.echohunter.systems.SpawnerSystem
 import com.appsbyalok.echohunter.utils.EchoAudioManager
 
 class GameEngine(
@@ -30,6 +31,7 @@ class GameEngine(
 
     private val arsenalSys = ArsenalSystem(gs, effectSys)
     private val playerAI = PlayerAI(gs, enemySys)
+    private val spawnerSys = SpawnerSystem(enemySys, effectSys)
 
     fun update(dt: Float, targetW: Float, targetH: Float, scale: Float) {
         gs.timeSinceStart += dt
@@ -147,7 +149,7 @@ class GameEngine(
         if (gs.state == 1 || gs.state == 8) {
             // --- NAYA: MODULAR OBJECTIVE CALL ---
             // Updates timers and dynamic logic (like Core activation in Story Mode)
-            gs.activeObjective.updateObjective(simDt, gs, enemySys, targetW, targetH)
+            gs.activeObjective.updateObjective(simDt, gs, enemySys, spawnerSys, targetW, targetH)
 
             // --- CRITICAL: WIN CONDITION CHECK ---
             // Modular objectives determine if the level is cleared (Campaign Mode)
@@ -155,6 +157,7 @@ class GameEngine(
                 gs.isLevelCleared = true
             }
 
+            spawnerSys.update(simDt, gs, targetW, targetH, scale)
             enemySys.updateEnemies(simDt, gs, targetW, targetH, scale)
             enemySys.updateBoss(simDt, gs, scale)
             enemySys.updatePowerups(simDt, gs, targetW, targetH)
@@ -215,11 +218,12 @@ class GameEngine(
 
         val config = LevelEngine.getLevelConfig(gs.currentLevel)
 
-        // --- NAYA: OBJECTIVE ASSIGNMENT ---
+        // --- OBJECTIVE ASSIGNMENT ---
         gs.activeObjective = when {
-            gs.gameMode == 1 -> com.appsbyalok.echohunter.modes.StoryObjective() // <--- YE LINE ADD KI
+            gs.gameMode == 1 -> com.appsbyalok.echohunter.modes.StoryObjective()
             config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE) && gs.gameMode == 0 -> com.appsbyalok.echohunter.modes.DefenseObjective()
             config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ESCAPE) && gs.gameMode == 0 -> com.appsbyalok.echohunter.modes.EscapeObjective()
+            config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ELIMINATION) && gs.gameMode == 0 -> com.appsbyalok.echohunter.modes.EliminationObjective()
             else -> com.appsbyalok.echohunter.modes.StandardObjective()
         }
 
@@ -243,6 +247,25 @@ class GameEngine(
 
         // Set up the specific objective timers, HP, and logic
         gs.activeObjective.setupObjective(gs, targetW, targetH, scale)
+
+        // NAYA: Generate Spawner Nodes for the level
+        spawnerSys.generateNodes(gs, gs.mapWidth, gs.mapHeight, scale)
+
+        // NAYA: Physically spawn enemies immediately so the map isn't empty
+        val preSpawnCount = if (gs.difficulty == 1) 10 else 7
+        for (i in 0 until preSpawnCount) {
+            val node = gs.spawnerNodes.random()
+            for (j in 0 until enemySys.n) {
+                if (enemySys.ex[j] < -1000f) {
+                    enemySys.spawnAt(j, node.x, node.y, gs, targetW, targetH, node.type)
+                    break
+                }
+            }
+        }
+
+        // NAYA: Start level with a few more enemies queued to emerge shortly
+        val initialPop = if (gs.difficulty == 1) 8 else 5
+        spawnerSys.queueSpawns(initialPop, gs)
 
         gs.cameraX = gs.px - targetW / 2f
         gs.cameraY = gs.py - targetH / 2f

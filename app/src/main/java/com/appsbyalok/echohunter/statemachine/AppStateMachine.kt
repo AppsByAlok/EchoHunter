@@ -71,7 +71,7 @@ class MainMenuState(private val manager: AppStateManager) : IAppState {
     }
     override fun draw(c: Canvas, gs: GameState, width: Float, height: Float, scale: Float, dt: Float) {
         c.drawColor(0xFF050A0F.toInt()) // Deep Dark Background
-        manager.view.worldRenderer.drawGrid(c, scale, gs, width, height)
+        manager.view.worldRenderer.drawGrid(c, scale, gs, width, height, showSpawners = false)
         manager.view.uiMainMenu.draw(c, scale, gs, width, height, manager.view.effectSys)
     }
     override fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean {
@@ -199,15 +199,14 @@ class VictoryState(private val manager: AppStateManager) : IAppState {
                 manager.view.startGame(0, gs.currentLevel + 1)
                 return true
             } else if (manager.view.menuRenderer.victoryHomeRect.contains(vx, vy)) {
-                EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
-                manager.view.disconnectCable()
+                manager.view.returnToArchives()
                 return true
             }
         }
         return true
     }
     override fun onBackPressed(gs: GameState): Boolean {
-        manager.view.disconnectCable()
+        manager.view.returnToArchives()
         return true
     }
 }
@@ -224,16 +223,16 @@ class StoryCutsceneState(private val manager: AppStateManager) : IAppState {
         manager.view.storyStep = manager.view.menuRenderer.drawStory(c, lines, scale, gs, width, height, manager.view.storyStep)
     }
     override fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean {
-        // Story skipping ONLY works in the bottom half of the screen
         if (action == MotionEvent.ACTION_UP) {
             val activeLines = if (gs.state == 4) StoryProtocol.badEndingLines else manager.view.currentStoryLines
             
-            // Agar typing khatam nahi hui toh typing skip karo, warna next line
             if (manager.view.storyStep < activeLines.size) {
-                manager.view.storyStep++
-            } else if ( vy > targetH * 0.5f) {
-                // Transition logic
-                if (gs.stateTimer < 0.8f) return true
+                manager.view.storyStep = activeLines.size
+                return true
+            } 
+            
+            if (vy > targetH * 0.5f) {
+                if (gs.stateTimer < 0.5f) return true
                 when (gs.state) {
                     5, 7 -> {
                         // Intro or Mid-story -> Start Gameplay

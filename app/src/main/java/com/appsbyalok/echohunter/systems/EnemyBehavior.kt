@@ -113,6 +113,40 @@ object KamikazeBehavior : IEnemyBehavior {
     }
 }
 
+
+// 4. TARGET BEHAVIOR (High-Value Target - Runs away when spotted)
+object TargetBehavior : IEnemyBehavior {
+    override fun updateBehavior(i: Int, dt: Float, gs: GameState, enemySys: EnemySystem, ai: EnemyAI, targetW: Float, targetH: Float, scale: Float) {
+        val targetX = if (gs.isDecoyActive) gs.decoyX else gs.px
+        val targetY = if (gs.isDecoyActive) gs.decoyY else gs.py
+        val tdx = targetX - enemySys.ex[i]
+        val tdy = targetY - enemySys.ey[i]
+        val td2 = tdx * tdx + tdy * tdy
+
+        val speed = scale * (if (gs.difficulty == 0) 0.25f else 0.35f)
+        val inLoS = ai.hasLineOfSight(enemySys.ex[i], enemySys.ey[i], targetX, targetY, gs)
+
+        // Agar player close hai aur line of sight me hai, toh panic mode (Run!)
+        if (inLoS && td2 < (scale * 0.8f) * (scale * 0.8f)) {
+            enemySys.eState[i] = 2 // Alert state
+            val dist = sqrt(td2)
+            if (dist > 0f) {
+                enemySys.evx[i] = -(tdx / dist) * speed * 1.5f
+                enemySys.evy[i] = -(tdy / dist) * speed * 1.5f
+            }
+        } else {
+            if (enemySys.eState[i] != 2) {
+                enemySys.eState[i] = 0
+                if (kotlin.random.Random.nextFloat() < 0.02f) {
+                    val angle = kotlin.random.Random.nextFloat() * 6.28f
+                    enemySys.evx[i] = kotlin.math.cos(angle) * speed * 0.7f
+                    enemySys.evy[i] = kotlin.math.sin(angle) * speed * 0.7f
+                }
+            }
+        }
+    }
+}
+
 // =========================================================
 // BOSS BEHAVIORS (Modular Patterns for Boss Entities)
 // =========================================================

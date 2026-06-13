@@ -30,10 +30,10 @@ object MazeGenerator {
         // Map LevelFeatures dynamically to spatial layouts
         val type = when {
             config.features.contains(LevelFeature.ADMIN_BONUS) -> MazeType.ARENA
+            config.features.contains(LevelFeature.ESCAPE) -> MazeType.LABYRINTH   // Escape/Maze take priority for layout
+            config.features.contains(LevelFeature.MAZE) -> MazeType.LABYRINTH
             config.features.contains(LevelFeature.BOSS) -> MazeType.ARENA       // Bosses need wide-open kiting space
             config.features.contains(LevelFeature.DEFENSE) -> MazeType.QUARANTINE // Defense needs a specialized fortified shell
-            config.features.contains(LevelFeature.ESCAPE) -> MazeType.LABYRINTH   // Escape needs dense navigation
-            config.features.contains(LevelFeature.MAZE) -> MazeType.LABYRINTH     // Maze is a pure labyrinth
             level % 3 == 0 -> MazeType.PILLARS                                    // Fallback structural variety
             else -> MazeType.SERVER_FARM                                          // Default layout for classic sweeps
         }

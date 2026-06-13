@@ -11,6 +11,7 @@ object StoryProtocol {
     var popupTimer: Float = 0f
     var isGlitchActive: Boolean = false
     var areControlsInverted: Boolean = false
+    var isBlackoutActive: Boolean = false
 
     fun showIngameMessage(resId: Int, duration: Float = 3f) {
         currentPopupRes = resId

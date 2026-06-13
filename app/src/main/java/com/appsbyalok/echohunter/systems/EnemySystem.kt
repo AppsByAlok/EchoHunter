@@ -6,9 +6,7 @@ import android.graphics.Path
 import android.graphics.Typeface
 import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.utils.GameColors
-import kotlin.math.cos
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
@@ -36,6 +34,10 @@ class EnemySystem {
     val type = IntArray(n)
     val eState = IntArray(n)
     val investigateTimer = FloatArray(n)
+    
+    // --- NAYA: ENEMY HEALTH SYSTEM ---
+    val hp = IntArray(n)
+    val maxHp = IntArray(n)
     val invX = FloatArray(n)
     val invY = FloatArray(n)
 
@@ -49,15 +51,11 @@ class EnemySystem {
 
     fun respawnAll(gs: GameState, width: Float, height: Float) {
         for (i in 0 until pwn) pwActive[i] = false
-        val isDefense = gs.coreRadius > 0f && gs.activeObjective is com.appsbyalok.echohunter.modes.DefenseObjective
-
+        // Level start hote hi map khaali hoga. SpawnerSystem Nodes se dushmano ko nikalega.
         for (i in 0 until n) {
-            if (isDefense) {
-                ex[i] = -9999f
-                ey[i] = -9999f
-            } else {
-                spawn(i, gs, width, height)
-            }
+            ex[i] = -9999f
+            ey[i] = -9999f
+            vis[i] = 0f
         }
     }
 
@@ -69,72 +67,62 @@ class EnemySystem {
         if (gs.activeObjective is com.appsbyalok.echohunter.modes.DefenseObjective) {
             gs.defEnemiesAlive--
             if (gs.defEnemiesAlive < 0) gs.defEnemiesAlive = 0
-        } else {
-            spawn(i, gs, width, height)
         }
+        // NAYA: Campaign aur Story mode mein turant respawn band.
+        // SpawnerSystem handles respawning now via queue.
     }
 
-    fun spawn(i: Int, gs: GameState, width: Float, height: Float) {
-        val scale = min(width, height)
-        val isSwarm = gs.bossActive && (gs.bossType == 1 || gs.bossType == 4)
+    // NAYA: Ab dushman sirf ek specified Node (nx, ny) par paida hoga
+    fun spawnAt(i: Int, nx: Float, ny: Float, gs: GameState, width: Float, height: Float, nodeType: Int = -1) {
+        val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
+        val isElimination = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ELIMINATION) && gs.gameMode == 0
+        val isDefense = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE) && gs.gameMode == 0
 
-        if (gs.gridMap != null) {
-            val w = gs.gridMap!!.size; val h = gs.gridMap!![0].size
-            var placed = false
-            val pCol = (gs.px / gs.tileSize).toInt().coerceIn(1, w - 2)
-            val pRow = (gs.py / gs.tileSize).toInt().coerceIn(1, h - 2)
+        ex[i] = nx
+        ey[i] = ny
 
-            for (attempt in 0..100) {
-                val rx = pCol + Random.nextInt(-12, 13)
-                val ry = pRow + Random.nextInt(-12, 13)
+        val hunterProb = 0.2f + (gs.difficulty * 0.15f)
 
-                if (rx in 1 until w - 1 && ry in 1 until h - 1 && gs.gridMap!![rx][ry] != 1) {
-                    val tryX = rx * gs.tileSize + gs.tileSize / 2f
-                    val tryY = ry * gs.tileSize + gs.tileSize / 2f
-                    val dx = tryX - gs.px; val dy = tryY - gs.py
-
-                    if (dx * dx + dy * dy > (scale * 0.5f) * (scale * 0.5f) || gs.timeSinceStart == 0f) {
-                        ex[i] = tryX; ey[i] = tryY
-                        placed = true
-                        break
-                    }
+        when (nodeType) {
+            1 -> { // Glitch Tear (Swarmers)
+                type[i] = 1; enemyBrains[i] = HunterBehavior
+            }
+            2 -> { // Admin Gateway (HVTs or Elites)
+                if (isElimination && i < 5) {
+                    type[i] = 3; enemyBrains[i] = TargetBehavior
+                } else {
+                    type[i] = 1; enemyBrains[i] = HunterBehavior
+                    // Maybe even stronger behavior in future
                 }
             }
-            if (!placed) { ex[i] = gs.px; ey[i] = gs.py }
-        } else {
-            val spawnPos = gs.modeStrategy.getEnemySpawnPosition(gs, width, height, scale)
-            ex[i] = spawnPos.first; ey[i] = spawnPos.second
+            else -> { // Compiler (Normal)
+                if (isDefense) {
+                    type[i] = 2; enemyBrains[i] = KamikazeBehavior
+                } else {
+                    type[i] = if (kotlin.random.Random.nextFloat() < hunterProb) 1 else 0
+                    enemyBrains[i] = if (type[i] == 1) HunterBehavior else PatrolBehavior
+                }
+            }
         }
 
-        val diffSpeedMult = if (gs.difficulty == 0) 0.65f else 1.0f
-        val speedMult = when (gs.gameMode) {
-            0 -> 0.4f + (gs.wave * 0.1f)
-            1 -> 0.5f + (gs.currentSector * 0.15f)
-            else -> 1f + (gs.score * 0.005f)
-        } * diffSpeedMult
+        eState[i] = 0
+        evx[i] = 0f
+        evy[i] = 0f
+        vis[i] = 0f
+        invX[i] = -9999f
+        invY[i] = -9999f
+        investigateTimer[i] = 0f
 
-        val sp = (scale * 0.3f * speedMult) + Random.nextFloat() * (scale * 0.2f)
-        val angle = Random.nextFloat() * 6.28f
-        evx[i] = cos(angle) * sp; evy[i] = sin(angle) * sp
+        // --- NAYA: DYNAMIC HP SCALING (Saturated Growth Curve via LevelEngine) ---
+        // Level 1-10: 1 HP | Level 50: ~4 HP | Level 100: ~7 HP | Level 500: ~13 HP | Max Cap: 19 HP
+        val baseHp = com.appsbyalok.echohunter.data.LevelEngine.getSaturatedValue(gs.currentLevel, 1f, 18f, 200f).toInt()
 
-        val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
-        val isElimination = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ELIMINATION)
-        val isDefense = gs.activeObjective is com.appsbyalok.echohunter.modes.DefenseObjective
-        val hunterProb = if (gs.score < 10) 0.0f else min(0.65f, (gs.score - 10) * 0.015f)
-
-        // --- BRAIN ASSIGNMENT ---
-        if (isSwarm) {
-            type[i] = 1; enemyBrains[i] = HunterBehavior
-        } else if (isElimination && i < 5) {
-            type[i] = 3; enemyBrains[i] = PatrolBehavior
-        } else if (isDefense) {
-            type[i] = 2; enemyBrains[i] = KamikazeBehavior
-        } else {
-            type[i] = if (Random.nextFloat() < hunterProb) 1 else 0
-            enemyBrains[i] = if (type[i] == 1) HunterBehavior else PatrolBehavior
+        maxHp[i] = when (nodeType) {
+            1 -> 1 // Swarmers bahut kamzor hote hain, 1 hit kill
+            2 -> baseHp * 2 // HVT ya Guards ki HP zyada hogi
+            else -> baseHp
         }
-
-        vis[i] = 1f; eState[i] = 0; investigateTimer[i] = 0f
+        hp[i] = maxHp[i]
     }
 
     fun updateEnemies(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {
@@ -178,7 +166,12 @@ class EnemySystem {
             vis[i] *= gs.fadeMultiplier
 
             val maxAllowedDistSq = if (gs.bossActive || gs.coreRadius > 0f) (width * 1.5f) * (width * 1.5f) else (width * 4.0f) * (width * 4.0f)
-            if (d2 > maxAllowedDistSq) spawn(i, gs, width, height)
+            if (d2 > maxAllowedDistSq) {
+                // NAYA: Player se door gaye toh seedha despawn. SpawnerSystem apne aap nayi node se nikal dega
+                ex[i] = -9999f
+                ey[i] = -9999f
+                vis[i] = 0f
+            }
         }
         gs.globalSonarAlert = false
         gs.localAttackAlert = false
@@ -203,9 +196,8 @@ class EnemySystem {
     }
 
     fun spawnSwarmIfNeeded(gs: GameState, width: Float, height: Float) {
-        if (gs.bossType == 1 || gs.bossType == 4) {
-            for (i in 0 until n) spawn(i, gs, width, height)
-        }
+        // Swarm logic is now partially handled by SpawnerSystem's queueing
+        // or by calling spawnAt if needed for specific boss points.
     }
 
     fun updateBoss(dt: Float, gs: GameState, scale: Float) {
@@ -372,6 +364,22 @@ class EnemySystem {
                             c.drawText("?", screenEx, screenEy - entitySize - scale * 0.01f, pText)
                         }
                     }
+                }
+
+                // --- NAYA: DRAW HEALTH BAR (Sirf tab jab HP 1 se zyada ho aur dushman alert/visible ho) ---
+                if (maxHp[i] > 1 && effectiveVis > 0.5f) {
+                    val hpRatio = hp[i].toFloat() / maxHp[i].toFloat()
+                    val barW = scale * 0.06f
+                    val barH = scale * 0.008f
+                    val bx = screenEx - barW / 2f
+                    val by = screenEy - entitySize - scale * 0.02f
+                    
+                    // Background
+                    p.color = 0xAA000000.toInt()
+                    c.drawRect(bx, by, bx + barW, by + barH, p)
+                    // Foreground HP
+                    p.color = GameColors.HP
+                    c.drawRect(bx, by, bx + barW * hpRatio, by + barH, p)
                 }
             }
         }

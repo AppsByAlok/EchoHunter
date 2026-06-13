@@ -28,6 +28,10 @@ class CollisionSystem(
         val hitRadius = scale * 0.045f
         val hitDistSq = hitRadius * hitRadius
 
+        val config = LevelEngine.getLevelConfig(gs.currentLevel)
+        val isElimination = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ELIMINATION) && gs.gameMode == 0
+        val isDefense = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE) && gs.gameMode == 0
+
         var playedEnemyKillSound = false
         var playedEnemyHackSound = false
 
@@ -92,10 +96,21 @@ class CollisionSystem(
                     val edx = gs.empMineX - enemySystem.ex[j]
                     val edy = gs.empMineY - enemySystem.ey[j]
                     if (edx * edx + edy * edy < (scale * 0.4f) * (scale * 0.4f)) {
-                        onScoreAdd(5); gs.collectedDataKB += LevelEngine.getKillRewardKB(
-                            gs.currentLevel, isBoss = false
-                        )
-                        enemySystem.killEnemy(j, gs, width, height)
+                        // EMP Deals 5 Damage!
+                        enemySystem.hp[j] -= 5
+                        if (enemySystem.hp[j] <= 0) {
+                            onScoreAdd(5)
+                            gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
+
+                            if (isElimination && enemySystem.type[j] == 3) {
+                                gs.elimTargetsKilled++
+                                StoryProtocol.showIngameMessage("TARGET ELIMINATED!", 1.5f)
+                            }
+                            enemySystem.killEnemy(j, gs, width, height)
+                        } else {
+                            // Agar mara nahi, toh thoda push back karo
+                            enemySystem.eState[j] = 2 
+                        }
                     }
                 }
                 if (gs.bossActive) {
@@ -134,7 +149,7 @@ class CollisionSystem(
 
                         gs.bossIframe = 0.15f // Quick iframe against multi-hit spikes
 
-                        effectSystem.spawnParticles(gs.bossX, gs.bossY, 2, scale)
+                        effectSystem.spawnParticles(gs.bossX, gs.bossY, 3, scale)
                         EchoAudioManager.playSound(ToneGenerator.TONE_SUP_INTERCEPT, 100)
 
                         gs.combo++
@@ -163,54 +178,42 @@ class CollisionSystem(
 
                         if (dx * dx + dy * dy < hitDistSq * 1.5f) {
                             spikeHit = true
-                            gs.combo++
-
-//                            onScoreAdd(2 + gs.combo)
-//                            gs.collectedDataKB += LevelEngine.getKillRewardKB(
-//                                gs.currentLevel, isBoss = false
-//                            )
-
-                            // --- NAYA: ELIMINATION MODE SCORE LOGIC ---
-                            val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
-                            val isElimination = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ELIMINATION) && gs.gameMode == 0
-
-                            if (isElimination) {
-                                if (enemySystem.type[i] == 3) {
-                                    // Sahi Target Maara! Score badhao aur double data do!
-                                    onScoreAdd(2 + gs.combo)
-                                    gs.collectedDataKB += com.appsbyalok.echohunter.data.LevelEngine.getKillRewardKB(gs.currentLevel, false) * 2
-                                    com.appsbyalok.echohunter.data.StoryProtocol.showIngameMessage("TARGET ELIMINATED!", 1.5f)
-                                } else {
-                                    // Galat dushman maara, sirf thode data coins milenge, score nahi badhega
-                                    gs.collectedDataKB += com.appsbyalok.echohunter.data.LevelEngine.getKillRewardKB(gs.currentLevel, false) / 2
-                                }
-                            } else {
-                                // Classic / Escape / Maze Modes: Normal kill logic
-                                onScoreAdd(2 + gs.combo)
-                                gs.collectedDataKB += com.appsbyalok.echohunter.data.LevelEngine.getKillRewardKB(gs.currentLevel, false)
-                            }
-
-
-
-
-
-                            if (!gs.isOverclocked) {
-                                gs.overclockMeter = min(100f, gs.overclockMeter + 15f)
-                                if (gs.overclockMeter >= 100f && gs.showOverclockTextTimer <= 0f) {
-                                    gs.showOverclockTextTimer = 2.0f
-                                    EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100)
-                                }
-                            }
-
-                            effectSystem.spawnParticles(
-                                enemySystem.ex[i], enemySystem.ey[i], 1, scale
-                            )
+                            
+                            // Spike Deals 1 Damage per hit!
+                            enemySystem.hp[i] -= 1
+                            effectSystem.spawnParticles(enemySystem.ex[i], enemySystem.ey[i], 1, scale)
                             EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 50)
 
-                            if (!gs.bossActive || enemySystem.type[i] == 1) {
-                                enemySystem.killEnemy(i, gs, width, height)
+                            if (enemySystem.hp[i] <= 0) {
+                                gs.combo++
+                                // --- ELIMINATION MODE SCORE LOGIC ---
+                                if (isElimination) {
+                                    if (enemySystem.type[i] == 3) {
+                                        onScoreAdd(2 + gs.combo)
+                                        gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, false) * 2
+                                        StoryProtocol.showIngameMessage("TARGET ELIMINATED!", 1.5f)
+                                        gs.elimTargetsKilled++
+                                    } else {
+                                        gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, false) / 2
+                                    }
+                                } else {
+                                    onScoreAdd(2 + gs.combo)
+                                    gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, false)
+                                }
+
+                                if (!gs.isOverclocked) {
+                                    gs.overclockMeter = min(100f, gs.overclockMeter + 15f)
+                                    if (gs.overclockMeter >= 100f && gs.showOverclockTextTimer <= 0f) {
+                                        gs.showOverclockTextTimer = 2.0f
+                                        EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100)
+                                    }
+                                }
+
+                                if (!gs.bossActive || enemySystem.type[i] == 1) {
+                                    enemySystem.killEnemy(i, gs, width, height)
+                                }
                             }
-                            break
+                            break // Spike todi der ke liye break ho jati hai
                         }
                     }
                 }
@@ -224,9 +227,6 @@ class CollisionSystem(
 
 
         // 5. Enemies Collision
-        val config = LevelEngine.getLevelConfig(gs.currentLevel)
-        val isDefense = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE) && gs.gameMode == 0
-
         for (i in 0 until enemySystem.n) {
 
             // --- CORE DEFENSE COLLISION LOGIC ---
@@ -238,23 +238,21 @@ class CollisionSystem(
 
                 if (cdx * cdx + cdy * cdy < coreHitDistSq) {
                     gs.coreHp--
-                    effectSystem.spawnParticles(gs.coreX, gs.coreY, 0, scale * 1.5f)
+                    effectSystem.spawnParticles(gs.coreX, gs.coreY, 1, scale * 1.5f)
                     EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 200)
                     gs.shakeAmount = max(gs.shakeAmount, scale * 0.1f)
                     gs.chromaticIntensity = max(gs.chromaticIntensity, 0.6f)
 
-                    // Dushman core se takra kar fanaa ho jayega
                     enemySystem.killEnemy(i, gs, width, height)
 
-                    // Agar core ki HP khatam ho gayi, toh seedha Death trigger karo
                     if (gs.coreHp <= 0) {
                         gs.hp = 0
                         StoryProtocol.showIngameMessage(
                             "CRITICAL: SYSTEM CORE COMPROMISED!", 4f
                         )
-                        onDamage(scale) // Death sequence activate
+                        onDamage(scale)
                     }
-                    continue // Is enemy ke liye baaki checks skip karo
+                    continue
                 }
             }
 
@@ -268,51 +266,64 @@ class CollisionSystem(
 
             if (d2 < hitDistSq) {
                 if (gs.isOverclocked) {
-                    onScoreAdd(5)
-                    gs.collectedDataKB += LevelEngine.getKillRewardKB(
-                        gs.currentLevel, isBoss = false
-                    )
+                    // Dash Deals 2 Damage!
+                    enemySystem.hp[i] -= 2
                     effectSystem.spawnParticles(enemySystem.ex[i], enemySystem.ey[i], 1, scale)
-
+                    gs.hitStopTimer = max(gs.hitStopTimer, 0.05f)
+                    
                     if (!playedEnemyKillSound) {
                         EchoAudioManager.playSound(ToneGenerator.TONE_SUP_INTERCEPT, 50)
                         playedEnemyKillSound = true
                     }
-                    gs.hitStopTimer = max(gs.hitStopTimer, 0.05f)
 
+                    if (enemySystem.hp[i] <= 0) {
+                        onScoreAdd(5)
+                        gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
+
+                        if (config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ELIMINATION) && gs.gameMode == 0) {
+                            if (enemySystem.type[i] == 3) {
+                                gs.elimTargetsKilled++
+                                StoryProtocol.showIngameMessage("TARGET ELIMINATED!", 1.5f)
+                            }
+                        }
+                        enemySystem.killEnemy(i, gs, width, height)
+                    }
                 } else if (enemySystem.type[i] == 1) {
+                    // --- HUNTER COLLISION ---
                     if (gs.playerIframe <= 0f) {
                         if (gs.shieldTimer > 0f) {
                             gs.shieldTimer = 0f
                             gs.playerIframe = 1.0f
-                            effectSystem.spawnParticles(
-                                enemySystem.ex[i], enemySystem.ey[i], 1, scale
-                            )
+                            effectSystem.spawnParticles(enemySystem.ex[i], enemySystem.ey[i], 1, scale)
+                            enemySystem.killEnemy(i, gs, width, height) // Shield absorbs and kills
                         } else {
-                            effectSystem.spawnParticles(gs.px, gs.py, 0, scale)
+                            effectSystem.spawnParticles(gs.px, gs.py, 1, scale)
                             onDamage(scale)
                             gs.chromaticIntensity = max(gs.chromaticIntensity, 0.8f)
+                            // Hunter doesn't necessarily die on impact unless player has shield/overclock
                         }
                     }
                 } else if (enemySystem.type[i] == 2) {
+                    // --- KAMIKAZE/HACKER ---
                     onScoreAdd(5)
-                    gs.collectedDataKB += LevelEngine.getKillRewardKB(
-                        gs.currentLevel, isBoss = false
-                    )
-                    effectSystem.spawnParticles(enemySystem.ex[i], enemySystem.ey[i], 0, scale)
-
+                    gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
+                    effectSystem.spawnParticles(enemySystem.ex[i], enemySystem.ey[i], 1, scale)
                     if (!playedEnemyHackSound) {
                         EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 80)
                         playedEnemyHackSound = true
                     }
-                } else {
+                    enemySystem.killEnemy(i, gs, width, height)
+                } else if (enemySystem.type[i] == 0) {
+                    // --- NORMAL YELLOW (PATROL) ---
                     onScoreAdd(2)
-                    gs.collectedDataKB += LevelEngine.getKillRewardKB(
-                        gs.currentLevel, isBoss = false
-                    )
+                    gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
+                    effectSystem.spawnParticles(enemySystem.ex[i], enemySystem.ey[i], 0, scale * 0.5f) // Small pulse effect
+                    if (!playedEnemyHackSound) {
+                        EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 60)
+                        playedEnemyHackSound = true
+                    }
+                    enemySystem.killEnemy(i, gs, width, height)
                 }
-
-                enemySystem.killEnemy(i, gs, width, height)
             }
         }
 
@@ -328,7 +339,7 @@ class CollisionSystem(
                 if (gs.isOverclocked && gs.bossIframe <= 0f) {
                     gs.bossHp--
                     gs.bossIframe = 1.0f
-                    effectSystem.spawnParticles(gs.bossX, gs.bossY, 2, scale)
+                    effectSystem.spawnParticles(gs.bossX, gs.bossY, 3, scale)
                     EchoAudioManager.playSound(ToneGenerator.TONE_SUP_INTERCEPT, 150)
                     gs.shakeAmount = max(gs.shakeAmount, scale * 0.08f)
                     gs.chromaticIntensity = max(gs.chromaticIntensity, 0.6f)
@@ -339,7 +350,6 @@ class CollisionSystem(
                 } else if (gs.bossIframe <= 0f && gs.playerIframe <= 0f) {
                     gs.bossIframe = 1.0f
 
-                    // --- NAYA: PUSH / DHAKKA LOGIC COMPLETELY REMOVED ---
                     if (gs.shieldTimer > 0f) {
                         gs.shieldTimer = 0f
                         gs.playerIframe = 1.0f
@@ -391,7 +401,9 @@ class CollisionSystem(
         EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 500)
 
         if (gs.gameMode == 0) {
-            gs.isLevelCleared = true
+            if (gs.activeObjective.checkWinCondition(gs)) {
+                gs.isLevelCleared = true
+            }
         } else {
             if (gs.currentSector > 5 && gs.gameMode == 1) {
                 onCoreUnlock(gs.hp == gs.maxHp)

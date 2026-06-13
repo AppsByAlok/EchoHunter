@@ -57,9 +57,16 @@ class EffectSystem {
                 val speed = scale * 0.5f + Random.nextFloat() * (scale * 1.0f)
                 pvxA[i] = cos(angle) * speed
                 pvyA[i] = sin(angle) * speed
-                pLife[i] = 1f
-                if (colorMode == 1) pLife[i] = 2f
-                if (colorMode == 2) pLife[i] = 3f
+                
+                // --- FIX: VISUAL CLARITY COLOR MAPPING ---
+                // 0 -> PULSE (Blue), 1 -> RED (Default/Enemy), 2 -> OVERCLOCK (Orange), 3 -> BOSS (Magenta)
+                pLife[i] = when(colorMode) {
+                    0 -> 0.9f  // Pulse Blue
+                    1 -> 1.0f  // Red
+                    2 -> 2.0f  // Overclock
+                    3 -> 3.0f  // Boss
+                    else -> 1.0f
+                }
                 if (Random.nextFloat() > 0.8f) break
             }
         }
@@ -112,11 +119,12 @@ class EffectSystem {
         for (i in 0 until pn) {
             if (pLife[i] > 0) {
                 val pColor = when {
-                    pLife[i] > 2f -> GameColors.BOSS
-                    pLife[i] > 1f -> GameColors.OVERCLOCK
+                    pLife[i] > 2.0f -> GameColors.BOSS
+                    pLife[i] > 1.0f -> GameColors.OVERCLOCK
+                    pLife[i] < 1.0f && pLife[i] > 0.85f -> GameColors.PULSE // Spawner Blue
                     else -> GameColors.RED
                 }
-                val alphaAlpha = pLife[i] - pLife[i].toInt()
+                val alphaAlpha = if (pLife[i] > 1f) pLife[i] - pLife[i].toInt() else pLife[i]
                 p.color = ((alphaAlpha * 255).toInt() shl 24) or (pColor and 0xFFFFFF)
                 c.drawCircle(pxA[i] - cameraX, pyA[i] - cameraY, alphaAlpha * (scale * 0.008f), p)
             }

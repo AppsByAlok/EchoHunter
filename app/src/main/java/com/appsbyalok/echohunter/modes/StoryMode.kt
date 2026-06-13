@@ -75,13 +75,16 @@ class StoryMode : GameModeStrategy {
         }
 
         // APT (Advanced Persistent Threat) LORE: Admin panics if player is on a 3-win streak
-        if (SaveManager.unlockedStoryStreak == 3 || SaveManager.unlockedHardStreak > 1) {
+        if (SaveManager.unlockedStoryStreak >= 3 || SaveManager.unlockedHardStreak > 1) {
             // High chance of glitches because the system recognizes the Hacker as an imminent APT threat
             if (Random.nextDouble() < 0.015) StoryProtocol.triggerRandomGlitch(gs.score, modeId, gs.difficulty)
 
             // Just before the Omega Guardian on the 4th run, hint at the Blackout Protocol
             if (gs.currentSector == 5 && !gs.bossActive && gs.score == gs.sectorTarget - 5) {
-                StoryProtocol.showIngameMessage("ADMIN: \"APT CLASSIFICATION CONFIRMED. BLACKOUT PROTOCOL ENGAGED.\"", 4f)
+                if (!StoryProtocol.isBlackoutActive) {
+                    StoryProtocol.showIngameMessage("ADMIN: \"APT CLASSIFICATION CONFIRMED. BLACKOUT PROTOCOL ENGAGED.\"", 4f)
+                    StoryProtocol.isBlackoutActive = true
+                }
             }
         } else {
             // Standard glitch rate

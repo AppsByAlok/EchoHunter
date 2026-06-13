@@ -18,6 +18,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.sqrt
+import kotlin.random.Random
 
 class WorldRenderer(
     private val context: Context,
@@ -41,7 +42,7 @@ class WorldRenderer(
         pDash.pathEffect = DashPathEffect(floatArrayOf(scale * 0.05f, scale * 0.05f), 0f)
     }
 
-    fun drawGrid(c: Canvas, scale: Float, gs: GameState, targetW: Float, targetH: Float) {
+    fun drawGrid(c: Canvas, scale: Float, gs: GameState, targetW: Float, targetH: Float, showSpawners: Boolean = true) {
         p.style = Paint.Style.STROKE
         p.color = if (gs.difficulty == 1) 0xFF441010.toInt() else 0xFF1A1C2E.toInt()
         p.strokeWidth = max(1f, scale * 0.002f)
@@ -60,6 +61,36 @@ class WorldRenderer(
         while (j < targetH + gap) {
             c.drawLine(0f, j, targetW, j, p); j += gap
         }
+
+        if (!showSpawners) return
+
+        // --- NAYA: DRAW SPAWNER NODES PROGRESS ---
+        for (node in gs.spawnerNodes) {
+            val nx = node.x - gs.cameraX
+            val ny = node.y - gs.cameraY
+            
+            // Back Ring
+            p.style = Paint.Style.STROKE
+            p.strokeWidth = scale * 0.015f
+            p.color = if (node.type == 1) 0x66FF0000.toInt() else 0x6600FFFF.toInt()
+            c.drawCircle(nx, ny, scale * 0.08f, p)
+            
+            // Progress Arc
+            p.color = if (node.type == 1) GameColors.RED else GameColors.PULSE
+            val progress = 1f - (node.cooldownTimer / node.maxCooldown)
+            c.drawArc(
+                nx - scale * 0.08f, ny - scale * 0.08f,
+                nx + scale * 0.08f, ny + scale * 0.08f,
+                -90f, progress * 360f, false, p
+            )
+            
+            // Queue Text
+            if (node.queue > 0) {
+                p.style = Paint.Style.FILL
+                p.textSize = scale * 0.035f
+                c.drawText("${node.queue}", nx, ny + scale * 0.01f, p)
+            }
+        }
     }
 
     fun drawCRTOverlay(c: Canvas, gs: GameState, targetW: Float, targetH: Float) {
@@ -70,6 +101,38 @@ class WorldRenderer(
         while (yLine < targetH) {
             c.drawLine(0f, yLine, targetW, yLine, p)
             yLine += 8f
+        }
+
+        // --- NAYA: BLACKOUT GLITCH EFFECTS ---
+        if (StoryProtocol.isBlackoutActive) {
+            // 1. Heavy flickering overlay
+            if (Random.nextFloat() < 0.1f) {
+                c.drawColor(0x88000000.toInt())
+            }
+
+            // 2. RGB Shift Glitch Strips
+            if (Random.nextFloat() < 0.25f) {
+                p.style = Paint.Style.FILL
+                val stripY = Random.nextFloat() * targetH
+                val stripH = Random.nextFloat() * (targetH * 0.05f)
+                
+                // Cyan strip
+                p.color = 0x4400FFFF
+                c.drawRect(0f, stripY, targetW, stripY + stripH, p)
+                
+                // Red strip (slightly offset)
+                p.color = 0x44FF0000
+                c.drawRect(0f, (stripY + 5f) % targetH, targetW, (stripY + 5f + stripH) % targetH, p)
+            }
+
+            // 3. Static/Noise pixels
+            if (Random.nextFloat() < 0.3f) {
+                p.strokeWidth = 2f
+                p.color = 0xAAFFFFFF.toInt()
+                repeat(15) {
+                    c.drawPoint(Random.nextFloat() * targetW, Random.nextFloat() * targetH, p)
+                }
+            }
         }
     }
 

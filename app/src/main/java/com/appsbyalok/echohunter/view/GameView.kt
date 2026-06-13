@@ -155,8 +155,8 @@ class GameView(context: Context) : View(context) {
         effectSys.reset()
         gs.gameMode = mode
         gs.currentLevel = level
-        engine.generateLevelMaze(width.toFloat(), height.toFloat(), gameScale)
         enemySys.respawnAll(gs, width.toFloat(), height.toFloat())
+        engine.generateLevelMaze(width.toFloat(), height.toFloat(), gameScale)
         uiMainMenu.disconnect()
         lastFrameTime = System.nanoTime()
         EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 50)
@@ -173,15 +173,24 @@ class GameView(context: Context) : View(context) {
     }
 
     fun disconnectCable() {
+        cleanupLevelEffects()
+        uiMainMenu.disconnect()
+        changeState(0)
+        EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
+    }
+
+    fun returnToArchives() {
+        cleanupLevelEffects()
+        changeState(11) // State 11 is UIArchives
+        EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
+    }
+
+    private fun cleanupLevelEffects() {
         if (!StoryProtocol.isGlitchActive) {
             gs.shakeAmount = 0f
             gs.chromaticIntensity = 0f
             gs.sectorFlash = 0f
         }
-//        gs.resetGame()
-        uiMainMenu.disconnect()
-        changeState(0)
-        EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
     }
 
     fun pauseGame() {
@@ -300,7 +309,11 @@ class GameView(context: Context) : View(context) {
     private fun triggerBoss(type: Int, scale: Float) {
         gs.bossActive = true
         gs.bossType = type
-        gs.bossHp = 25 + (gs.currentSector * 5)
+        
+        // --- NAYA: BOSS HP SCALING (Saturated Growth Curve) ---
+        // Base 25 + Max 475 = 500 HP Cap at extreme levels
+        val bossScaling = com.appsbyalok.echohunter.data.LevelEngine.getSaturatedValue(gs.currentLevel, 0f, 475f, 300f)
+        gs.bossHp = (25 + bossScaling).toInt()
         gs.bossMaxHp = gs.bossHp
         var safeX = gs.px + scale * 1.2f
         var safeY = gs.py

@@ -1,8 +1,5 @@
 package com.appsbyalok.echohunter.data
 
-import kotlin.math.min
-import kotlin.math.pow
-
 // Represents individual gameplay components that can overlap cleanly
 enum class LevelFeature {
     CLASSIC,       // Baseline Default: Score/Data collect to win
@@ -28,6 +25,14 @@ data class LevelConfig(
 )
 
 object LevelEngine {
+
+    /**
+     * Saturated Growth Curve Utility
+     * Formula: Base + (MaxAdd * Level) / (Level + K)
+     */
+    fun getSaturatedValue(level: Int, base: Float, maxAdd: Float, curveConstant: Float): Float {
+        return base + (maxAdd * level) / (level + curveConstant)
+    }
 
     /**
      * Algorithmic Generation using Prime (Objectives) and Even (Modifiers) Matrix.
@@ -74,19 +79,20 @@ object LevelEngine {
     fun getLevelConfig(level: Int): LevelConfig {
         val features = determineLevelFeatures(level)
 
-        // Balanced and playable scaling thresholds
-        val speedMult = min(2.5f, 1.0f + (level * 0.012f))
-        val hpMult = 1.0f + (level * 0.04f)
-        val spawnRateMult = min(4.0f, 1.0f + (level * 0.018f))
+        // --- NAYA: SMOOTH SATURATED SCALING ---
+        val speedMult = getSaturatedValue(level, 1.0f, 1.5f, 150f)     // Max 2.5x
+        val hpMult = getSaturatedValue(level, 1.0f, 19.0f, 200f)      // Max 20x HP
+        val spawnRateMult = getSaturatedValue(level, 1.0f, 3.0f, 200f) // Max 4.0x
 
         // AI Intelligence tuning (Level 1 starts dumb, Level 100 is expert)
-        val aiIntel = min(1.0f, 0.2f + (level / 100f) * 0.8f)
+        val aiIntel = getSaturatedValue(level, 0.2f, 0.8f, 50f)       // Max 1.0
 
-        // Cap score limits to maintain smooth game sessions
-        val targetScore = min(200, 15 + (level * 2))
+        val targetScore = getSaturatedValue(level, 50f, 1950f, 400f).toInt() // Max 2000 score
 
-        // Compounding roguelite reward matrix
-        var clearReward = (60L * (1.08).pow(level.toDouble() / 2.0).toLong()).coerceAtLeast(100L)
+        // --- NAYA: SMOOTH REWARD SCALING (Prevents Long Overflow) ---
+        val baseClear = 100f
+        val maxAddClear = 50000f // Plateau at 50k base reward
+        var clearReward = getSaturatedValue(level, baseClear, maxAddClear, 300f).toLong()
 
         var featureMult = 1.0
         if (features.contains(LevelFeature.BOSS)) featureMult *= 2.5
@@ -114,7 +120,11 @@ object LevelEngine {
     }
 
     fun getKillRewardKB(level: Int, isBoss: Boolean): Long {
-        val base = if (isBoss) 400L + (level * 15L) else 5L + (level / 6L)
+        val base = if (isBoss) {
+            getSaturatedValue(level, 400f, 1600f, 200f).toLong() // Max 2000 KB for Boss
+        } else {
+            getSaturatedValue(level, 5f, 45f, 300f).toLong() // Max 50 KB for Normal
+        }
         return base + (base * UpgradeSystem.getRewardBonusPercent()).toLong()
     }
 }
