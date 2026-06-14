@@ -22,20 +22,26 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
         }
 
         // Logic check for firing/sonar
-        if ((gs.controls.isAttackPressed || gs.controls.isAutoFireLocked) && gs.attackCooldown <= 0f) fireWeapon(scale)
+        // Use the new attackRequested intent from InputSystem
+        if (gs.controls.attackRequested && gs.attackCooldown <= 0f) {
+            fireWeapon(scale)
+        }
+        
         if ((gs.controls.isSonarPressed || gs.controls.isAutoSonarLocked) && gs.cooldownTimer <= 0f) deploySonar()
-
-//        gs.isSonarPressed = false
     }
 
     fun fireWeapon(scale: Float) {
         val baseCooldown = 0.25f
         gs.attackCooldown = baseCooldown * UpgradeSystem.getSpikeCooldownMultiplier()
 
-        val dirX = if (gs.lastFacingX == 0f && gs.lastFacingY == 0f) 1f else gs.lastFacingX
-        val dirY = if (gs.lastFacingX == 0f && gs.lastFacingY == 0f) 0f else gs.lastFacingY
+        // Use the aim direction calculated by InputSystem
+        val dirX = if (gs.controls.aimDirX == 0f && gs.controls.aimDirY == 0f) 1f else gs.controls.aimDirX
+        val dirY = gs.controls.aimDirY
 
         EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 50)
+
+        // Reset attack request immediately so we don't double fire in the same frame
+        gs.controls.attackRequested = false
 
         // DYNAMIC WEAPON FIRE
         when (gs.controls.currentWeapon) {
@@ -49,7 +55,6 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
             2 -> fireSingle(dirX, dirY, scale * 2.5f, 2) // Sniper (Fast)
         }
 
-        gs.controls.isAttackPressed = false
         gs.localAttackAlert = true
     }
 

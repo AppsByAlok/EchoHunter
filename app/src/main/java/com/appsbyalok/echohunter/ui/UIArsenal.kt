@@ -22,8 +22,9 @@ class UIArsenal {
     private val closeBtnRect = RectF()
     private val weaponDirRect = RectF()
     private val trapDirRect = RectF()
+    private val attackModeRect = RectF()
 
-    // 0 = Main OS, 1 = Weapons Folder, 2 = Traps Folder
+    // 0 = Main OS, 1 = Weapons Folder, 2 = Traps Folder, 3 = Attack Mode Folder
     private var currentTab = 0
     private val itemReacts = mutableMapOf<Int, RectF>()
 
@@ -53,35 +54,37 @@ class UIArsenal {
                 drawTrapFolder(c, targetW, targetH, scale, gs)
             }
 
-            // --- DISCONNECT / BACK BUTTON (Responsive Footer) ---
-            else -> {
-                pText.textAlign = Paint.Align.CENTER
-                val isPortrait = targetH > targetW
-                val btnWidth = if (isPortrait) targetW * 0.7f else scale * 0.4f
-                val btnHeight = scale * 0.09f
-                val btnBottomMargin = scale * 0.05f
-
-                closeBtnRect.set(
-                    targetW / 2f - btnWidth / 2f,
-                    targetH - btnHeight - btnBottomMargin,
-                    targetW / 2f + btnWidth / 2f,
-                    targetH - btnBottomMargin
-                )
-
-                p.style = Paint.Style.FILL; p.color = 0xFF330000.toInt()
-                c.drawRoundRect(closeBtnRect, scale * 0.02f, scale * 0.02f, p)
-                p.style = Paint.Style.STROKE; p.color = GameColors.RED; p.strokeWidth = scale * 0.005f
-                c.drawRoundRect(closeBtnRect, scale * 0.02f, scale * 0.02f, p)
-
-                pText.color = GameColors.RED; pText.textSize = scale * 0.045f
-                c.drawText(
-                    if (currentTab == 0) "DISCONNECT" else "< BACK",
-                    closeBtnRect.centerX(),
-                    closeBtnRect.centerY() + scale * 0.015f,
-                    pText
-                )
+            3 -> {
+                drawAttackModeFolder(c, targetW, targetH, scale, gs)
             }
         }
+
+        // --- DISCONNECT / BACK BUTTON (Responsive Footer) ---
+        pText.textAlign = Paint.Align.CENTER
+        val isPortrait = targetH > targetW
+        val btnWidth = if (isPortrait) targetW * 0.7f else scale * 0.4f
+        val btnHeight = scale * 0.09f
+        val btnBottomMargin = scale * 0.05f
+
+        closeBtnRect.set(
+            targetW / 2f - btnWidth / 2f,
+            targetH - btnHeight - btnBottomMargin,
+            targetW / 2f + btnWidth / 2f,
+            targetH - btnBottomMargin
+        )
+
+        p.style = Paint.Style.FILL; p.color = 0xFF330000.toInt()
+        c.drawRoundRect(closeBtnRect, scale * 0.02f, scale * 0.02f, p)
+        p.style = Paint.Style.STROKE; p.color = GameColors.RED; p.strokeWidth = scale * 0.005f
+        c.drawRoundRect(closeBtnRect, scale * 0.02f, scale * 0.02f, p)
+
+        pText.color = GameColors.RED; pText.textSize = scale * 0.045f
+        c.drawText(
+            if (currentTab == 0) "DISCONNECT" else "< BACK",
+            closeBtnRect.centerX(),
+            closeBtnRect.centerY() + scale * 0.015f,
+            pText
+        )
     }
 
     private fun drawMainScreen(c: Canvas, targetW: Float, targetH: Float, scale: Float, gs: GameState) {
@@ -89,26 +92,26 @@ class UIArsenal {
 
         // Dynamic placements based on orientation
         val droneX = if (isPortrait) targetW * 0.5f else targetW * 0.3f
-        val droneY = if (isPortrait) targetH * 0.25f else targetH * 0.5f
+        val droneY = if (isPortrait) targetH * 0.22f else targetH * 0.5f
 
         // Folders placements
         val dirX = if (isPortrait) targetW * 0.5f else targetW * 0.75f
-        val dirYStart = if (isPortrait) targetH * 0.45f else targetH * 0.35f
+        val dirYStart = if (isPortrait) targetH * 0.38f else targetH * 0.22f
         val boxW = if (isPortrait) targetW * 0.85f else scale * 0.65f
-        val boxH = if (isPortrait) scale * 0.22f else scale * 0.18f
-        val spacing = scale * 0.06f
+        val boxH = if (isPortrait) scale * 0.16f else scale * 0.14f
+        val spacing = scale * 0.04f
 
         // --- Drone Wireframe Graphic ---
         p.style = Paint.Style.STROKE; p.color = 0x5500FFFF; p.strokeWidth = scale * 0.005f
-        c.drawCircle(droneX, droneY, scale * 0.15f, p)
-        c.drawRect(droneX - scale*0.05f, droneY - scale*0.05f, droneX + scale*0.05f, droneY + scale*0.05f, p)
+        c.drawCircle(droneX, droneY, scale * 0.12f, p)
+        c.drawRect(droneX - scale*0.04f, droneY - scale*0.04f, droneX + scale*0.04f, droneY + scale*0.04f, p)
 
         p.style = Paint.Style.FILL; p.color = GameColors.PULSE
         c.drawCircle(droneX, droneY, scale * 0.02f + sin(gs.timeSinceStart * 5f) * scale * 0.01f, p)
 
         pText.textAlign = Paint.Align.CENTER; pText.color = GameColors.CLARITY
         pText.textSize = scale * 0.04f
-        c.drawText("PROBE-7 HARDWARE STATUS", droneX, droneY - scale * 0.2f, pText)
+        c.drawText("PROBE-7 HARDWARE STATUS", droneX, droneY - scale * 0.18f, pText)
 
         // --- OS Folders (Directories) ---
         // Weapons Folder
@@ -118,6 +121,16 @@ class UIArsenal {
         // Traps Folder
         trapDirRect.set(dirX - boxW/2f, dirYStart + boxH + spacing, dirX + boxW/2f, dirYStart + boxH * 2 + spacing)
         drawFolderBox(c, trapDirRect, "TRAPS.dir", getTrapName(gs.controls.currentTrap), scale, isPortrait)
+
+        // Attack Mode Folder
+        attackModeRect.set(dirX - boxW/2f, dirYStart + (boxH + spacing) * 2, dirX + boxW/2f, dirYStart + boxH * 3 + spacing * 2)
+        drawFolderBox(c, attackModeRect, "LOGIC_AIM.sys", gs.controls.activeAttackMode.name, scale, isPortrait)
+    }
+
+    private fun drawAttackModeFolder(c: Canvas, targetW: Float, targetH: Float, scale: Float, gs: GameState) {
+        val modes = com.appsbyalok.echohunter.input.AttackMode.values()
+        val names = modes.map { it.name }.toTypedArray()
+        drawList(c, targetW, targetH, scale, "SELECT AIMING LOGIC", gs.controls.activeAttackMode.ordinal, names)
     }
 
     private fun drawFolderBox(c: Canvas, rect: RectF, title: String, activeItem: String, scale: Float, isPortrait: Boolean) {
@@ -129,14 +142,14 @@ class UIArsenal {
         pText.textAlign = Paint.Align.LEFT
 
         // Scale text up slightly for portrait mode readability
-        val titleSize = if (isPortrait) scale * 0.06f else scale * 0.05f
-        val subSize = if (isPortrait) scale * 0.04f else scale * 0.035f
+        val titleSize = if (isPortrait) scale * 0.05f else scale * 0.045f
+        val subSize = if (isPortrait) scale * 0.035f else scale * 0.03f
 
         pText.color = GameColors.CLARITY; pText.textSize = titleSize
-        c.drawText("> $title", rect.left + scale * 0.05f, rect.top + titleSize * 1.5f, pText)
+        c.drawText("> $title", rect.left + scale * 0.04f, rect.top + titleSize * 1.6f, pText)
 
         pText.color = GameColors.YELLOW; pText.textSize = subSize
-        c.drawText("LOADED: $activeItem", rect.left + scale * 0.05f, rect.bottom - scale * 0.04f, pText)
+        c.drawText("STATUS: $activeItem", rect.left + scale * 0.04f, rect.bottom - scale * 0.03f, pText)
     }
 
     private fun drawWeaponFolder(c: Canvas, targetW: Float, targetH: Float, scale: Float, gs: GameState) {
@@ -210,17 +223,28 @@ class UIArsenal {
                     currentTab = 2
                     return true
                 }
+                if (attackModeRect.contains(x, y)) {
+                    EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
+                    currentTab = 3
+                    return true
+                }
             } else {
                 for ((index, rect) in itemReacts) {
                     if (rect.contains(x, y)) {
                         EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 150)
-                        if (currentTab == 1) {
-                            gs.controls.currentWeapon = index
-                            gs.showGlobalMessage("WEAPON PROTOCOL UPDATED.", 1.5f)
-                        }
-                        if (currentTab == 2) {
-                            gs.controls.currentTrap = index
-                            gs.showGlobalMessage("TRAP MODULE LOADED.", 1.5f)
+                        when (currentTab) {
+                            1 -> {
+                                gs.controls.currentWeapon = index
+                                gs.showGlobalMessage("WEAPON PROTOCOL UPDATED.", 1.5f)
+                            }
+                            2 -> {
+                                gs.controls.currentTrap = index
+                                gs.showGlobalMessage("TRAP MODULE LOADED.", 1.5f)
+                            }
+                            3 -> {
+                                gs.controls.activeAttackMode = com.appsbyalok.echohunter.input.AttackMode.values()[index]
+                                gs.showGlobalMessage("AIMING LOGIC RECONFIGURED.", 1.5f)
+                            }
                         }
                         currentTab = 0 // Go back to main OS screen
                         return true

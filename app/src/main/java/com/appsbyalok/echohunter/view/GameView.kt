@@ -390,8 +390,10 @@ class GameView(context: Context) : View(context) {
         gs.hudLayout.pauseX = w - gameScale * 0.1f
         gs.hudLayout.pauseY = gameScale * 0.1f
 
-        gs.touch.joyBaseX = gs.hudLayout.btnRadius * 2.2f
-        gs.touch.joyBaseY = h - gs.hudLayout.btnRadius * 2.2f
+        gs.touch.moveBaseX = gs.hudLayout.btnRadius * 2.2f
+        gs.touch.moveBaseY = h - gs.hudLayout.btnRadius * 2.2f
+        gs.touch.moveKnobX = gs.touch.moveBaseX
+        gs.touch.moveKnobY = gs.touch.moveBaseY
     }
 
     override fun onDraw(canvas: Canvas) {

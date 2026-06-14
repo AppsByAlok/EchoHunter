@@ -134,8 +134,6 @@ class GameState {
         return config.features.contains(LevelFeature.DARKNESS)
     }
 
-    val isHardStoryMode: Boolean get() = false 
-
     val targetClarity: Float get() = if (isDarknessLevel || StoryProtocol.isBlackoutActive) 0.15f else 1.0f
 
     var shieldTimer = 0f // Remaining duration of active invulnerability shield
@@ -328,20 +326,27 @@ class GameState {
         bossDeathTimer = 0f
         bossVis = 1.0f
 
-        // FIX: RESET JOYSTICK
+        // RESET INPUT STATE
         controls.isMoveJoyActive = false
         controls.moveDirX = 0f
         controls.moveDirY = 0f
-        touch.joyBaseX = 0f
-        touch.joyBaseY = 0f
-        touch.joyKnobX = 0f
-        touch.joyKnobY = 0f
-        controls.isAttackPressed = false
-        controls.isOverclockPressed = false
-        controls.isTrapPressed = false
-        controls.isSonarPressed = false
+        
+        touch.moveBaseX = 0f
+        touch.moveBaseY = 0f
+        touch.moveKnobX = 0f
+        touch.moveKnobY = 0f
+        touch.moveTouchId = -1
+        
+        controls.isAttackTouching = false
+        controls.attackRequested = false
+        controls.attackPullDist = 0f
+        touch.attackTouchId = -1
+        touch.attackKnobX = 0f
+        touch.attackKnobY = 0f
 
-        controls.isAutoFireLocked = false
+        controls.isTrapPressed = false
+        controls.isOverclockPressed = false
+        controls.isSonarPressed = false
         controls.isAutoSonarLocked = false
 
         controls.currentWeapon = 1

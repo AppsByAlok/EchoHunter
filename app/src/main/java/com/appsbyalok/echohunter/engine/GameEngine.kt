@@ -32,6 +32,7 @@ class GameEngine(
     private val arsenalSys = ArsenalSystem(gs, effectSys)
     private val playerAI = PlayerAI(gs, enemySys)
     private val spawnerSys = SpawnerSystem(enemySys, effectSys)
+    private val inputSys = com.appsbyalok.echohunter.systems.InputSystem(gs)
 
     fun update(dt: Float, targetW: Float, targetH: Float, scale: Float) {
         gs.timeSinceStart += dt
@@ -60,6 +61,7 @@ class GameEngine(
         }
 
         if (gs.state == 1 || gs.state == 8) {
+            inputSys.update(simDt, scale, enemySys)
             if (gs.isAutoPilotActive) playerAI.update(simDt, scale)
             arsenalSys.update(simDt, scale)
 

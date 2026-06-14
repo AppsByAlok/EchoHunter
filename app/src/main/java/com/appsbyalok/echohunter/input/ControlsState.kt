@@ -1,23 +1,35 @@
 package com.appsbyalok.echohunter.input
 
+enum class AttackMode {
+    DEFAULT,    // Forward facing (Classic)
+    AUTO_AIM,   // Nearest enemy
+    MANUAL_AIM  // Joystick / Directional
+}
+
 class ControlsState {
     var isMoveJoyActive = false
     var moveDirX = 0f
     var moveDirY = 0f
 
-    var isAttackPressed = false
-    var isAutoFireLocked = false
+    // --- ATTACK SYSTEM ---
+    var activeAttackMode = AttackMode.DEFAULT
 
-    var currentWeapon = 1 // 0: Blaster, 1: Shotgun, 2: Sniper
+    // Raw Input (Filled by TouchController)
+    var isAttackTouching = false
+    var attackTouchX = 0f
+    var attackTouchY = 0f
+
+    // Derived Logic (Calculated by InputSystem)
+    var attackRequested = false
+    var aimDirX = 0f
+    var aimDirY = 0f
+    var attackPullDist = 0f // For manual aim visualization
+    
+    // Arsenal
+    var currentWeapon = 1 
+    var currentTrap = 2 
     var isTrapPressed = false
-    var currentTrap = 2 // 0: Camo, 1: Decoy, 2: EMP
-
     var isOverclockPressed = false
-
     var isSonarPressed = false
     var isAutoSonarLocked = false
-    
-    // Story Unlocks (Future proofing for the user's new idea)
-    var isManualAimUnlocked = true // Default true for now to maintain current gameplay
-    var isTrapMenuUnlocked = true
 }

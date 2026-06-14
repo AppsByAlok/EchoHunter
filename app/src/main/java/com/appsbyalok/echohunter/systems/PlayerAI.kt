@@ -34,7 +34,7 @@ class PlayerAI(private val gs: GameState, private val enemySys: EnemySystem) {
             }
         }
 
-        gs.controls.isAutoFireLocked = true
+        // gs.controls.isAutoFireLocked = true // Removed legacy field
         gs.controls.isAutoSonarLocked = true
 
         decisionTimer -= dt
@@ -316,7 +316,6 @@ class PlayerAI(private val gs: GameState, private val enemySys: EnemySystem) {
     fun deactivateAutopilot() {
         gs.isAutoPilotActive = false
         gs.controls.moveDirX = 0f; gs.controls.moveDirY = 0f
-        gs.controls.isAutoFireLocked = false
         gs.controls.isAutoSonarLocked = false
     }
 }

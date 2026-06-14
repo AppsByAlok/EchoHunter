@@ -173,6 +173,8 @@ class CollisionSystem(
                 // B. Normal Enemy Hit Detection
                 if (!spikeHit) {
                     for (i in 0 until enemySystem.n) {
+                        if (enemySystem.ex[i] < -1000f) continue // Skip dead/inactive enemies
+
                         val dx = gs.spikeX[s] - enemySystem.ex[i]
                         val dy = gs.spikeY[s] - enemySystem.ey[i]
 
@@ -228,6 +230,7 @@ class CollisionSystem(
 
         // 5. Enemies Collision
         for (i in 0 until enemySystem.n) {
+            if (enemySystem.ex[i] < -1000f) continue // Skip dead enemies
 
             // --- CORE DEFENSE COLLISION LOGIC ---
             if (isDefense && gs.coreRadius > 0f) {
