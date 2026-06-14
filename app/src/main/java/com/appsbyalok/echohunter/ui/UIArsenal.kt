@@ -113,11 +113,11 @@ class UIArsenal {
         // --- OS Folders (Directories) ---
         // Weapons Folder
         weaponDirRect.set(dirX - boxW/2f, dirYStart, dirX + boxW/2f, dirYStart + boxH)
-        drawFolderBox(c, weaponDirRect, "WEAPONS.dir", getWeaponName(gs.currentWeapon), scale, isPortrait)
+        drawFolderBox(c, weaponDirRect, "WEAPONS.dir", getWeaponName(gs.controls.currentWeapon), scale, isPortrait)
 
         // Traps Folder
         trapDirRect.set(dirX - boxW/2f, dirYStart + boxH + spacing, dirX + boxW/2f, dirYStart + boxH * 2 + spacing)
-        drawFolderBox(c, trapDirRect, "TRAPS.dir", getTrapName(gs.currentTrap), scale, isPortrait)
+        drawFolderBox(c, trapDirRect, "TRAPS.dir", getTrapName(gs.controls.currentTrap), scale, isPortrait)
     }
 
     private fun drawFolderBox(c: Canvas, rect: RectF, title: String, activeItem: String, scale: Float, isPortrait: Boolean) {
@@ -140,11 +140,11 @@ class UIArsenal {
     }
 
     private fun drawWeaponFolder(c: Canvas, targetW: Float, targetH: Float, scale: Float, gs: GameState) {
-        drawList(c, targetW, targetH, scale, "SELECT WEAPON PROTOCOL", gs.currentWeapon, arrayOf("BLASTER (Default)", "SHOTGUN (Spread)", "SNIPER (Pierce)"))
+        drawList(c, targetW, targetH, scale, "SELECT WEAPON PROTOCOL", gs.controls.currentWeapon, arrayOf("BLASTER (Default)", "SHOTGUN (Spread)", "SNIPER (Pierce)"))
     }
 
     private fun drawTrapFolder(c: Canvas, targetW: Float, targetH: Float, scale: Float, gs: GameState) {
-        drawList(c, targetW, targetH, scale, "SELECT TRAP MODULE", gs.currentTrap, arrayOf("CAMOUFLAGE (Stealth)", "DECOY (Hologram)", "EMP MINE (Explosive)"))
+        drawList(c, targetW, targetH, scale, "SELECT TRAP MODULE", gs.controls.currentTrap, arrayOf("CAMOUFLAGE (Stealth)", "DECOY (Hologram)", "EMP MINE (Explosive)"))
     }
 
     private fun drawList(c: Canvas, targetW: Float, targetH: Float, scale: Float, title: String, currentActive: Int, items: Array<String>) {
@@ -215,11 +215,11 @@ class UIArsenal {
                     if (rect.contains(x, y)) {
                         EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 150)
                         if (currentTab == 1) {
-                            gs.currentWeapon = index
+                            gs.controls.currentWeapon = index
                             gs.showGlobalMessage("WEAPON PROTOCOL UPDATED.", 1.5f)
                         }
                         if (currentTab == 2) {
-                            gs.currentTrap = index
+                            gs.controls.currentTrap = index
                             gs.showGlobalMessage("TRAP MODULE LOADED.", 1.5f)
                         }
                         currentTab = 0 // Go back to main OS screen

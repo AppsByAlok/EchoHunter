@@ -372,26 +372,26 @@ class GameView(context: Context) : View(context) {
         worldRenderer.updateDashEffect(gameScale)
 
         // Recalculate dynamic UI coordinates (Restored Original Grid Layout)
-        gs.uiBtnRadius = gameScale * 0.11f
-        gs.uiAtkX = w - gameScale * 0.18f
-        gs.uiAtkY = h - gameScale * 0.18f
+        gs.hudLayout.btnRadius = gameScale * 0.11f
+        gs.hudLayout.atkX = w - gameScale * 0.18f
+        gs.hudLayout.atkY = h - gameScale * 0.18f
         
         val spacing = gameScale * 0.28f
         
-        gs.uiOvrX = gs.uiAtkX
-        gs.uiOvrY = gs.uiAtkY - spacing
+        gs.hudLayout.ovrX = gs.hudLayout.atkX
+        gs.hudLayout.ovrY = gs.hudLayout.atkY - spacing
         
-        gs.uiTrapX = gs.uiAtkX - spacing
-        gs.uiTrapY = gs.uiAtkY
+        gs.hudLayout.trapX = gs.hudLayout.atkX - spacing
+        gs.hudLayout.trapY = gs.hudLayout.atkY
         
-        gs.uiPulseX = gs.uiAtkX - spacing
-        gs.uiPulseY = gs.uiAtkY - spacing
+        gs.hudLayout.pulseX = gs.hudLayout.atkX - spacing
+        gs.hudLayout.pulseY = gs.hudLayout.atkY - spacing
         
-        gs.uiPauseX = w - gameScale * 0.1f
-        gs.uiPauseY = gameScale * 0.1f
+        gs.hudLayout.pauseX = w - gameScale * 0.1f
+        gs.hudLayout.pauseY = gameScale * 0.1f
 
-        gs.joyBaseX = gs.uiBtnRadius * 2.2f
-        gs.joyBaseY = h - gs.uiBtnRadius * 2.2f
+        gs.touch.joyBaseX = gs.hudLayout.btnRadius * 2.2f
+        gs.touch.joyBaseY = h - gs.hudLayout.btnRadius * 2.2f
     }
 
     override fun onDraw(canvas: Canvas) {

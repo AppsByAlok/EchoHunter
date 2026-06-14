@@ -108,28 +108,28 @@ class HUDRenderer(private val context: Context) {
 
 
         // --- 3. VIRTUAL JOYSTICK ---
-        if (gs.isJoyActive) {
+        if (gs.controls.isMoveJoyActive) {
             p.style = Paint.Style.STROKE; p.strokeWidth = scale * 0.01f; p.color = 0x55FFFFFF
-            c.drawCircle(gs.joyBaseX, gs.joyBaseY, scale * 0.15f, p)
+            c.drawCircle(gs.touch.joyBaseX, gs.touch.joyBaseY, scale * 0.15f, p)
             p.style = Paint.Style.FILL; p.color = 0xAAFFFFFF.toInt()
-            c.drawCircle(gs.joyKnobX, gs.joyKnobY, scale * 0.05f, p)
+            c.drawCircle(gs.touch.joyKnobX, gs.touch.joyKnobY, scale * 0.05f, p)
         }
 
         // --- 4. ACTION BUTTONS (With Auto Locks) ---
-        drawActionButton(c, gs.uiAtkX, gs.uiAtkY, gs.uiBtnRadius, "ATK", if (gs.isAttackPressed || gs.isAutoFireLocked) GameColors.TEXT else GameColors.RED, gs.isAutoFireLocked)
+        drawActionButton(c, gs.hudLayout.atkX, gs.hudLayout.atkY, gs.hudLayout.btnRadius, "ATK", if (gs.controls.isAttackPressed || gs.controls.isAutoFireLocked) GameColors.TEXT else GameColors.RED, gs.controls.isAutoFireLocked)
 
         val ovrColor = if (gs.overclockMeter >= 100f) GameColors.OVERCLOCK else GameColors.TEXT
-        drawActionButton(c, gs.uiOvrX, gs.uiOvrY, gs.uiBtnRadius, "OVR", if (gs.isOverclockPressed) GameColors.CLARITY else ovrColor, false)
+        drawActionButton(c, gs.hudLayout.ovrX, gs.hudLayout.ovrY, gs.hudLayout.btnRadius, "OVR", if (gs.controls.isOverclockPressed) GameColors.CLARITY else ovrColor, false)
 
         val trapColor = if (gs.trapCooldownTimer <= 0f) GameColors.YELLOW else 0xFF555555.toInt()
-        drawActionButton(c, gs.uiTrapX, gs.uiTrapY, gs.uiBtnRadius, "TRAP", if (gs.isTrapPressed) GameColors.CLARITY else trapColor, false)
+        drawActionButton(c, gs.hudLayout.trapX, gs.hudLayout.trapY, gs.hudLayout.btnRadius, "TRAP", if (gs.controls.isTrapPressed) GameColors.CLARITY else trapColor, false)
 
         // SONAR is only visible when the environment is actually dark
         val isDarknessActive = gs.isDarknessLevel || StoryProtocol.isBlackoutActive
 
         if (isDarknessActive) {
             val pulseColor = if (gs.cooldownTimer <= 0f) GameColors.PULSE else 0xFF555555.toInt()
-            drawActionButton(c, gs.uiPulseX, gs.uiPulseY, gs.uiBtnRadius, "SONAR", if (gs.isSonarPressed || gs.isAutoSonarLocked) GameColors.CLARITY else pulseColor, gs.isAutoSonarLocked)
+            drawActionButton(c, gs.hudLayout.pulseX, gs.hudLayout.pulseY, gs.hudLayout.btnRadius, "SONAR", if (gs.controls.isSonarPressed || gs.controls.isAutoSonarLocked) GameColors.CLARITY else pulseColor, gs.controls.isAutoSonarLocked)
         }
 
 
@@ -228,10 +228,10 @@ class HUDRenderer(private val context: Context) {
 
         // Pause Button
         p.style = Paint.Style.STROKE; p.color = GameColors.YELLOW; p.strokeWidth = scale * 0.005f
-        c.drawCircle(gs.uiPauseX, gs.uiPauseY, gs.uiBtnRadius * 0.8f, p)
+        c.drawCircle(gs.hudLayout.pauseX, gs.hudLayout.pauseY, gs.hudLayout.btnRadius * 0.8f, p)
         p.style = Paint.Style.FILL
-        c.drawRect(gs.uiPauseX - scale * 0.015f, gs.uiPauseY - scale * 0.02f, gs.uiPauseX - scale * 0.005f, gs.uiPauseY + scale * 0.02f, p)
-        c.drawRect(gs.uiPauseX + scale * 0.005f, gs.uiPauseY - scale * 0.02f, gs.uiPauseX + scale * 0.015f, gs.uiPauseY + scale * 0.02f, p)
+        c.drawRect(gs.hudLayout.pauseX - scale * 0.015f, gs.hudLayout.pauseY - scale * 0.02f, gs.hudLayout.pauseX - scale * 0.005f, gs.hudLayout.pauseY + scale * 0.02f, p)
+        c.drawRect(gs.hudLayout.pauseX + scale * 0.005f, gs.hudLayout.pauseY - scale * 0.02f, gs.hudLayout.pauseX + scale * 0.015f, gs.hudLayout.pauseY + scale * 0.02f, p)
     }
 
     private fun drawActionButton(c: Canvas, x: Float, y: Float, radius: Float, label: String, color: Int, isAutoLocked: Boolean) {

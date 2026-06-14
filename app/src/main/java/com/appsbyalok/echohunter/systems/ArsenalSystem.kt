@@ -22,8 +22,8 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
         }
 
         // Logic check for firing/sonar
-        if ((gs.isAttackPressed || gs.isAutoFireLocked) && gs.attackCooldown <= 0f) fireWeapon(scale)
-        if ((gs.isSonarPressed || gs.isAutoSonarLocked) && gs.cooldownTimer <= 0f) deploySonar()
+        if ((gs.controls.isAttackPressed || gs.controls.isAutoFireLocked) && gs.attackCooldown <= 0f) fireWeapon(scale)
+        if ((gs.controls.isSonarPressed || gs.controls.isAutoSonarLocked) && gs.cooldownTimer <= 0f) deploySonar()
 
 //        gs.isSonarPressed = false
     }
@@ -38,7 +38,7 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
         EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 50)
 
         // DYNAMIC WEAPON FIRE
-        when (gs.currentWeapon) {
+        when (gs.controls.currentWeapon) {
             0 -> fireSingle(dirX, dirY, scale, 0) // Normal
             1 -> { // Shotgun (Spread)
                 fireSingle(dirX, dirY, scale, 1)
@@ -49,7 +49,7 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
             2 -> fireSingle(dirX, dirY, scale * 2.5f, 2) // Sniper (Fast)
         }
 
-        gs.isAttackPressed = false
+        gs.controls.isAttackPressed = false
         gs.localAttackAlert = true
     }
 
@@ -88,7 +88,7 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
         EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
 
         // DYNAMIC TRAP DEPLOYMENT
-        when (gs.currentTrap) {
+        when (gs.controls.currentTrap) {
             0 -> { // Camouflage (Invisibility)
                 gs.isCamouflaged = true
                 gs.camoTimer = 4f
@@ -105,6 +105,6 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
                 gs.empMineY = gs.py
             }
         }
-        gs.isTrapPressed = false
+        gs.controls.isTrapPressed = false
     }
 }

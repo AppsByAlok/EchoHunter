@@ -63,8 +63,8 @@ class GameEngine(
             if (gs.isAutoPilotActive) playerAI.update(simDt, scale)
             arsenalSys.update(simDt, scale)
 
-            if (gs.isTrapPressed && gs.trapCooldownTimer <= 0f) arsenalSys.deployTrap()
-            if (gs.isOverclockPressed && gs.overclockMeter >= 100f && !gs.isOverclocked) activateOverclock(scale)
+            if (gs.controls.isTrapPressed && gs.trapCooldownTimer <= 0f) arsenalSys.deployTrap()
+            if (gs.controls.isOverclockPressed && gs.overclockMeter >= 100f && !gs.isOverclocked) activateOverclock(scale)
 
             for (i in 0 until gs.maxSpikes) {
                 if (gs.spikeActive[i]) {
@@ -278,6 +278,6 @@ class GameEngine(
         gs.shakeAmount = scale * 0.08f
         gs.sectorFlash = 0.5f
         gs.showOverclockTextTimer = 2.0f
-        gs.isOverclockPressed = false
+        gs.controls.isOverclockPressed = false
     }
 }

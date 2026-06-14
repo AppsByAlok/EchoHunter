@@ -29,19 +29,19 @@ class TouchController(private val gs: GameState) {
         val vx = e.getX(pointerIndex) - offsetX
         val vy = e.getY(pointerIndex) - offsetY
 
-        gs.lastTouchX = vx
-        gs.lastTouchY = vy
+        gs.touch.lastTouchX = vx
+        gs.touch.lastTouchY = vy
 
         val joyMaxRadius = scale * 0.15f
 
         // --- 100% PERFECT HITBOX MATCH ---
         // Reads directly from what GameView calculated for the screen!
-        val btnRadius = gs.uiBtnRadius
-        val atkX = gs.uiAtkX; val atkY = gs.uiAtkY
-        val ovrX = gs.uiOvrX; val ovrY = gs.uiOvrY
-        val trapX = gs.uiTrapX; val trapY = gs.uiTrapY
-        val pulseX = gs.uiPulseX; val pulseY = gs.uiPulseY
-        val pauseX = gs.uiPauseX; val pauseY = gs.uiPauseY
+        val btnRadius = gs.hudLayout.btnRadius
+        val atkX = gs.hudLayout.atkX; val atkY = gs.hudLayout.atkY
+        val ovrX = gs.hudLayout.ovrX; val ovrY = gs.hudLayout.ovrY
+        val trapX = gs.hudLayout.trapX; val trapY = gs.hudLayout.trapY
+        val pulseX = gs.hudLayout.pulseX; val pulseY = gs.hudLayout.pulseY
+        val pauseX = gs.hudLayout.pauseX; val pauseY = gs.hudLayout.pauseY
 
         when (action) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
@@ -55,13 +55,13 @@ class TouchController(private val gs: GameState) {
                 if (vx < targetW / 2f) {
                     if (joyPointerId == -1) {
                         joyPointerId = pointerId
-                        gs.isJoyActive = true
-                        gs.joyBaseX = vx
-                        gs.joyBaseY = vy
-                        gs.joyKnobX = vx
-                        gs.joyKnobY = vy
-                        gs.joyDirX = 0f
-                        gs.joyDirY = 0f
+                        gs.controls.isMoveJoyActive = true
+                        gs.touch.joyBaseX = vx
+                        gs.touch.joyBaseY = vy
+                        gs.touch.joyKnobX = vx
+                        gs.touch.joyKnobY = vy
+                        gs.controls.moveDirX = 0f
+                        gs.controls.moveDirY = 0f
                     }
                 } else {
                     // Check Pause Button First (Top Right)
@@ -77,14 +77,14 @@ class TouchController(private val gs: GameState) {
                     }
                     // Check TRAP Button
                     else if (isInsideCircle(vx, vy, trapX, trapY, btnRadius * 1.2f)) {
-                        gs.isTrapPressed = true
-                        gs.isAttackPressed = false
-                        gs.isOverclockPressed = false
+                        gs.controls.isTrapPressed = true
+                        gs.controls.isAttackPressed = false
+                        gs.controls.isOverclockPressed = false
                     }
                     // Check OVERCLOCK Button
-                    else if (isInsideCircle(vx, vy, gs.uiOvrX, gs.uiOvrY, btnRadius * 1.2f)) {
+                    else if (isInsideCircle(vx, vy, ovrX, ovrY, btnRadius * 1.2f)) {
                         if (gs.overclockMeter >= 100f && !gs.isOverclocked) {
-                            gs.isOverclockPressed = true // Trigger trigger trigger!
+                            gs.controls.isOverclockPressed = true // Trigger trigger trigger!
                             EchoAudioManager.playSound(android.media.ToneGenerator.TONE_SUP_CONFIRM, 150)
                         } else {
                             EchoAudioManager.playSound(android.media.ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 50)
@@ -92,9 +92,9 @@ class TouchController(private val gs: GameState) {
                     }
                     // Check ATTACK Button (Fallback for bottom right area)
                     else if (isInsideCircle(vx, vy, atkX, atkY, btnRadius * 1.2f)) {
-                        gs.isAttackPressed = true
-                        gs.isOverclockPressed = false
-                        gs.isTrapPressed = false
+                        gs.controls.isAttackPressed = true
+                        gs.controls.isOverclockPressed = false
+                        gs.controls.isTrapPressed = false
                     }
                 }
             }
@@ -106,36 +106,36 @@ class TouchController(private val gs: GameState) {
                     val id = e.getPointerId(i)
 
                     if (id == joyPointerId) {
-                        val dx = mx - gs.joyBaseX
-                        val dy = my - gs.joyBaseY
+                        val dx = mx - gs.touch.joyBaseX
+                        val dy = my - gs.touch.joyBaseY
                         val dist = sqrt(dx * dx + dy * dy)
 
                         if (dist > joyMaxRadius) {
                             val ratio = joyMaxRadius / dist
-                            gs.joyKnobX = gs.joyBaseX + dx * ratio
-                            gs.joyKnobY = gs.joyBaseY + dy * ratio
-                            gs.joyDirX = dx / dist
-                            gs.joyDirY = dy / dist
+                            gs.touch.joyKnobX = gs.touch.joyBaseX + dx * ratio
+                            gs.touch.joyKnobY = gs.touch.joyBaseY + dy * ratio
+                            gs.controls.moveDirX = dx / dist
+                            gs.controls.moveDirY = dy / dist
                         } else {
-                            gs.joyKnobX = mx
-                            gs.joyKnobY = my
-                            gs.joyDirX = if (dist > 0) dx / joyMaxRadius else 0f
-                            gs.joyDirY = if (dist > 0) dy / joyMaxRadius else 0f
+                            gs.touch.joyKnobX = mx
+                            gs.touch.joyKnobY = my
+                            gs.controls.moveDirX = if (dist > 0) dx / joyMaxRadius else 0f
+                            gs.controls.moveDirY = if (dist > 0) dy / joyMaxRadius else 0f
                         }
                     } else if (mx > targetW / 2f && my > targetH / 2f) {
                         // DYNAMIC COMBAT SLIDING
                         if (isInsideCircle(mx, my, trapX, trapY, btnRadius * 1.2f)) {
-                            gs.isTrapPressed = true
-                            gs.isAttackPressed = false
-                            gs.isOverclockPressed = false
+                            gs.controls.isTrapPressed = true
+                            gs.controls.isAttackPressed = false
+                            gs.controls.isOverclockPressed = false
                         } else if (isInsideCircle(mx, my, ovrX, ovrY, btnRadius * 1.2f)) {
-                            gs.isOverclockPressed = true
-                            gs.isAttackPressed = false
-                            gs.isTrapPressed = false
+                            gs.controls.isOverclockPressed = true
+                            gs.controls.isAttackPressed = false
+                            gs.controls.isTrapPressed = false
                         } else if (isInsideCircle(mx, my, atkX, atkY, btnRadius * 1.2f)) {
-                            gs.isAttackPressed = true
-                            gs.isOverclockPressed = false
-                            gs.isTrapPressed = false
+                            gs.controls.isAttackPressed = true
+                            gs.controls.isOverclockPressed = false
+                            gs.controls.isTrapPressed = false
                         }
                     }
                 }
@@ -145,9 +145,9 @@ class TouchController(private val gs: GameState) {
                 // 1. Joystick pointer check
                 if (pointerId == joyPointerId) {
                     joyPointerId = -1
-                    gs.isJoyActive = false
-                    gs.joyDirX = 0f
-                    gs.joyDirY = 0f
+                    gs.controls.isMoveJoyActive = false
+                    gs.controls.moveDirX = 0f
+                    gs.controls.moveDirY = 0f
                 }
 
                 // --- FIX: STICKING BUTTONS REMOVAL ---
@@ -156,9 +156,9 @@ class TouchController(private val gs: GameState) {
                 // toh bina kisi condition ke attack aur trap states ko clear (false) karo!
                 val upX = e.getX(pointerIndex) - offsetX
                 if (upX > targetW / 2f || action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
-                    gs.isAttackPressed = false
-                    gs.isOverclockPressed = false
-                    gs.isTrapPressed = false
+                    gs.controls.isAttackPressed = false
+                    gs.controls.isOverclockPressed = false
+                    gs.controls.isTrapPressed = false
                 }
 
                 if (e.pointerCount <= 1 || action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {

@@ -7,6 +7,9 @@ import com.appsbyalok.echohunter.data.LevelEngine
 import com.appsbyalok.echohunter.data.LevelFeature
 import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.data.UpgradeSystem
+import com.appsbyalok.echohunter.input.ControlsState
+import com.appsbyalok.echohunter.input.HUDLayout
+import com.appsbyalok.echohunter.input.TouchState
 import com.appsbyalok.echohunter.modes.CampaignMode
 import com.appsbyalok.echohunter.modes.GameModeStrategy
 import com.appsbyalok.echohunter.modes.IGameObjective
@@ -39,6 +42,9 @@ class GameState {
     var isRotationWarning = false // Flag to show rotation-related UI warnings
     var selectedStoryAct = 0 // Index of the currently selected story chapter
 
+    val hudLayout = HUDLayout()
+    val controls = ControlsState()
+    val touch = TouchState()
 
     // --- GLOBAL SNACK BAR / TOAST SYSTEM ---
     var globalMessage = "" // Current message text to display in the global snackbar
@@ -50,35 +56,14 @@ class GameState {
         globalMessageTimer = duration
     }
 
-    // --- NAYA: CENTRALIZED UI COORDINATES (100% RESPONSIVE MATCH) ---
-    var uiBtnRadius = 0f // Hitbox radius for on-screen control buttons
-    var uiAtkX = 0f // Screen X coordinate for the Attack button
-    var uiAtkY = 0f // Screen Y coordinate for the Attack button
-    var uiOvrX = 0f // Screen X coordinate for the Overclock button
-    var uiOvrY = 0f // Screen Y coordinate for the Overclock button
-    var uiTrapX = 0f // Screen X coordinate for the Trap button
-    var uiTrapY = 0f // Screen Y coordinate for the Trap button
-    var uiPulseX = 0f // Screen X coordinate for the Pulse/Sonar button
-    var uiPulseY = 0f // Screen Y coordinate for the Pulse/Sonar button
-    var uiPauseX = 0f // Screen X coordinate for the Pause button
-    var uiPauseY = 0f // Screen Y coordinate for the Pause button
-
     // --- AUTOPILOT & DOUBLE TAP ---
     var isAutoPilotActive = false // Whether the AI is currently controlling player movement
     var autoPilotTimer = 0f // Duration or cooldown tracking for autopilot mode
-    var isAutoFireLocked = false // If the weapon is set to fire automatically
-    var isAutoSonarLocked = false // If sonar pulses are triggered automatically
-    var isSonarPressed = false // Current input state of the sonar button
-
 
     // NAYA: MOD MENU FLAGS
     var modGodMode = false // Cheat flag for player invincibility
     var modInfiniteOvr = false // Cheat flag for unlimited overclock meter
     var modFullVisibility = false // Cheat flag to remove visibility restrictions (fog of war)
-
-    // --- VISUAL DEBUGGER VARIABLES ---
-    var lastTouchX = -100f // Last recorded raw touch X coordinate for debugging
-    var lastTouchY = -100f // Last recorded raw touch Y coordinate for debugging
 
     var gridMap: Array<IntArray>? = null // 2D layout representing walls and walkable areas
     var tileSize = 100f // Size of each grid cell in world units
@@ -88,13 +73,6 @@ class GameState {
     var px = 0f // Player's current world X position
     var py = 0f // Player's current world Y position
 
-    var joyBaseX = 0f // Static X position of the joystick base
-    var joyBaseY = 0f // Static Y position of the joystick base
-    var joyKnobX = 0f // Current X position of the interactive joystick knob
-    var joyKnobY = 0f // Current Y position of the interactive joystick knob
-    var joyDirX = 0f // Normalized X direction vector from the joystick
-    var joyDirY = 0f // Normalized Y direction vector from the joystick
-    var isJoyActive = false // Whether the user is currently interacting with the joystick
     var lastFacingX = 1f // The horizontal direction the player last moved towards
     var lastFacingY = 0f // The vertical direction the player last moved towards
 
@@ -107,8 +85,8 @@ class GameState {
     val spikeActive = BooleanArray(maxSpikes) // Active status of projectile slots
     val spikeType = IntArray(maxSpikes) // Type identifier for different projectile effects
 
-    var currentWeapon = 1 // Index of equipped weapon (0: Blaster, 1: Shotgun, 2: Sniper)
-    var currentTrap = 2   // Index of selected trap (0: Camouflage, 1: Decoy, 2: EMP Mine)
+    var elimTargetsKilled = 0
+    var elimTargetsRequired = 0
 
     var coreHp = 10 // Current health of the core being defended
     var coreMaxHp = 10 // Maximum possible health of the core
@@ -121,15 +99,8 @@ class GameState {
 
     var escapeGateActive = false // Whether the level exit portal is currently available
 
-    var elimTargetsKilled = 0
-    var elimTargetsRequired = 0
-
     // --- NAYA: GLOBAL SPAWNER NODES ---
     var spawnerNodes = mutableListOf<com.appsbyalok.echohunter.systems.SpawnNode>()
-
-    var isAttackPressed = false // Input state for the attack command
-    var isOverclockPressed = false // Input state for the overclock command
-    var isTrapPressed = false // Input state for the trap command
 
     var attackCooldown = 0f // Time remaining before the next attack can be performed
     var trapCooldownTimer = 0f // Time remaining before the next trap can be deployed
@@ -358,20 +329,23 @@ class GameState {
         bossVis = 1.0f
 
         // FIX: RESET JOYSTICK
-        isJoyActive = false
-        joyDirX = 0f
-        joyDirY = 0f
-        joyBaseX = 0f
-        joyBaseY = 0f
-        joyKnobX = 0f
-        joyKnobY = 0f
-        isAttackPressed = false
-        isOverclockPressed = false
-        isTrapPressed = false
-        isSonarPressed = false
+        controls.isMoveJoyActive = false
+        controls.moveDirX = 0f
+        controls.moveDirY = 0f
+        touch.joyBaseX = 0f
+        touch.joyBaseY = 0f
+        touch.joyKnobX = 0f
+        touch.joyKnobY = 0f
+        controls.isAttackPressed = false
+        controls.isOverclockPressed = false
+        controls.isTrapPressed = false
+        controls.isSonarPressed = false
 
-        isAutoFireLocked = false
-        isAutoSonarLocked = false
+        controls.isAutoFireLocked = false
+        controls.isAutoSonarLocked = false
+
+        controls.currentWeapon = 1
+        controls.currentTrap = 2
 
         defEnemiesToSpawn = 0
         defEnemiesAlive = 0
@@ -433,13 +407,13 @@ class GameState {
         val baseSpeed = scale * (if (isOverclocked) 1.2f else 0.8f)
         val pSpeed = baseSpeed * UpgradeSystem.getSpeedMultiplier()
 
-        if (joyDirX != 0f || joyDirY != 0f) {
-            lastFacingX = joyDirX
-            lastFacingY = joyDirY
+        if (controls.moveDirX != 0f || controls.moveDirY != 0f) {
+            lastFacingX = controls.moveDirX
+            lastFacingY = controls.moveDirY
         }
 
-        var vx = joyDirX * pSpeed * dt
-        var vy = joyDirY * pSpeed * dt
+        var vx = controls.moveDirX * pSpeed * dt
+        var vy = controls.moveDirY * pSpeed * dt
 
         if (StoryProtocol.areControlsInverted) {
             vx = -vx

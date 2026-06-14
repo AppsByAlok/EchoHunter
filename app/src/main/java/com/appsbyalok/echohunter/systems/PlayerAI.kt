@@ -24,7 +24,7 @@ class PlayerAI(private val gs: GameState, private val enemySys: EnemySystem) {
     fun update(dt: Float, scale: Float) {
         if (!gs.isAutoPilotActive) return
 
-        if (gs.isJoyActive) return
+        if (gs.controls.isMoveJoyActive) return
 
         if (gs.autoPilotTimer > 0f) {
             gs.autoPilotTimer -= dt
@@ -34,8 +34,8 @@ class PlayerAI(private val gs: GameState, private val enemySys: EnemySystem) {
             }
         }
 
-        gs.isAutoFireLocked = true
-        gs.isAutoSonarLocked = true
+        gs.controls.isAutoFireLocked = true
+        gs.controls.isAutoSonarLocked = true
 
         decisionTimer -= dt
         if (decisionTimer <= 0f) {
@@ -246,8 +246,8 @@ class PlayerAI(private val gs: GameState, private val enemySys: EnemySystem) {
                 if (length > 0) { dirX /= length; dirY /= length }
             }
 
-            gs.joyDirX = dirX
-            gs.joyDirY = dirY
+            gs.controls.moveDirX = dirX
+            gs.controls.moveDirY = dirY
 
             // Aiming behavior: Face the enemy while retreating, otherwise look where moving
             if (closestEnemyIdx != -1 && minEnemyDistSq < (ts * 6f) * (ts * 6f)) {
@@ -263,8 +263,8 @@ class PlayerAI(private val gs: GameState, private val enemySys: EnemySystem) {
                 gs.lastFacingY = dirY
             }
         } else {
-            gs.joyDirX = 0f
-            gs.joyDirY = 0f
+            gs.controls.moveDirX = 0f
+            gs.controls.moveDirY = 0f
         }
 
         lastPx = gs.px
@@ -315,8 +315,8 @@ class PlayerAI(private val gs: GameState, private val enemySys: EnemySystem) {
 
     fun deactivateAutopilot() {
         gs.isAutoPilotActive = false
-        gs.joyDirX = 0f; gs.joyDirY = 0f
-        gs.isAutoFireLocked = false
-        gs.isAutoSonarLocked = false
+        gs.controls.moveDirX = 0f; gs.controls.moveDirY = 0f
+        gs.controls.isAutoFireLocked = false
+        gs.controls.isAutoSonarLocked = false
     }
 }
