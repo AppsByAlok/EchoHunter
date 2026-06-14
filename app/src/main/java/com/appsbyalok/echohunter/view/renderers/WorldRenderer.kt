@@ -238,6 +238,15 @@ class WorldRenderer(
             val holoPulse = sin(gs.timeSinceStart * 20f) * scale * 0.005f
             c.drawCircle(screenDecoyX, screenDecoyY, scale * 0.02f + holoPulse, p)
             c.drawCircle(screenDecoyX, screenDecoyY, scale * 0.035f - holoPulse, p)
+
+            // Glitch effect for Decoy
+            if (Random.nextFloat() < 0.2f) {
+                p.color = GameColors.OVERCLOCK
+                p.strokeWidth = scale * 0.002f
+                val dx = (Random.nextFloat() - 0.5f) * scale * 0.05f
+                val dy = (Random.nextFloat() - 0.5f) * scale * 0.05f
+                c.drawCircle(screenDecoyX + dx, screenDecoyY + dy, scale * 0.025f, p)
+            }
         }
 
         pGlow.color = GameColors.PULSE
@@ -299,6 +308,16 @@ class WorldRenderer(
         if (shouldDrawPlayer) {
             val playerRadius = scale * 0.015f
             val alpha = if (gs.isCamouflaged) 0x33 else 0xFF
+
+            // Camouflage distortion effect
+            if (gs.isCamouflaged && Random.nextFloat() < 0.15f) {
+                p.style = Paint.Style.STROKE
+                p.color = 0x4400FFFF
+                p.strokeWidth = scale * 0.002f
+                val offX = (Random.nextFloat() - 0.5f) * scale * 0.04f
+                val offY = (Random.nextFloat() - 0.5f) * scale * 0.04f
+                c.drawCircle(screenPlayerX + offX, screenPlayerY + offY, playerRadius * 2.5f, p)
+            }
 
             p.style = Paint.Style.FILL
             p.color = (alpha shl 24) or (currentPlayerColor and 0xFFFFFF)
@@ -516,8 +535,14 @@ class WorldRenderer(
         var arrowColor = GameColors.HP
         var shouldDraw = false
 
+        // 0. BOSS TRACKING (Highest Priority)
+        if (gs.bossActive) {
+            targetX = gs.bossX; targetY = gs.bossY
+            arrowColor = GameColors.BOSS
+            shouldDraw = true
+        }
         // 1. STORY MODE / BOSS MERGE
-        if (gs.state == 8) {
+        else if (gs.state == 8) {
             targetX = gs.coreX; targetY = gs.coreY
             arrowColor = GameColors.YELLOW
             shouldDraw = true

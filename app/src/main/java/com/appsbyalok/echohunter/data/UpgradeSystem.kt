@@ -12,7 +12,8 @@ enum class UpgradeType {
     SPIKE_PAYLOAD,      // MALWARE_SPIKE.SH (Attack Fire Rate Multiplier)
     OVERCLOCK_DUR,      // BRUTE_FORCE.BIN (Overclock +0.5s)
     DATA_MAGNET,        // PACKET_SNIFFER.EXE (Magnet Radius)
-    COMPRESSION_ALGO    // CRYPTO_SIPHON.BAT (Data Bonus +10%)
+    COMPRESSION_ALGO,   // CRYPTO_SIPHON.BAT (Data Bonus +10%)
+    STEALTH_CAMO        // STEALTH_DRIVER.SYS (Camo detection radius reduction)
 }
 
 data class UpgradeConfig(
@@ -36,7 +37,8 @@ object UpgradeSystem {
         UpgradeType.SPIKE_PAYLOAD to UpgradeConfig(UpgradeType.SPIKE_PAYLOAD, "MALWARE_SPIKE.SH", "Increases Attack fire rate by 10%.", 6, 250L, 1.6f),
         UpgradeType.OVERCLOCK_DUR to UpgradeConfig(UpgradeType.OVERCLOCK_DUR, "BRUTE_FORCE.BIN", "Extends Overclock duration by 0.5s.", 10, 300L, 1.5f),
         UpgradeType.DATA_MAGNET to UpgradeConfig(UpgradeType.DATA_MAGNET, "PACKET_SNIFFER.EXE", "Increases Data drop magnetic radius.", 5, 200L, 1.8f),
-        UpgradeType.COMPRESSION_ALGO to UpgradeConfig(UpgradeType.COMPRESSION_ALGO, "CRYPTO_SIPHON.BAT", "Grants +10% bonus to all Data extracted.", 10, 400L, 1.7f)
+        UpgradeType.COMPRESSION_ALGO to UpgradeConfig(UpgradeType.COMPRESSION_ALGO, "CRYPTO_SIPHON.BAT", "Grants +10% bonus to all Data extracted.", 10, 400L, 1.7f),
+        UpgradeType.STEALTH_CAMO to UpgradeConfig(UpgradeType.STEALTH_CAMO, "STEALTH_DRIVER.SYS", "Reduces enemy detection range by 5% per level.", 10, 350L, 1.6f)
     )
 
     fun init(context: Context) {
@@ -94,6 +96,8 @@ object UpgradeSystem {
     fun getDataMagnetRadiusMultiplier(): Float = 1.0f + (getLevel(UpgradeType.DATA_MAGNET) * 0.5f)
 
     fun getRewardBonusPercent(): Float = getLevel(UpgradeType.COMPRESSION_ALGO) * 0.10f
+
+    fun getStealthDetectionMultiplier(): Float = 1.0f - (getLevel(UpgradeType.STEALTH_CAMO) * 0.05f)
 
     fun clearAllData() {
         // 1. Map values reset to 0

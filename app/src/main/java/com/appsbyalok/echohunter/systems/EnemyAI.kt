@@ -165,7 +165,13 @@ class EnemyAI {
     }
 
     fun hasLineOfSight(x0: Float, y0: Float, x1: Float, y1: Float, gs: GameState): Boolean {
-        if (gs.isCamouflaged) return false
+        if (gs.isCamouflaged && !gs.isDecoyActive) {
+            val dx = x1 - x0
+            val dy = y1 - y0
+            val distSq = dx * dx + dy * dy
+            val detectionRange = (gs.tileSize * 3f) * com.appsbyalok.echohunter.data.UpgradeSystem.getStealthDetectionMultiplier()
+            if (distSq > detectionRange * detectionRange) return false
+        }
         val grid = gs.gridMap ?: return true
         val ts = gs.tileSize
         val steps = 15

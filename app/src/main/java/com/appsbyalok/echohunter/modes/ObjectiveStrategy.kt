@@ -112,7 +112,7 @@ class DefenseObjective : IGameObjective {
     }
 
     override fun checkWinCondition(gs: GameState): Boolean {
-        return gs.defWaveCurrent > gs.defWaveMax && gs.coreHp > 0
+        return gs.defWaveCurrent > gs.defWaveMax && gs.coreHp > 0 && !gs.bossActive
     }
 
     override fun isBossTriggerReady(gs: GameState): Boolean {

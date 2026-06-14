@@ -215,13 +215,18 @@ class EnemySystem {
         val bDistSq = bdx * bdx + bdy * bdy
         val bDist = sqrt(bDistSq)
 
-        val bSpeed = scale * (if (gs.bossType == 3 || gs.bossType == 4) 0.6f else 0.3f) * (if (gs.difficulty == 0) 0.7f else 1.0f) * (if (gs.isBossRage) 2.0f else 1.0f)
+        val bSpeed = scale * (if (gs.bossType == 3 || gs.bossType == 4) 0.8f else 0.45f) * (if (gs.difficulty == 0) 0.7f else 1.0f) * (if (gs.isBossRage) 2.0f else 1.0f)
 
         if (bDist > 0f) {
             val (vx, vy) = if (gs.gridMap != null) {
+                // steerByPlayerHeatMap internally uses decoy coordinates if gs.isDecoyActive is true
                 ai.steerByPlayerHeatMap(gs.bossX, gs.bossY, 0f, 0f, bSpeed * 5f, gs)
             } else {
-                Pair((bdx / bDist) * bSpeed, (bdy / bDist) * bSpeed)
+                val tx = if (gs.isDecoyActive) gs.decoyX else gs.px
+                val ty = if (gs.isDecoyActive) gs.decoyY else gs.py
+                val tdx = tx - gs.bossX; val tdy = ty - gs.bossY
+                val tDist = sqrt(tdx * tdx + tdy * tdy)
+                if (tDist > 0f) Pair((tdx / tDist) * bSpeed, (tdy / tDist) * bSpeed) else Pair(0f, 0f)
             }
 
             val (finalVx, finalVy) = behavior.applyMovementPattern(vx, vy, dt, gs, scale)
