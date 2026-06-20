@@ -64,6 +64,7 @@ class GameState {
     var modGodMode = false // Cheat flag for player invincibility
     var modInfiniteOvr = false // Cheat flag for unlimited overclock meter
     var modFullVisibility = false // Cheat flag to remove visibility restrictions (fog of war)
+    var modInfinityTraps = false // Cheat flag for unlimited traps
 
     var gridMap: Array<IntArray>? = null // 2D layout representing walls and walkable areas
     var tileSize = 100f // Size of each grid cell in world units
@@ -104,6 +105,7 @@ class GameState {
 
     var attackCooldown = 0f // Time remaining before the next attack can be performed
     var trapCooldownTimer = 0f // Time remaining before the next trap can be deployed
+    var sonarTimer = 0f // Time remaining before next Sonar Ping
 
     var globalSonarAlert = false // Flag for high-priority sonar-detected threats
     var localAttackAlert = false // Flag for immediate proximity threats
@@ -187,6 +189,7 @@ class GameState {
     var empFlashTimer = 0f // Timer for the visual flash triggered by EMPs
     var timeScale = 1.0f // Global speed multiplier for game logic (e.g., 0.5f for half-speed)
     var slowMoTimer = 0f // Remaining duration for slow-motion effects
+    var lastDt = 0.016f // Delta time of the last frame
 
     var hitStopTimer = 0f // Duration to freeze the game momentarily for impact feedback
 
@@ -195,6 +198,10 @@ class GameState {
     var coreY = 0f // Target Y position for the end-level core sequence
     var coreRadius = 0f // Visual radius of the end-level core
     var mergeTimer = 0f // Timer for the level-completion "merging" cinematic
+
+    // Bomb Mode
+    var bombTargetX = -9999f
+    var bombTargetY = -9999f
     var whiteFlash = 0f // Intensity of the screen-clearing white flash effect
 
     var chromaticIntensity = 0f // Intensity of the chromatic aberration post-processing effect
@@ -221,6 +228,12 @@ class GameState {
     var bossIframe = 0f // Boss's temporary invulnerability period
     var bossType = 0 // Identifier for the type of boss encountered
     var bossVis = 1.0f // Visual alpha/visibility factor for the boss
+    var bossLockTimer = 0f // Timer to force auto-aim on boss when it first appears
+
+    // --- OBJECTIVE UI HELPER ---
+    var objectiveTimer = 0f
+    var objectiveProgress = 0f // 0.0 to 1.0
+    var objectiveLabel = ""
 
     var innerRSq = 0f // Squared inner radius for optimized shader visibility calculations
     var outerRSq = 0f // Squared outer radius for optimized shader visibility calculations
@@ -300,6 +313,7 @@ class GameState {
 
         attackCooldown = 0f
         trapCooldownTimer = 0f
+        sonarTimer = 0f
         isCamouflaged = false
         isDecoyActive = false
         empMineActive = false
@@ -310,6 +324,16 @@ class GameState {
         StoryProtocol.isGlitchActive = false
         StoryProtocol.areControlsInverted = false
         isRotationWarning = false
+
+        val config = LevelEngine.getLevelConfig(currentLevel)
+        activeObjective = when {
+            gameMode == 1 -> com.appsbyalok.echohunter.modes.StoryObjective()
+            config.features.contains(LevelFeature.DEFENSE) -> com.appsbyalok.echohunter.modes.DefenseObjective()
+            config.features.contains(LevelFeature.ESCAPE) -> com.appsbyalok.echohunter.modes.EscapeObjective()
+            config.features.contains(LevelFeature.ELIMINATION) -> com.appsbyalok.echohunter.modes.EliminationObjective()
+            config.features.contains(LevelFeature.BOMB) -> com.appsbyalok.echohunter.modes.BombObjective()
+            else -> StandardObjective()
+        }
 
         coreHp = 10
         coreMaxHp = 10
@@ -325,6 +349,11 @@ class GameState {
         shockwaveActive = false
         bossDeathTimer = 0f
         bossVis = 1.0f
+
+        objectiveTimer = 0f
+        objectiveProgress = 0f
+        bombTargetX = -9999f
+        bombTargetY = -9999f
 
         // RESET INPUT STATE
         controls.isMoveJoyActive = false
@@ -373,6 +402,7 @@ class GameState {
         if (slowMoTimer > 0f) slowMoTimer -= dt
         if (bossDeathTimer > 0f) bossDeathTimer -= dt
         if (attackCooldown > 0f) attackCooldown -= dt
+        if (sonarTimer > 0f) sonarTimer -= dt
 
         val target = targetClarity
         val visionUpdateRate = if (difficulty == 1) 0.04f else 0.8f

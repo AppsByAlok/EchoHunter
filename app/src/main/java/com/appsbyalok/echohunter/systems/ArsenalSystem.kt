@@ -5,6 +5,7 @@ import com.appsbyalok.echohunter.data.UpgradeSystem
 import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.utils.EchoAudioManager
 import kotlin.math.max
+import kotlin.math.sqrt
 
 // ArsenalSystem: Modular class handling all Weapons and Traps
 class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSystem) {
@@ -27,17 +28,27 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
             fireWeapon(scale)
         }
         
-        if ((gs.controls.isSonarPressed || gs.controls.isAutoSonarLocked) && gs.cooldownTimer <= 0f) deploySonar()
+        if (gs.controls.isSonarPressed && gs.sonarTimer <= 0f) {
+            deploySonar()
+            gs.controls.isSonarPressed = false
+        }
     }
 
     fun fireWeapon(scale: Float) {
+        var dx = gs.controls.aimDirX
+        var dy = gs.controls.aimDirY
+
+        if (dx == 0f && dy == 0f) {
+            dx = 1f
+            dy = 0f
+        } else {
+            val magnitude = sqrt((dx * dx + dy * dy).toDouble()).toFloat()
+            dx /= magnitude
+            dy /= magnitude
+        }
+
         val baseCooldown = 0.25f
         gs.attackCooldown = baseCooldown * UpgradeSystem.getSpikeCooldownMultiplier()
-
-        // Use the aim direction calculated by InputSystem
-        val dirX = if (gs.controls.aimDirX == 0f && gs.controls.aimDirY == 0f) 1f else gs.controls.aimDirX
-        val dirY = gs.controls.aimDirY
-
         EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 50)
 
         // Reset attack request immediately so we don't double fire in the same frame
@@ -45,16 +56,18 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
 
         // DYNAMIC WEAPON FIRE
         when (gs.controls.currentWeapon) {
-            0 -> fireSingle(dirX, dirY, scale, 0) // Normal
-            1 -> { // Shotgun (Spread)
-                fireSingle(dirX, dirY, scale, 1)
-                fireSingle(dirX + dirY * 0.2f, dirY + dirX * 0.2f, scale, 1)
-                fireSingle(dirX - dirY * 0.2f, dirY - dirX * 0.2f, scale, 1)
-                gs.attackCooldown *= 1.5f // Shotgun takes longer to reload
+            0 -> fireSingle(dx, dy, scale, 0)
+            1 -> { // SHOTGUN
+                fireSingle(dx, dy, scale, 1)
+                fireSingle(dx - dy * 0.3f, dy + dx * 0.3f, scale, 1)
+                fireSingle(dx + dy * 0.3f, dy - dx * 0.3f, scale, 1)
+                gs.attackCooldown *= 1.8f
             }
-            2 -> fireSingle(dirX, dirY, scale * 2.5f, 2) // Sniper (Fast)
+            2 -> { // SNIPER
+                fireSingle(dx, dy, scale * 2.5f, 2)
+                gs.attackCooldown *= 3.0f
+            }
         }
-
         gs.localAttackAlert = true
     }
 
@@ -68,10 +81,9 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
                 gs.spikeType[i] = type
 
                 val speed = scale * 2.0f
-                gs.spikeVx[i] = dx * speed
-                gs.spikeVy[i] = dy * speed
-
-                effectSys.spawnParticles(gs.px, gs.py, 1, scale)
+                // Add player velocity to projectile for more natural physics
+                gs.spikeVx[i] = dx * speed + (gs.controls.moveDirX * 0.5f * scale)
+                gs.spikeVy[i] = dy * speed + (gs.controls.moveDirY * 0.5f * scale)
                 break
             }
         }
@@ -80,7 +92,7 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
     private fun deploySonar() {
         gs.pulse = true
         gs.pulseR = 0f
-        gs.cooldownTimer = 0.25f * UpgradeSystem.getPulseCooldownMultiplier()
+        gs.sonarTimer = 0.25f * UpgradeSystem.getPulseCooldownMultiplier()
         if (gs.isDarknessLevel) {
             gs.visionClarity = max(0.0f, gs.visionClarity - 0.25f)
         }
@@ -89,7 +101,11 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
     }
 
     fun deployTrap() {
-        gs.trapCooldownTimer = 8f // Traps have a long cooldown
+        if (gs.modInfinityTraps) {
+            gs.trapCooldownTimer = 0f
+        } else {
+            gs.trapCooldownTimer = 8f // Traps have a long cooldown
+        }
         EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
 
         // DYNAMIC TRAP DEPLOYMENT

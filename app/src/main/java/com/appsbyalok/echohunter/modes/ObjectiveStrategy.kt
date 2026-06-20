@@ -7,11 +7,12 @@ import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.systems.EnemySystem
 import com.appsbyalok.echohunter.systems.SpawnerSystem
 import com.appsbyalok.echohunter.utils.EchoAudioManager
+import kotlin.math.sqrt
 
 // Blueprint for all level objectives
 interface IGameObjective {
     fun setupObjective(gs: GameState, targetW: Float, targetH: Float, scale: Float)
-    fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float)
+    fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float)
     fun checkWinCondition(gs: GameState): Boolean
     fun isBossTriggerReady(gs: GameState): Boolean
 }
@@ -25,23 +26,24 @@ class StandardObjective : IGameObjective {
         gs.coreY = -9999f
         gs.coreRadius = 0f
     }
-    override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float) {
+    override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
+        val config = LevelEngine.getLevelConfig(gs.currentLevel)
+        gs.objectiveLabel = "SYSTEM PENETRATION"
+        gs.objectiveProgress = (gs.score.toFloat() / config.targetScore).coerceIn(0f, 1f)
+
         trickleTimer -= dt
         if (trickleTimer <= 0f) {
             var activeCount = 0
             for (i in 0 until enemySys.n) if (enemySys.ex[i] > -1000f) activeCount++
             
-            // Limit badhti jayegi jaise-jaise level badhega (Max 40 tak)
             val baseLimit = if (gs.difficulty == 1) 18f else 14f
             val limit = LevelEngine.getSaturatedValue(gs.currentLevel, baseLimit, 40f - baseLimit, 100f).toInt()
             val queued = spawnerSys.getTotalQueue(gs)
             
-            // --- NAYA: BULK QUEUE LOGIC ---
             if (activeCount + queued < limit) {
-                val needed = limit - (activeCount + queued)
-                spawnerSys.queueSpawns(needed, gs) // Jitne kam hain, sabka order de do
+                spawnerSys.queueSpawns(limit - (activeCount + queued), gs)
             }
-            trickleTimer = 1f // Har 1 second me map ki bheed check karo
+            trickleTimer = 1f
         }
     }
     override fun checkWinCondition(gs: GameState): Boolean {
@@ -72,7 +74,7 @@ class DefenseObjective : IGameObjective {
         gs.coreHp = gs.coreMaxHp
     }
 
-    override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float) {
+    override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
         when (gs.defWaveState) {
             0, 2 -> { // Buffer or Cooldown Phase
                 gs.defWaveTimer -= dt
@@ -127,7 +129,7 @@ class EscapeObjective : IGameObjective {
     override fun setupObjective(gs: GameState, targetW: Float, targetH: Float, scale: Float) {
         gs.escapeGateActive = false
     }
-    override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float) {
+    override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
         val config = LevelEngine.getLevelConfig(gs.currentLevel)
         
         trickleTimer -= dt
@@ -179,7 +181,7 @@ class StoryObjective : IGameObjective {
         // Core is hidden until the final boss of Sector 5 is defeated
         gs.coreRadius = 0f 
     }
-    override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float) {
+    override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
         trickleTimer -= dt
         if (trickleTimer <= 0f) {
             var activeCount = 0
@@ -221,7 +223,7 @@ class EliminationObjective : IGameObjective {
         gs.elimTargetsRequired = LevelEngine.getSaturatedValue(gs.currentLevel, 5f, 10f, 100f).toInt()
     }
 
-    override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float) {
+    override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
         trickleTimer -= dt
         if (trickleTimer <= 0f) {
             var activeCount = 0
@@ -246,5 +248,127 @@ class EliminationObjective : IGameObjective {
 
     override fun isBossTriggerReady(gs: GameState): Boolean {
         return gs.elimTargetsKilled >= gs.elimTargetsRequired
+    }
+}
+
+// 6. BOMB OBJECTIVE (Plant and Defend)
+class BombObjective : IGameObjective {
+    private var trickleTimer = 1f
+    private var bombPlanted = false
+    private var plantTimer = 3f // 3 seconds to plant if near target
+    private var defuseTimer = 45f // 45 seconds to defend after planting
+    private var detonationTimer = 0f // Delay for VFX
+
+    override fun setupObjective(gs: GameState, targetW: Float, targetH: Float, scale: Float) {
+        gs.coreX = -9999f
+        gs.coreY = -9999f
+        gs.coreRadius = 0f
+        bombPlanted = false
+        plantTimer = 3f
+        detonationTimer = 0f
+        defuseTimer = 30f + (gs.currentLevel / 5f).coerceAtMost(30f) // Scaled timer
+
+        // Find a valid path node for the bomb
+        val grid = gs.gridMap
+        if (grid != null) {
+            val paths = mutableListOf<Pair<Int, Int>>()
+            for (x in 0 until grid.size) {
+                for (y in 0 until grid[0].size) {
+                    if (grid[x][y] == 0) paths.add(Pair(x, y))
+                    // 0 is PATH in MazeGenerator
+                }
+            }
+            // Pick a path far from player
+            val targetNode = paths.filter { 
+                val dx = it.first * gs.tileSize - gs.px
+                val dy = it.second * gs.tileSize - gs.py
+                (dx*dx + dy*dy) > (targetW * targetW * 0.5f)
+            }.randomOrNull() ?: paths.random()
+
+            gs.bombTargetX = targetNode.first * gs.tileSize + gs.tileSize/2f
+            gs.bombTargetY = targetNode.second * gs.tileSize + gs.tileSize/2f
+        } else {
+            gs.bombTargetX = gs.px + (if (Math.random() > 0.5) 1f else -1f) * targetW * 0.8f
+            gs.bombTargetY = gs.py + (if (Math.random() > 0.5) 1f else -1f) * targetH * 0.8f
+        }
+    }
+
+    override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
+        trickleTimer -= dt
+        if (trickleTimer <= 0f) {
+            var activeCount = 0
+            for (i in 0 until enemySys.n) if (enemySys.ex[i] > -1000f) activeCount++
+
+            val baseLimit = if (gs.difficulty == 1) 20f else 15f
+            val limit = LevelEngine.getSaturatedValue(gs.currentLevel, baseLimit, 45f - baseLimit, 100f).toInt()
+            val queued = spawnerSys.getTotalQueue(gs)
+
+            if (activeCount + queued < limit) {
+                spawnerSys.queueSpawns(limit - (activeCount + queued), gs)
+            }
+            trickleTimer = 1f
+        }
+
+        if (!bombPlanted) {
+            val dx = gs.px - gs.bombTargetX
+            val dy = gs.py - gs.bombTargetY
+            val dist = sqrt(dx * dx + dy * dy)
+
+            gs.objectiveLabel = "LOCATE PLANT SITE"
+            gs.objectiveProgress = (1.0f - (dist / 1000f)).coerceIn(0f, 0.9f)
+
+            if (dist < 150f) { // Near target
+                plantTimer -= dt
+                gs.objectiveLabel = "PLANTING LOGIC BOMB..."
+                gs.objectiveProgress = 1.0f - (plantTimer / 3f)
+
+                if (plantTimer <= 0f) {
+                    bombPlanted = true
+                    StoryProtocol.showIngameMessage("LOGIC BOMB PLANTED! DEFEND THE UPLINK!", 3f)
+                    EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 500)
+                    // Move spawners closer to bomb
+                    for(node in gs.spawnerNodes) {
+                        node.queue += 5
+                    }
+                }
+            } else {
+                plantTimer = 3f // Reset if player moves away
+            }
+        } else {
+            if (detonationTimer > 0f) {
+                detonationTimer -= dt
+                gs.shakeAmount = scale * 0.2f
+                gs.whiteFlash = (detonationTimer / 1.5f).coerceIn(0f, 1f)
+                if (detonationTimer <= 0f) {
+                    gs.isLevelCleared = true
+                }
+                return
+            }
+
+            defuseTimer -= dt
+            gs.objectiveLabel = "BOMB DETONATION IN: ${defuseTimer.toInt()}s"
+            val totalTime = 45f + (gs.currentLevel / 10f)
+            gs.objectiveProgress = 1.0f - (defuseTimer / totalTime)
+
+            if (defuseTimer <= 0f && !gs.bossActive) {
+                detonationTimer = 1.5f
+                gs.whiteFlash = 1.0f
+                gs.shakeAmount = scale * 0.25f
+                StoryProtocol.isGlitchActive = true
+                gs.objectiveLabel = "DETONATION IN PROGRESS..."
+                
+                // More intense sound sequence
+                EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_HIGH_L, 1000)
+                EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 500)
+            }
+        }
+    }
+
+    override fun checkWinCondition(gs: GameState): Boolean {
+        return bombPlanted && defuseTimer <= 0f && detonationTimer <= 0f && !gs.bossActive
+    }
+
+    override fun isBossTriggerReady(gs: GameState): Boolean {
+        return bombPlanted && defuseTimer <= 15f && defuseTimer > 0f // Boss spawns when 15s left
     }
 }

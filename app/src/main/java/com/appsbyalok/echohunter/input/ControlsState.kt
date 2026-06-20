@@ -25,6 +25,29 @@ class ControlsState {
     var aimDirY = 0f
     var attackPullDist = 0f // For manual aim visualization
     
+    // Touchpad Manual Aim
+    var manualAimActive = false
+    var manualAimTouchX = 0f
+    var manualAimTouchY = 0f
+    var manualAimDeltaX = 0f
+    var manualAimDeltaY = 0f
+
+    var isWeaponMenuOpen = false
+    var isTrapMenuOpen = false
+    var isSonarMenuOpen = false
+    
+    var selectedWeaponIdx = -1
+    var selectedTrapIdx = -1
+    var selectedSonarIdx = -1
+
+    var trapTouchX = 0f
+    var trapTouchY = 0f
+    var sonarTouchX = 0f
+    var sonarTouchY = 0f
+    
+    // Progression
+    var isManualAimUnlocked = false
+    
     // Arsenal
     var currentWeapon = 1 
     var currentTrap = 2 

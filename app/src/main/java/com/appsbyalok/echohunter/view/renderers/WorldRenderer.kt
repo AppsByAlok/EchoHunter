@@ -103,33 +103,35 @@ class WorldRenderer(
             yLine += 8f
         }
 
-        // --- NAYA: BLACKOUT GLITCH EFFECTS ---
-        if (StoryProtocol.isBlackoutActive) {
+        // --- NAYA: BLACKOUT & STORY GLITCH EFFECTS ---
+        if (StoryProtocol.isBlackoutActive || StoryProtocol.isGlitchActive) {
+            val intensity = if (StoryProtocol.isGlitchActive) 0.3f else 0.15f
+            
             // 1. Heavy flickering overlay
-            if (Random.nextFloat() < 0.1f) {
-                c.drawColor(0x88000000.toInt())
+            if (Random.nextFloat() < intensity) {
+                c.drawColor(0x44000000)
             }
 
             // 2. RGB Shift Glitch Strips
-            if (Random.nextFloat() < 0.25f) {
+            if (Random.nextFloat() < (intensity * 1.2f)) {
                 p.style = Paint.Style.FILL
                 val stripY = Random.nextFloat() * targetH
-                val stripH = Random.nextFloat() * (targetH * 0.05f)
+                val stripH = Random.nextFloat() * (targetH * 0.02f)
                 
                 // Cyan strip
-                p.color = 0x4400FFFF
+                p.color = 0x3300FFFF
                 c.drawRect(0f, stripY, targetW, stripY + stripH, p)
                 
                 // Red strip (slightly offset)
-                p.color = 0x44FF0000
+                p.color = 0x33FF0000
                 c.drawRect(0f, (stripY + 5f) % targetH, targetW, (stripY + 5f + stripH) % targetH, p)
             }
 
             // 3. Static/Noise pixels
-            if (Random.nextFloat() < 0.3f) {
-                p.strokeWidth = 2f
-                p.color = 0xAAFFFFFF.toInt()
-                repeat(15) {
+            if (Random.nextFloat() < (intensity + 0.1f)) {
+                p.strokeWidth = 3f
+                p.color = 0xCCFFFFFF.toInt()
+                repeat(25) {
                     c.drawPoint(Random.nextFloat() * targetW, Random.nextFloat() * targetH, p)
                 }
             }
@@ -338,6 +340,37 @@ class WorldRenderer(
                 p.color = (alpha shl 24) or (currentPlayerColor and 0xFFFFFF)
             }
             c.drawCircle(screenPlayerX, screenPlayerY, playerRadius * 2f, p)
+        }
+
+        // --- BOMB TARGET ---
+        if (gs.bombTargetX > -1000f) {
+            val sx = gs.bombTargetX - gs.cameraX
+            val sy = gs.bombTargetY - gs.cameraY
+            
+            p.style = Paint.Style.STROKE
+            p.strokeWidth = scale * 0.005f
+            val colorBase = if ((gs.timeSinceStart * 10).toInt() % 2 == 0) GameColors.RED else GameColors.YELLOW
+            p.color = colorBase
+            
+            val r = scale * 0.05f + sin(gs.timeSinceStart * 8f) * scale * 0.015f
+            c.drawRect(sx - r, sy - r, sx + r, sy + r, p)
+            c.drawRect(sx - r * 0.5f, sy - r * 0.5f, sx + r * 0.5f, sy + r * 0.5f, p)
+            
+            // Corners for a "Lock-on" look
+            val cs = r * 0.4f
+            c.drawLine(sx - r, sy - r, sx - r + cs, sy - r, p)
+            c.drawLine(sx - r, sy - r, sx - r, sy - r + cs, p)
+            c.drawLine(sx + r, sy - r, sx + r - cs, sy - r, p)
+            c.drawLine(sx + r, sy - r, sx + r, sy - r + cs, p)
+            c.drawLine(sx - r, sy + r, sx - r + cs, sy + r, p)
+            c.drawLine(sx - r, sy + r, sx - r, sy + r - cs, p)
+            c.drawLine(sx + r, sy + r, sx + r - cs, sy + r, p)
+            c.drawLine(sx + r, sy + r, sx + r, sy + r - cs, p)
+
+            pText.textSize = scale * 0.025f
+            pText.color = colorBase
+            pText.textAlign = Paint.Align.CENTER
+            c.drawText("UPLINK NODE", sx, sy - r * 1.5f, pText)
         }
 
         effectSys.drawParticles(c, gs.cameraX, gs.cameraY, scale)

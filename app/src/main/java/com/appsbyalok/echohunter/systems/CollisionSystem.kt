@@ -211,9 +211,9 @@ class CollisionSystem(
                                     }
                                 }
 
-                                if (!gs.bossActive || enemySystem.type[i] == 1) {
-                                    enemySystem.killEnemy(i, gs, width, height)
-                                }
+                                // FIX: Enemies should always die if HP <= 0, regardless of boss state.
+                                // The old check prevented clearing the arena but caused invincibility bugs.
+                                enemySystem.killEnemy(i, gs, width, height)
                             }
                             break // Spike todi der ke liye break ho jati hai
                         }

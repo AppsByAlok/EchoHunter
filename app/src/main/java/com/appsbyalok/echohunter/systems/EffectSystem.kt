@@ -24,7 +24,7 @@ class EffectSystem {
         private const val TWO_PI = 6.2831855f
     }
 
-    private val pn = 40
+    private val pn = 128
     private val pxA = FloatArray(pn); private val pyA = FloatArray(pn)
     private val pvxA = FloatArray(pn); private val pvyA = FloatArray(pn)
     private val pLife = FloatArray(pn)
@@ -39,6 +39,7 @@ class EffectSystem {
     private val ftStr = Array(ftn) { "" }
 
     fun reset() {
+        trailIdx = 0
         for (i in 0 until trailLength) { trailX[i] = 0f; trailY[i] = 0f }
         for (i in 0 until pn) { pLife[i] = 0f }
         for (i in 0 until ftn) { ftLife[i] = 0f }
@@ -67,7 +68,8 @@ class EffectSystem {
                     3 -> 3.0f  // Boss
                     else -> 1.0f
                 }
-                if (Random.nextFloat() > 0.8f) break
+                // Break condition adjusted for higher particle count
+                if (Random.nextFloat() > 0.95f) break
             }
         }
     }
@@ -108,25 +110,36 @@ class EffectSystem {
                 val isOverclocked = currentPlayerColor == GameColors.OVERCLOCK
                 val trailSize = if (isOverclocked) scale * 0.02f else scale * 0.012f
                 p.color = ((255 * (i.toFloat() / trailLength)).toInt() shl 24) or (currentPlayerColor and 0xFFFFFF)
-                c.drawCircle(tx, ty, trailSize * (i.toFloat() / trailLength), p)
+                
+                // OPTIMIZATION: Simplified trail rendering
+                val sz = trailSize * (i.toFloat() / trailLength)
+                c.drawRect(tx - sz, ty - sz, tx + sz, ty + sz, p)
             }
         }
     }
 
-    // FIXED: Particles now render relative to camera
+    // FIXED: Optimized single-pass rendering
     fun drawParticles(c: Canvas, cameraX: Float, cameraY: Float, scale: Float) {
         p.style = Paint.Style.FILL
+
         for (i in 0 until pn) {
             if (pLife[i] > 0) {
+                val life = pLife[i]
                 val pColor = when {
-                    pLife[i] > 2.0f -> GameColors.BOSS
-                    pLife[i] > 1.0f -> GameColors.OVERCLOCK
-                    pLife[i] < 1.0f && pLife[i] > 0.85f -> GameColors.PULSE // Spawner Blue
+                    life > 2.0f -> GameColors.BOSS
+                    life > 1.0f -> GameColors.OVERCLOCK
+                    life < 1.0f && life > 0.85f -> GameColors.PULSE
                     else -> GameColors.RED
                 }
-                val alphaAlpha = if (pLife[i] > 1f) pLife[i] - pLife[i].toInt() else pLife[i]
+
+                val alphaAlpha = if (life > 1f) life - life.toInt() else life
                 p.color = ((alphaAlpha * 255).toInt() shl 24) or (pColor and 0xFFFFFF)
-                c.drawCircle(pxA[i] - cameraX, pyA[i] - cameraY, alphaAlpha * (scale * 0.008f), p)
+
+                val sz = alphaAlpha * (scale * 0.008f)
+                val sx = pxA[i] - cameraX
+                val sy = pyA[i] - cameraY
+                
+                c.drawRect(sx - sz, sy - sz, sx + sz, sy + sz, p)
             }
         }
     }

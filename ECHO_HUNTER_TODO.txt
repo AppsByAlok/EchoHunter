@@ -1,0 +1,41 @@
+# ECHO HUNTER - PROJECT SOURCE OF TRUTH (TODO / FIXME)
+
+## [CRITICAL] BUGS & LOGIC ISSUES
+### 1. Yellow Enemy (Patrol) Combat Glitch
+- **PROBLEM**: Occasionally HP increases (+) instead of decreasing (-) on hit.
+- **PROBLEM**: Occasionally invincible (particle effect plays but HP doesn't change).
+- **CONTEXT**: Likely an index recycling issue in EnemySystem or atomic damage conflict in CollisionSystem.
+- **FIXME**: Audit EnemySystem.killEnemy() and CollisionSystem.checkCollisions() for race conditions or state resets during the same frame.
+
+### 2. Spatial Intelligence (Spawner Logic)
+- **PROBLEM**: Enemies spawn inside walls.
+- **PROBLEM**: Enemies spawn directly on top of the player at game start.
+- **PROBLEM**: Powerups spawn in inaccessible areas (walls).
+- **TODO**: Implement a `SpawnValidator` utility to check gridMap[x][y] == WALL and enforce a minimum SAFE_DIST from the player.
+
+### 3. HVT/Target Spawn Reliability
+- **PROBLEM**: Mission targets (Elimination Mode) fail to spawn in certain levels (e.g., Level 14).
+- **CONTEXT**: Level 7 works, Level 14 doesn't. Possible issue with mission counter reset or SpawnerSystem queue saturation.
+- **TODO**: Verify GameState.resetGame() resets all mission-specific counters. Audit SpawnerSystem queue priority.
+
+## [UX] INTERFACE & CONTROLS OVERHAUL
+### 4. Radial Trap Menu (Conflict Resolution)
+- **PROBLEM**: Manual Aim (Joystick) and Trap Menu both use "Drag" gestures on the same UI area.
+- **PROPOSED FIX**: Threshold-based logic.
+    - Short/Mid Drag (< 15% Screen): Manual Aim.
+    - Long/Extreme Drag (> 25% Screen): Open Radial Trap Menu.
+- **UX GOAL**: No game pause during menu; use transparent overlay and haptic/color cues for mode transition.
+
+### 5. NanoOS Terminal (ROOT_TERM.sh)
+- **FEATURE**: Functional command-line interface inside NanoOS.
+- **TODO**: Implement a string parser for commands like `unlock --all`, `set_mode`, `spawn`, etc.
+
+## [FEATURES] INCOMPLETE MODES
+### 6. Bomb/Defense Mode
+- **STATUS**: Unfinished.
+- **TODO**: Complete logic for core protection and wave-based defense.
+
+## [IDEAS / SIDE NOTES]
+- Consider full refactor of SpawnerSystem to use a cleaner State pattern.
+- Move all UI layout constants to a single configuration file for easier maintenance.
+- Add maintenance logs for every major architectural shift.

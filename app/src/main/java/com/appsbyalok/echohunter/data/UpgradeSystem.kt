@@ -109,4 +109,12 @@ object UpgradeSystem {
             prefs.edit().clear().apply()
         }
     }
+
+    fun debugMaxAll() {
+        for (type in UpgradeType.entries) {
+            val config = catalog[type] ?: continue
+            currentLevels[type] = config.maxLevel
+            prefs.edit().putInt("upg_${type.name}", config.maxLevel).apply()
+        }
+    }
 }

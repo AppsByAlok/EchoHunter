@@ -111,6 +111,8 @@ class CampaignMode : GameModeStrategy {
         val subText = when {
             gs.bossActive -> "ADMIN SECURITY ACTIVE"
             gs.escapeGateActive -> "EXIT PORTAL ACTIVE"
+            config.features.contains(LevelFeature.BOMB) -> "LOGIC BOMB SEQUENCE"
+            config.features.contains(LevelFeature.DEFENSE) -> "DEFENSE PROTOCOL"
             config.features.contains(LevelFeature.ELIMINATION) -> "TARGETS: ${gs.elimTargetsKilled} / ${gs.elimTargetsRequired}"
             else -> "TARGET: ${config.targetScore} KB"
         }

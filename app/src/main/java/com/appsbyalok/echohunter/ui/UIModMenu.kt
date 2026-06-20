@@ -109,14 +109,15 @@ class UIModMenu {
             "God Mode (HP <= 1): " + if(gs.modGodMode) "ON" else "OFF",
             "Infinite Overclock: " + if(gs.modInfiniteOvr) "ON" else "OFF",
             "Full Visibility: " + if(gs.modFullVisibility) "ON" else "OFF",
-            "Add +100 MB Data",                        // Index 3 (Holdable)
-            "Level UP (+1) [Cur: ${gs.currentLevel}]", // Index 4 (Holdable)
-            "Level DOWN (-1)",                        // Index 5 (Holdable)
-            "Instant Boss Spawn",
-            "Trigger Core Merge",
-            "Force EMP Blast",
-            "[ CRITICAL: RESET ALL DATA ]",           // Index 9
-            "Close Menu"                              // Index 10
+            "Infinity Traps: " + if(gs.modInfinityTraps) "ON" else "OFF",
+            "Add +100 MB Data",                        // Index 4 (Holdable)
+            "Level UP (+1) [Cur: ${gs.currentLevel}]", // Index 5 (Holdable)
+            "Level DOWN (-1)",                        // Index 6 (Holdable)
+            "Story Mode ++ (Streak: ${SaveManager.unlockedStoryStreak})",
+            "Story Mode --",
+            "[ UNLOCK ALL: MAX EVERYTHING ]",
+            "[ CRITICAL: RESET ALL DATA ]",
+            "Close Menu"
         )
 
         val totalHeight = items.size * (itemHeight + gap)
@@ -130,18 +131,18 @@ class UIModMenu {
 
             p.style = Paint.Style.FILL
             p.color = when {
-                i == 3 && holdingLevelDir == 2 -> 0xFF333333.toInt()
-                i == 4 && holdingLevelDir == 1 -> 0xFF333333.toInt()
-                i == 5 && holdingLevelDir == -1 -> 0xFF333333.toInt()
-                i < 3 && ((i==0 && gs.modGodMode) || (i==1 && gs.modInfiniteOvr) || (i==2 && gs.modFullVisibility)) -> 0xFF114411.toInt()
-                i == 9 -> 0xFF2A0505.toInt()
+                i == 4 && holdingLevelDir == 2 -> 0xFF333333.toInt()
+                i == 5 && holdingLevelDir == 1 -> 0xFF333333.toInt()
+                i == 6 && holdingLevelDir == -1 -> 0xFF333333.toInt()
+                i < 4 && ((i==0 && gs.modGodMode) || (i==1 && gs.modInfiniteOvr) || (i==2 && gs.modFullVisibility) || (i==3 && gs.modInfinityTraps)) -> 0xFF114411.toInt()
+                i == 10 -> 0xFF2A0505.toInt()
                 else -> 0xFF1A1A1A.toInt()
             }
             c.drawRoundRect(rect, scale * 0.03f, scale * 0.03f, p)
 
             p.style = Paint.Style.STROKE
             p.color = when(i) {
-                9 -> GameColors.RED
+                9, 10 -> GameColors.RED
                 items.lastIndex -> GameColors.YELLOW
                 else -> GameColors.PULSE
             }
@@ -150,7 +151,7 @@ class UIModMenu {
 
             p.style = Paint.Style.FILL
             pText.textSize = scale * 0.045f
-            pText.color = if (i == 9 || i == items.lastIndex) GameColors.RED else GameColors.CLARITY
+            pText.color = if (i == 9 || i == 10 || i == items.lastIndex) GameColors.RED else GameColors.CLARITY
             c.drawText(item, targetW / 2f, y + itemHeight * 0.65f, pText)
         }
 
@@ -183,7 +184,7 @@ class UIModMenu {
                 if (vy >= itemYStart && vy <= itemYStart + itemHeight && vx >= targetW / 2f - btnW / 2f && vx <= targetW / 2f + btnW / 2f) {
                     // Instant single-click execution on touch down + activate loop holding state
                     when (clickedIndex) {
-                        3 -> {
+                        4 -> {
                             holdingLevelDir = 2
                             holdStartTime = System.currentTimeMillis()
                             lastLevelChangeTime = holdStartTime
@@ -192,7 +193,7 @@ class UIModMenu {
                             SaveManager.addData(dataToAdd)
                             EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 100)
                         }
-                        4 -> {
+                        5 -> {
                             holdingLevelDir = 1
                             holdStartTime = System.currentTimeMillis()
                             lastLevelChangeTime = holdStartTime
@@ -200,7 +201,7 @@ class UIModMenu {
                             SaveManager.debugSetLevel(gs.currentLevel)
                             EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 60)
                         }
-                        5 -> {
+                        6 -> {
                             if (gs.currentLevel > 1) {
                                 holdingLevelDir = -1
                                 holdStartTime = System.currentTimeMillis()
@@ -242,21 +243,26 @@ class UIModMenu {
                     val clickedIndex = ((vy - startY) / (itemHeight + gap)).toInt()
                     val itemYStart = startY + clickedIndex * (itemHeight + gap)
 
-                    if (clickedIndex in 0..10 && vy >= itemYStart && vy <= itemYStart + itemHeight && vx >= targetW / 2f - btnW / 2f && vx <= targetW / 2f + btnW / 2f) {
+                    if (clickedIndex in 0..11 && vy >= itemYStart && vy <= itemYStart + itemHeight && vx >= targetW / 2f - btnW / 2f && vx <= targetW / 2f + btnW / 2f) {
                         when (clickedIndex) {
                             0 -> { EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100); gs.modGodMode = !gs.modGodMode }
                             1 -> { EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100); gs.modInfiniteOvr = !gs.modInfiniteOvr }
                             2 -> { EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100); gs.modFullVisibility = !gs.modFullVisibility }
-                            6 -> { EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100); listener?.onForceBossSpawn(); isOpen = false }
-                            7 -> { EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100); listener?.onTriggerCoreMerge(); isOpen = false }
-                            8 -> { EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100); listener?.onForceEMP(); isOpen = false }
-                            9 -> {
+                            3 -> { EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100); gs.modInfinityTraps = !gs.modInfinityTraps }
+                            7 -> { EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100); SaveManager.debugModifyStoryStreak(1) }
+                            8 -> { EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100); SaveManager.debugModifyStoryStreak(-1) }
+                            9 -> { 
+                                EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 100)
+                                SaveManager.debugUnlockAll()
+                                gs.currentLevel = 100
+                            }
+                            10 -> {
                                 SaveManager.clearAllData()
                                 gs.currentLevel = 1
                                 EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 600)
                                 isOpen = false
                             }
-                            10 -> { EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100); isOpen = false }
+                            11 -> { EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100); isOpen = false }
                         }
                     }
                 }

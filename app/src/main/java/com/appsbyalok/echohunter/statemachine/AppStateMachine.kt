@@ -277,6 +277,7 @@ class SubMenuState(private val manager: AppStateManager) : IAppState {
             11 -> manager.view.uiArchives.draw(c, width, height, gs, scale)
             13 -> manager.view.uiArsenal.draw(c, width, height, scale, gs)
             14 -> manager.view.uiNanoOS.draw(c, width, height, scale, gs.timeSinceStart)
+            15 -> manager.view.uiTerminal.draw(c, width, height, scale, gs)
         }
     }
     override fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean {
@@ -290,13 +291,15 @@ class SubMenuState(private val manager: AppStateManager) : IAppState {
                     0 -> manager.view.changeState(10)
                     1 -> manager.view.changeState(13)
                     2 -> manager.view.changeState(11)
+                    3 -> manager.view.changeState(15)
                 }
             }, manager.view.onDisconnect)
+            15 -> manager.view.uiTerminal.onTouch(vx, vy, action, gs, manager.view.onAppClose)
             else -> true
         }
     }
     override fun onBackPressed(gs: GameState): Boolean {
-        if (gs.state == 10 || gs.state == 11 || gs.state == 13) manager.view.onAppClose()
+        if (gs.state == 10 || gs.state == 11 || gs.state == 13 || gs.state == 15) manager.view.onAppClose()
         else if (gs.state == 14) manager.view.disconnectCable()
         return true
     }

@@ -20,6 +20,17 @@ class TouchState {
     var attackKnobX = 0f
     var attackKnobY = 0f
 
-    // Trap Menu (State)
+    // Action Buttons (State)
     var trapTouchId = -1
+    var sonarTouchId = -1
+    // Manual Aim Joystick (Raw Data)
+    var manualAimTouchId = -1
+    var manualAimBaseX = 0f
+    var manualAimBaseY = 0f
+    var manualAimCurrentX = 0f
+    var manualAimCurrentY = 0f
+    
+    // Manual Aim (Visual/Derived)
+    var manualAimKnobX = 0f
+    var manualAimKnobY = 0f
 }

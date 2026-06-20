@@ -42,6 +42,9 @@ object SaveManager {
     val isHardModeUnlocked: Boolean
         get() = unlockedStoryStreak >= 3
 
+    val isManualAimUnlocked: Boolean
+        get() = unlockedStoryStreak >= 1 || maxCampaignLevel > 20
+
     var highScore: Int = 0
         private set
     var previousScore: Int = 0
@@ -151,6 +154,29 @@ object SaveManager {
     fun debugSetLevel(level: Int) {
         maxCampaignLevel = max(1, level)
         prefs.edit().putInt("maxCampaignLevel", maxCampaignLevel).apply()
+    }
+
+    fun debugModifyStoryStreak(delta: Int) {
+        unlockedStoryStreak = max(0, unlockedStoryStreak + delta)
+        prefs.edit().putInt("unlockStory", unlockedStoryStreak).apply()
+    }
+
+    fun debugUnlockAll() {
+        maxCampaignLevel = 100
+        unlockedStoryStreak = 3
+        unlockedHardStreak = 3
+        dataCoinsKB = Int.MAX_VALUE.toLong()
+        totalData = (dataCoinsKB / 1024L).toInt()
+        
+        prefs.edit()
+            .putInt("maxCampaignLevel", maxCampaignLevel)
+            .putInt("unlockStory", unlockedStoryStreak)
+            .putInt("unlockHard", unlockedHardStreak)
+            .putLong("dataCoinsKB", dataCoinsKB)
+            .putInt("totalData", totalData)
+            .apply()
+        
+        UpgradeSystem.debugMaxAll()
     }
 
     fun clearAllData() {

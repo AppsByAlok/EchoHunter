@@ -28,6 +28,7 @@ import com.appsbyalok.echohunter.ui.UIHelpMenu
 import com.appsbyalok.echohunter.ui.UIMainMenu
 import com.appsbyalok.echohunter.ui.UIModMenu
 import com.appsbyalok.echohunter.ui.UINanoOS
+import com.appsbyalok.echohunter.ui.UITerminal
 import com.appsbyalok.echohunter.utils.EchoAudioManager
 import com.appsbyalok.echohunter.utils.GameColors
 import com.appsbyalok.echohunter.view.renderers.HUDRenderer
@@ -55,6 +56,7 @@ class GameView(context: Context) : View(context) {
     internal val uiArsenal = UIArsenal()
     internal val uiNanoOS = UINanoOS()
     internal val uiArchives = UIArchives()
+    internal val uiTerminal = UITerminal()
     internal val touchController = TouchController(gs)
     internal val modMenu = UIModMenu()
 
@@ -221,7 +223,7 @@ class GameView(context: Context) : View(context) {
             3 -> stateManager.helpState
             4, 5, 6, 7 -> stateManager.storyState
             12 -> stateManager.victoryState
-            10, 11, 13, 14 -> stateManager.subMenuState
+            10, 11, 13, 14, 15 -> stateManager.subMenuState
             else -> stateManager.mainMenuState
         }
         if (stateManager.currentState != newStateObj) {
@@ -371,12 +373,12 @@ class GameView(context: Context) : View(context) {
         uiMainMenu.initLayout(w.toFloat(), h.toFloat())
         worldRenderer.updateDashEffect(gameScale)
 
-        // Recalculate dynamic UI coordinates (Restored Original Grid Layout)
-        gs.hudLayout.btnRadius = gameScale * 0.11f
-        gs.hudLayout.atkX = w - gameScale * 0.18f
-        gs.hudLayout.atkY = h - gameScale * 0.18f
+        // Recalculate dynamic UI coordinates (Refined Layout)
+        gs.hudLayout.btnRadius = gameScale * 0.11f // Slightly larger
+        gs.hudLayout.atkX = w - gameScale * 0.16f
+        gs.hudLayout.atkY = h - gameScale * 0.16f
         
-        val spacing = gameScale * 0.28f
+        val spacing = gameScale * 0.25f // More spacing
         
         gs.hudLayout.ovrX = gs.hudLayout.atkX
         gs.hudLayout.ovrY = gs.hudLayout.atkY - spacing
@@ -387,8 +389,18 @@ class GameView(context: Context) : View(context) {
         gs.hudLayout.pulseX = gs.hudLayout.atkX - spacing
         gs.hudLayout.pulseY = gs.hudLayout.atkY - spacing
         
-        gs.hudLayout.pauseX = w - gameScale * 0.1f
-        gs.hudLayout.pauseY = gameScale * 0.1f
+        gs.hudLayout.pauseX = w - gameScale * 0.12f
+        gs.hudLayout.pauseY = gameScale * 0.12f
+
+        // Manual Aim Touchpad (Wider Area for easier thumb access)
+        val rectW = w * 0.45f
+        val rectH = h * 0.7f
+        gs.hudLayout.manualAimRect.set(
+            w - rectW, 
+            h - rectH, 
+            w.toFloat(), 
+            h.toFloat()
+        )
 
         gs.touch.moveBaseX = gs.hudLayout.btnRadius * 2.2f
         gs.touch.moveBaseY = h - gs.hudLayout.btnRadius * 2.2f

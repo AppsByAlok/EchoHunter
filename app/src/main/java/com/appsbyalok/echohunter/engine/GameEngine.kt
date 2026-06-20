@@ -35,6 +35,7 @@ class GameEngine(
     private val inputSys = com.appsbyalok.echohunter.systems.InputSystem(gs)
 
     fun update(dt: Float, targetW: Float, targetH: Float, scale: Float) {
+        gs.lastDt = dt
         gs.timeSinceStart += dt
         gs.stateTimer += dt
         StoryProtocol.update(dt)
@@ -113,21 +114,6 @@ class GameEngine(
         gs.updateVisibilityMath(scale, targetW * 0.75f)
         gs.updatePulseRadius(simDt, targetW * 0.75f)
 
-//        if (gs.isLevelCleared && gs.state == 1) {
-//            gs.isLevelCleared = false
-//            val config = LevelEngine.getLevelConfig(gs.currentLevel)
-//            var finalReward = config.clearRewardKB
-//            if (gs.currentLevel < SaveManager.maxCampaignLevel) finalReward /= 2
-//            finalReward += (finalReward * UpgradeSystem.getRewardBonusPercent()).toLong()
-//
-//            gs.collectedDataKB += finalReward
-//            SaveManager.addData(finalReward)
-//            SaveManager.updateCampaignProgress(gs.currentLevel)
-//
-//            EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 500)
-//            onChangeState?.invoke(12)
-//            return
-//        }
 
         if (gs.isLevelCleared && gs.state == 1 && gs.gameMode == 0) {
             gs.isLevelCleared = false
@@ -151,7 +137,7 @@ class GameEngine(
         if (gs.state == 1 || gs.state == 8) {
             // --- NAYA: MODULAR OBJECTIVE CALL ---
             // Updates timers and dynamic logic (like Core activation in Story Mode)
-            gs.activeObjective.updateObjective(simDt, gs, enemySys, spawnerSys, targetW, targetH)
+            gs.activeObjective.updateObjective(simDt, gs, enemySys, spawnerSys, targetW, targetH, scale)
 
             // --- CRITICAL: WIN CONDITION CHECK ---
             // Modular objectives determine if the level is cleared (Campaign Mode)
@@ -202,15 +188,14 @@ class GameEngine(
         gs.mapWidth = columns * gs.tileSize
         gs.mapHeight = rows * gs.tileSize
 
-        var pCol = 2; var pRow = 2; var dCol = columns - 3; var dRow = rows - 3
+        var pCol = 2
+        var pRow = 2
 
         for (x in 0 until columns) {
             for (y in 0 until rows) {
                 if (gs.gridMap!![x][y] == com.appsbyalok.echohunter.data.MazeGenerator.PLAYER_SPAWN) {
                     pCol = x; pRow = y
                     gs.gridMap!![x][y] = com.appsbyalok.echohunter.data.MazeGenerator.PATH
-                } else if (gs.gridMap!![x][y] == com.appsbyalok.echohunter.data.MazeGenerator.DEST_NODE) {
-                    dCol = x; dRow = y
                 }
             }
         }
@@ -218,36 +203,9 @@ class GameEngine(
         gs.px = pCol * gs.tileSize + (gs.tileSize / 2f)
         gs.py = pRow * gs.tileSize + (gs.tileSize / 2f)
 
-        val config = LevelEngine.getLevelConfig(gs.currentLevel)
-
-        // --- OBJECTIVE ASSIGNMENT ---
-        gs.activeObjective = when {
-            gs.gameMode == 1 -> com.appsbyalok.echohunter.modes.StoryObjective()
-            config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE) && gs.gameMode == 0 -> com.appsbyalok.echohunter.modes.DefenseObjective()
-            config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ESCAPE) && gs.gameMode == 0 -> com.appsbyalok.echohunter.modes.EscapeObjective()
-            config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ELIMINATION) && gs.gameMode == 0 -> com.appsbyalok.echohunter.modes.EliminationObjective()
-            else -> com.appsbyalok.echohunter.modes.StandardObjective()
-        }
-
-        val hasCampaignCore = gs.gameMode == 0 &&
-            (config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE) ||
-                config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ESCAPE))
-        val hasStoryCoreTarget = gs.gameMode == 1
-
-        if (hasCampaignCore || hasStoryCoreTarget) {
-            gs.coreX = dCol * gs.tileSize + (gs.tileSize / 2f)
-            gs.coreY = dRow * gs.tileSize + (gs.tileSize / 2f)
-            gs.coreRadius = if (hasCampaignCore) scale * 0.08f else 0f
-
-            if (config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE) && gs.gameMode == 0) {
-                gs.px = gs.coreX
-                gs.py = gs.coreY + gs.tileSize * 1.2f
-            }
-        } else {
-            gs.coreX = -9999f; gs.coreY = -9999f; gs.coreRadius = 0f
-        }
-
-        // Set up the specific objective timers, HP, and logic
+        // --- OBJECTIVE SETUP ---
+        // Note: activeObjective is assigned in GameState.resetGame() based on LevelFeature.
+        // We just need to call its setup here after map generation.
         gs.activeObjective.setupObjective(gs, targetW, targetH, scale)
 
         // NAYA: Generate Spawner Nodes for the level
@@ -264,6 +222,9 @@ class GameEngine(
                 }
             }
         }
+
+        // Initialize progression flags
+        gs.controls.isManualAimUnlocked = SaveManager.isManualAimUnlocked
 
         // NAYA: Start level with a few more enemies queued to emerge shortly
         val initialPop = if (gs.difficulty == 1) 8 else 5

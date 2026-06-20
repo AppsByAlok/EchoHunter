@@ -12,4 +12,7 @@ class HUDLayout {
     var pulseY = 0f
     var pauseX = 0f
     var pauseY = 0f
+
+    // Manual Aim Touchpad
+    val manualAimRect = android.graphics.RectF()
 }

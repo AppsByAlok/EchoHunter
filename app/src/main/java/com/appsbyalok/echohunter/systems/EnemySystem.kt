@@ -88,11 +88,10 @@ class EnemySystem {
                 type[i] = 1; enemyBrains[i] = HunterBehavior
             }
             2 -> { // Admin Gateway (HVTs or Elites)
-                if (isElimination && i < 5) {
+                if (isElimination) {
                     type[i] = 3; enemyBrains[i] = TargetBehavior
                 } else {
                     type[i] = 1; enemyBrains[i] = HunterBehavior
-                    // Maybe even stronger behavior in future
                 }
             }
             else -> { // Compiler (Normal)
@@ -240,6 +239,11 @@ class EnemySystem {
 
         behavior.updateSpecial(dt, gs, this, scale)
 
+        if (!gs.bossActive) {
+            gs.bossActive = true
+            gs.bossLockTimer = 1.0f // Force aim for 1 second on spawn
+        }
+
         // Visibility handling
         if (gs.difficulty == 1) {
             if ((gs.pulse && bDistSq in gs.innerRSq..gs.outerRSq) || bDistSq < gs.passiveAuraRadiusSq) gs.bossVis = 1.0f
@@ -373,7 +377,7 @@ class EnemySystem {
 
                 // --- NAYA: DRAW HEALTH BAR (Sirf tab jab HP 1 se zyada ho aur dushman alert/visible ho) ---
                 if (maxHp[i] > 1 && effectiveVis > 0.5f) {
-                    val hpRatio = hp[i].toFloat() / maxHp[i].toFloat()
+                    val hpRatio = kotlin.math.max(0f, hp[i].toFloat() / maxHp[i].toFloat())
                     val barW = scale * 0.06f
                     val barH = scale * 0.008f
                     val bx = screenEx - barW / 2f

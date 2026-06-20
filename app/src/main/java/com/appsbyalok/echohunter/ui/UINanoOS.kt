@@ -7,8 +7,8 @@ import android.graphics.Typeface
 import android.media.ToneGenerator
 import android.view.MotionEvent
 import com.appsbyalok.echohunter.data.SaveManager
-import com.appsbyalok.echohunter.utils.GameColors
 import com.appsbyalok.echohunter.utils.EchoAudioManager
+import com.appsbyalok.echohunter.utils.GameColors
 import kotlin.math.sin
 
 class UINanoOS {
@@ -125,7 +125,7 @@ class UINanoOS {
     }
 
     private fun drawCard(c: Canvas, rect: RectF, index: Int, scale: Float) {
-        val isLocked = (index == 3) // Root Terminal is currently locked
+        val isLocked = (index == 3 && !SaveManager.isHardModeUnlocked)
 
         p.style = Paint.Style.FILL
         p.color = if (isLocked) 0xFF110505.toInt() else 0xFF051515.toInt()
@@ -156,12 +156,12 @@ class UINanoOS {
 
             for (i in 0..3) {
                 if (cardRects[i].contains(x, y)) {
-                    if (i == 3) {
-                        // Terminal is Locked for now
+                    if (i == 3 && !SaveManager.isHardModeUnlocked) {
+                        // Terminal is Locked until Hard Mode is unlocked
                         EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
                     } else {
                         EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
-                        onAppSelect(i) // i: 0=Decompiler, 1=Arsenal, 2=Archives
+                        onAppSelect(i) // i: 0=Decompiler, 1=Arsenal, 2=Archives, 3=Terminal
                     }
                     return true
                 }

@@ -148,16 +148,25 @@ object LevelIcons {
                 c.drawPath(iconPath, p)
             }
             LevelFeature.BOMB -> {
-                // Bomb
+                // Classic Volatile Bomb with Wick
                 p.style = Paint.Style.FILL
-                p.color = 0xFFFF0000.toInt()
-                c.drawCircle(cx, cy, r * 0.8f, p)
+                c.drawCircle(cx, cy + r * 0.15f, r * 0.75f, p) // Body
+                c.drawRect(cx - r * 0.2f, cy - r * 0.65f, cx + r * 0.2f, cy - r * 0.45f, p) // Cap
+
+                p.style = Paint.Style.STROKE
+                p.strokeWidth = r * 0.12f
+                iconPath.moveTo(cx, cy - r * 0.65f)
+                iconPath.quadTo(cx + r * 0.5f, cy - r * 0.9f, cx + r * 0.6f, cy - r * 0.5f)
+                c.drawPath(iconPath, p)
             }
             LevelFeature.DARKNESS -> {
-                // Darkening Circle
+                // Crescent Moon (Uses bgColor for technical cutout)
                 p.style = Paint.Style.FILL
-                p.color = 0xFF000000.toInt()
-                c.drawCircle(cx, cy, r * 0.8f, p)
+                c.drawCircle(cx, cy, r * 0.85f, p)
+                
+                // Shifted circle cutout to create the crescent effect
+                p.color = bgColor
+                c.drawCircle(cx + r * 0.4f, cy - r * 0.2f, r * 0.8f, p)
             }
         }
 
