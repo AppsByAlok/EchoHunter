@@ -153,10 +153,10 @@ class GameView(context: Context) : View(context) {
     }
 
     fun startGame(mode: Int, level: Int) {
-        gs.resetGame()
-        effectSys.reset()
         gs.gameMode = mode
         gs.currentLevel = level
+        gs.resetGame()
+        effectSys.reset()
         enemySys.respawnAll(gs, width.toFloat(), height.toFloat())
         engine.generateLevelMaze(width.toFloat(), height.toFloat(), gameScale)
         uiMainMenu.disconnect()
@@ -311,6 +311,7 @@ class GameView(context: Context) : View(context) {
     private fun triggerBoss(type: Int, scale: Float) {
         gs.bossActive = true
         gs.bossType = type
+        gs.bossLockTimer = 1.0f // Trigger Auto-Aim lock for 1 second on spawn
         
         // --- NAYA: BOSS HP SCALING (Saturated Growth Curve) ---
         // Base 25 + Max 475 = 500 HP Cap at extreme levels

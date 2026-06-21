@@ -328,10 +328,10 @@ class GameState {
         val config = LevelEngine.getLevelConfig(currentLevel)
         activeObjective = when {
             gameMode == 1 -> com.appsbyalok.echohunter.modes.StoryObjective()
+            config.features.contains(LevelFeature.BOMB) -> com.appsbyalok.echohunter.modes.BombObjective()
             config.features.contains(LevelFeature.DEFENSE) -> com.appsbyalok.echohunter.modes.DefenseObjective()
             config.features.contains(LevelFeature.ESCAPE) -> com.appsbyalok.echohunter.modes.EscapeObjective()
             config.features.contains(LevelFeature.ELIMINATION) -> com.appsbyalok.echohunter.modes.EliminationObjective()
-            config.features.contains(LevelFeature.BOMB) -> com.appsbyalok.echohunter.modes.BombObjective()
             else -> StandardObjective()
         }
 

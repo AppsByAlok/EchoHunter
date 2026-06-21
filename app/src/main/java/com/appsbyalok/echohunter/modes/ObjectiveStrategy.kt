@@ -2,6 +2,7 @@ package com.appsbyalok.echohunter.modes
 
 import android.media.ToneGenerator
 import com.appsbyalok.echohunter.data.LevelEngine
+import com.appsbyalok.echohunter.data.LevelFeature
 import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.systems.EnemySystem
@@ -15,6 +16,25 @@ interface IGameObjective {
     fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float)
     fun checkWinCondition(gs: GameState): Boolean
     fun isBossTriggerReady(gs: GameState): Boolean
+
+    // NAYA: Shared verification to ensure all level features are satisfied
+    fun areSecondaryFeaturesMet(gs: GameState): Boolean {
+        val config = LevelEngine.getLevelConfig(gs.currentLevel)
+        // 1. Elimination Check
+        if (config.features.contains(LevelFeature.ELIMINATION) && gs.elimTargetsKilled < gs.elimTargetsRequired) return false
+        
+        // 2. Boss Check (Boss must be dead if it exists)
+        if (config.features.contains(LevelFeature.BOSS)) {
+            // Boss is dead if bossActive is false AND it was either killed or sector incremented
+            val bossDead = !gs.bossActive && (gs.bossDeathTimer > 0.1f || gs.currentSector > 1)
+            if (!bossDead) return false
+        }
+        
+        // 3. Score Check (Classic)
+        if (config.features.contains(LevelFeature.CLASSIC) && gs.score < config.targetScore) return false
+        
+        return true
+    }
 }
 
 // 1. STANDARD / ELIMINATION OBJECTIVE (Score based)
@@ -47,8 +67,7 @@ class StandardObjective : IGameObjective {
         }
     }
     override fun checkWinCondition(gs: GameState): Boolean {
-        val config = LevelEngine.getLevelConfig(gs.currentLevel)
-        return gs.score >= config.targetScore && !gs.bossActive
+        return areSecondaryFeaturesMet(gs)
     }
     override fun isBossTriggerReady(gs: GameState): Boolean {
         val config = LevelEngine.getLevelConfig(gs.currentLevel)
@@ -72,6 +91,25 @@ class DefenseObjective : IGameObjective {
 
         gs.coreMaxHp = LevelEngine.getSaturatedValue(gs.currentLevel, 10f, 15f, 150f).toInt()
         gs.coreHp = gs.coreMaxHp
+
+        // Locate DEST_NODE for Core position
+        val grid = gs.gridMap
+        if (grid != null) {
+            for (x in 0 until grid.size) {
+                for (y in 0 until grid[0].size) {
+                    if (grid[x][y] == 2) { // 2 is DEST_NODE
+                        gs.coreX = x * gs.tileSize + (gs.tileSize / 2f)
+                        gs.coreY = y * gs.tileSize + (gs.tileSize / 2f)
+                        gs.coreRadius = scale * 0.15f
+                        return
+                    }
+                }
+            }
+        }
+        // Fallback
+        gs.coreX = gs.px
+        gs.coreY = gs.py
+        gs.coreRadius = scale * 0.15f
     }
 
     override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
@@ -80,7 +118,6 @@ class DefenseObjective : IGameObjective {
                 gs.defWaveTimer -= dt
                 if (gs.defWaveTimer <= 0f) {
                     gs.defWaveState = 1
-                    // BALANCING: Hard mode increases enemy volume and caps for higher intensity
                     val diffMult = if (gs.difficulty == 1) 1.5f else 1.0f
                     val hardCap = if (gs.difficulty == 1) 40f else 25f
                     val baseCount = 2f * diffMult
@@ -88,8 +125,6 @@ class DefenseObjective : IGameObjective {
                     gs.defEnemiesToSpawn = LevelEngine.getSaturatedValue(gs.currentLevel, baseCount, hardCap - baseCount, 80f).toInt()
                     gs.defEnemiesAlive = 0
                     
-                    // Queue the entire wave into the Spawner System!
-                    // Note: SpawnerSystem.update will decrement defEnemiesToSpawn as they physically appear
                     spawnerSys.queueSpawns(gs.defEnemiesToSpawn, gs)
                     
                     StoryProtocol.showIngameMessage("WAVE ${gs.defWaveCurrent} / ${gs.defWaveMax} INCOMING!", 2f)
@@ -97,15 +132,13 @@ class DefenseObjective : IGameObjective {
                 }
             }
             1 -> { // Fighting Phase
-                // DefenseObjective now just waits for enemies to be cleared
-                // SpawnerSystem handles the actual instantiation
                 if (gs.defEnemiesAlive <= 0 && gs.defEnemiesToSpawn <= 0) {
                     if (gs.defWaveCurrent >= gs.defWaveMax) {
-                        gs.defWaveCurrent++
+                        gs.defWaveCurrent++ // Win condition check increments this to > Max
                     } else {
                         gs.defWaveCurrent++
                         gs.defWaveState = 2
-                        gs.defWaveTimer = 7f // More breathing time between waves
+                        gs.defWaveTimer = 7f 
                         StoryProtocol.showIngameMessage("WAVE CLEAR! REGROUPING...", 2f)
                     }
                 }
@@ -114,11 +147,13 @@ class DefenseObjective : IGameObjective {
     }
 
     override fun checkWinCondition(gs: GameState): Boolean {
-        return gs.defWaveCurrent > gs.defWaveMax && gs.coreHp > 0 && !gs.bossActive
+        // Must complete all waves AND secondary features (Boss/Elim)
+        return gs.defWaveCurrent > gs.defWaveMax && gs.coreHp > 0 && areSecondaryFeaturesMet(gs)
     }
 
     override fun isBossTriggerReady(gs: GameState): Boolean {
-        return gs.defWaveCurrent > gs.defWaveMax
+        // Hybrid: Boss spawns at the start of the final wave for maximum chaos
+        return gs.defWaveCurrent == gs.defWaveMax && gs.defWaveState == 1
     }
 }
 
@@ -128,34 +163,41 @@ class EscapeObjective : IGameObjective {
 
     override fun setupObjective(gs: GameState, targetW: Float, targetH: Float, scale: Float) {
         gs.escapeGateActive = false
+        val grid = gs.gridMap
+        if (grid != null) {
+            for (x in 0 until grid.size) {
+                for (y in 0 until grid[0].size) {
+                    if (grid[x][y] == 2) {
+                        gs.coreX = x * gs.tileSize + (gs.tileSize / 2f)
+                        gs.coreY = y * gs.tileSize + (gs.tileSize / 2f)
+                        gs.coreRadius = scale * 0.12f
+                        return
+                    }
+                }
+            }
+        }
+        gs.coreX = gs.px + (if (Math.random() > 0.5) 1f else -1f) * targetW * 0.8f
+        gs.coreY = gs.py + (if (Math.random() > 0.5) 1f else -1f) * targetH * 0.8f
+        gs.coreRadius = scale * 0.12f
     }
     override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
-        val config = LevelEngine.getLevelConfig(gs.currentLevel)
-        
         trickleTimer -= dt
         if (trickleTimer <= 0f) {
             var activeCount = 0
             for (i in 0 until enemySys.n) if (enemySys.ex[i] > -1000f) activeCount++
-            
-            // Escape me bheed thodi kam chahiye hoti hai bhagne ke liye
             val baseLimit = if (gs.difficulty == 1) 16f else 12f
             val limit = LevelEngine.getSaturatedValue(gs.currentLevel, baseLimit, 35f - baseLimit, 120f).toInt()
             val queued = spawnerSys.getTotalQueue(gs)
-            
             if (activeCount + queued < limit) {
-                val needed = limit - (activeCount + queued)
-                spawnerSys.queueSpawns(needed, gs)
+                spawnerSys.queueSpawns(limit - (activeCount + queued), gs)
             }
             trickleTimer = 1f
         }
 
-        // NAYA: AND logic - Boss maarna jaruri hai agar level me boss hai
-        val hasBoss = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.BOSS)
-        val bossDone = !hasBoss || gs.currentSector > 1 // Sector increments after boss death
-        
-        if (gs.score >= config.targetScore && bossDone && !gs.escapeGateActive) {
+        // Hybrid check: Gate activates ONLY when all other features are met
+        if (areSecondaryFeaturesMet(gs) && !gs.escapeGateActive) {
             gs.escapeGateActive = true
-            StoryProtocol.showIngameMessage("OBJECTIVES COMPLETE! LOCATE THE EXIT PORTAL!", 4f)
+            StoryProtocol.showIngameMessage("SYSTEM BREACHED! EXIT PORTAL OPEN!", 4f)
             EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 300)
         }
     }
@@ -168,17 +210,14 @@ class EscapeObjective : IGameObjective {
 
     override fun isBossTriggerReady(gs: GameState): Boolean {
         val config = LevelEngine.getLevelConfig(gs.currentLevel)
-        return gs.score >= config.targetScore
+        return gs.score >= config.targetScore || gs.elimTargetsKilled >= gs.elimTargetsRequired
     }
 }
 
-
-// 4. STORY OBJECTIVE (Progresses only via Boss Kills in CollisionSystem)
+// 4. STORY OBJECTIVE (Progresses only via Boss Kills)
 class StoryObjective : IGameObjective {
     private var trickleTimer = 2f
-
     override fun setupObjective(gs: GameState, targetW: Float, targetH: Float, scale: Float) {
-        // Core is hidden until the final boss of Sector 5 is defeated
         gs.coreRadius = 0f 
     }
     override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
@@ -186,28 +225,17 @@ class StoryObjective : IGameObjective {
         if (trickleTimer <= 0f) {
             var activeCount = 0
             for (i in 0 until enemySys.n) if (enemySys.ex[i] > -1000f) activeCount++
-            
-            // Story mode maps kaafi bade hote hain, base limit high rakhi hai
             val baseLimit = if (gs.difficulty == 1) 20 else 15
             val limit = kotlin.math.min(45, baseLimit + (gs.currentSector * 5))
             val queued = spawnerSys.getTotalQueue(gs)
-            
             if (activeCount + queued < limit) {
-                val needed = limit - (activeCount + queued)
-                spawnerSys.queueSpawns(needed, gs)
+                spawnerSys.queueSpawns(limit - (activeCount + queued), gs)
             }
             trickleTimer = 1f
         }
-
-        // Reactivate core radius for the final merge sequence if we are in State 8
-        if (gs.state == 8 && gs.coreRadius == 0f) {
-            gs.coreRadius = 100f // Arbitrary base, will be scaled in GameState/Renderer
-        }
+        if (gs.state == 8 && gs.coreRadius == 0f) gs.coreRadius = 100f
     }
-    override fun checkWinCondition(gs: GameState): Boolean {
-        return false // Story mode win is handled directly via State 8 -> 9 transition in GameEngine
-    }
-
+    override fun checkWinCondition(gs: GameState): Boolean = false
     override fun isBossTriggerReady(gs: GameState): Boolean = false
 }
 
@@ -228,22 +256,18 @@ class EliminationObjective : IGameObjective {
         if (trickleTimer <= 0f) {
             var activeCount = 0
             for (i in 0 until enemySys.n) if (enemySys.ex[i] > -1000f) activeCount++
-            
-            // Limit badhti jayegi jaise-jaise level badhega (Max 40 tak)
             val baseLimit = if (gs.difficulty == 1) 18f else 14f
             val limit = LevelEngine.getSaturatedValue(gs.currentLevel, baseLimit, 40f - baseLimit, 100f).toInt()
             val queued = spawnerSys.getTotalQueue(gs)
-            
             if (activeCount + queued < limit) {
-                val needed = limit - (activeCount + queued)
-                spawnerSys.queueSpawns(needed, gs)
+                spawnerSys.queueSpawns(limit - (activeCount + queued), gs)
             }
             trickleTimer = 1f
         }
     }
 
     override fun checkWinCondition(gs: GameState): Boolean {
-        return gs.elimTargetsKilled >= gs.elimTargetsRequired && !gs.bossActive
+        return gs.elimTargetsKilled >= gs.elimTargetsRequired && areSecondaryFeaturesMet(gs)
     }
 
     override fun isBossTriggerReady(gs: GameState): Boolean {
@@ -255,9 +279,9 @@ class EliminationObjective : IGameObjective {
 class BombObjective : IGameObjective {
     private var trickleTimer = 1f
     private var bombPlanted = false
-    private var plantTimer = 3f // 3 seconds to plant if near target
-    private var defuseTimer = 45f // 45 seconds to defend after planting
-    private var detonationTimer = 0f // Delay for VFX
+    private var plantTimer = 3f 
+    private var defuseTimer = 45f 
+    private var detonationTimer = 0f 
 
     override fun setupObjective(gs: GameState, targetW: Float, targetH: Float, scale: Float) {
         gs.coreX = -9999f
@@ -266,19 +290,16 @@ class BombObjective : IGameObjective {
         bombPlanted = false
         plantTimer = 3f
         detonationTimer = 0f
-        defuseTimer = 30f + (gs.currentLevel / 5f).coerceAtMost(30f) // Scaled timer
+        defuseTimer = 30f + (gs.currentLevel / 5f).coerceAtMost(30f)
 
-        // Find a valid path node for the bomb
         val grid = gs.gridMap
         if (grid != null) {
             val paths = mutableListOf<Pair<Int, Int>>()
             for (x in 0 until grid.size) {
                 for (y in 0 until grid[0].size) {
                     if (grid[x][y] == 0) paths.add(Pair(x, y))
-                    // 0 is PATH in MazeGenerator
                 }
             }
-            // Pick a path far from player
             val targetNode = paths.filter { 
                 val dx = it.first * gs.tileSize - gs.px
                 val dy = it.second * gs.tileSize - gs.py
@@ -298,11 +319,9 @@ class BombObjective : IGameObjective {
         if (trickleTimer <= 0f) {
             var activeCount = 0
             for (i in 0 until enemySys.n) if (enemySys.ex[i] > -1000f) activeCount++
-
             val baseLimit = if (gs.difficulty == 1) 20f else 15f
             val limit = LevelEngine.getSaturatedValue(gs.currentLevel, baseLimit, 45f - baseLimit, 100f).toInt()
             val queued = spawnerSys.getTotalQueue(gs)
-
             if (activeCount + queued < limit) {
                 spawnerSys.queueSpawns(limit - (activeCount + queued), gs)
             }
@@ -313,35 +332,25 @@ class BombObjective : IGameObjective {
             val dx = gs.px - gs.bombTargetX
             val dy = gs.py - gs.bombTargetY
             val dist = sqrt(dx * dx + dy * dy)
-
             gs.objectiveLabel = "LOCATE PLANT SITE"
             gs.objectiveProgress = (1.0f - (dist / 1000f)).coerceIn(0f, 0.9f)
-
-            if (dist < 150f) { // Near target
+            if (dist < 150f) {
                 plantTimer -= dt
                 gs.objectiveLabel = "PLANTING LOGIC BOMB..."
                 gs.objectiveProgress = 1.0f - (plantTimer / 3f)
-
                 if (plantTimer <= 0f) {
                     bombPlanted = true
                     StoryProtocol.showIngameMessage("LOGIC BOMB PLANTED! DEFEND THE UPLINK!", 3f)
                     EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 500)
-                    // Move spawners closer to bomb
-                    for(node in gs.spawnerNodes) {
-                        node.queue += 5
-                    }
+                    for(node in gs.spawnerNodes) node.queue += 5
                 }
-            } else {
-                plantTimer = 3f // Reset if player moves away
-            }
+            } else plantTimer = 3f
         } else {
             if (detonationTimer > 0f) {
                 detonationTimer -= dt
                 gs.shakeAmount = scale * 0.2f
                 gs.whiteFlash = (detonationTimer / 1.5f).coerceIn(0f, 1f)
-                if (detonationTimer <= 0f) {
-                    gs.isLevelCleared = true
-                }
+                if (detonationTimer <= 0f) gs.isLevelCleared = true
                 return
             }
 
@@ -350,25 +359,23 @@ class BombObjective : IGameObjective {
             val totalTime = 45f + (gs.currentLevel / 10f)
             gs.objectiveProgress = 1.0f - (defuseTimer / totalTime)
 
-            if (defuseTimer <= 0f && !gs.bossActive) {
+            // Hybrid: Detonation only starts if boss/elim features are ALSO cleared
+            if (defuseTimer <= 0f && areSecondaryFeaturesMet(gs)) {
                 detonationTimer = 1.5f
                 gs.whiteFlash = 1.0f
                 gs.shakeAmount = scale * 0.25f
                 StoryProtocol.isGlitchActive = true
-                gs.objectiveLabel = "DETONATION IN PROGRESS..."
-                
-                // More intense sound sequence
+                gs.objectiveLabel = "CRITICAL FAILURE IMMINENT"
                 EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_HIGH_L, 1000)
-                EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 500)
             }
         }
     }
 
     override fun checkWinCondition(gs: GameState): Boolean {
-        return bombPlanted && defuseTimer <= 0f && detonationTimer <= 0f && !gs.bossActive
+        return bombPlanted && defuseTimer <= 0f && detonationTimer <= 0f && areSecondaryFeaturesMet(gs)
     }
 
     override fun isBossTriggerReady(gs: GameState): Boolean {
-        return bombPlanted && defuseTimer <= 15f && defuseTimer > 0f // Boss spawns when 15s left
+        return bombPlanted && defuseTimer <= 15f && defuseTimer > 0f
     }
 }

@@ -101,15 +101,32 @@ object MazeGenerator {
         grid[startX][startY] = PLAYER_SPAWN
 
         // Place destination key-node safely on open paths
-        if (grid[destX][destY] == WALL) {
-            outer@ for(x in w-2 downTo 1) {
-                for(y in h-2 downTo 1) {
+        var foundDest = false
+        if (grid[destX][destY] != WALL && (destX != startX || destY != startY)) {
+            foundDest = true
+        } else {
+            // Find furthest path node from start for objective placement
+            var maxDistSq = -1
+            for (x in 1 until w - 1) {
+                for (y in 1 until h - 1) {
                     if (grid[x][y] == PATH && (x != startX || y != startY)) {
-                        destX = x; destY = y
-                        break@outer
+                        val dSq = (x - startX) * (x - startX) + (y - startY) * (y - startY)
+                        if (dSq > maxDistSq) {
+                            maxDistSq = dSq
+                            destX = x
+                            destY = y
+                            foundDest = true
+                        }
                     }
                 }
             }
+        }
+
+        // Emergency fallback: force a path at the edge if no path exists
+        if (!foundDest) {
+            destX = w - 2
+            destY = h - 2
+            grid[destX][destY] = PATH
         }
         grid[destX][destY] = DEST_NODE
 

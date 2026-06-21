@@ -28,9 +28,8 @@ class CollisionSystem(
         val hitRadius = scale * 0.045f
         val hitDistSq = hitRadius * hitRadius
 
-        val config = LevelEngine.getLevelConfig(gs.currentLevel)
-        val isElimination = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ELIMINATION) && gs.gameMode == 0
-        val isDefense = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE) && gs.gameMode == 0
+        val isElimination = gs.activeObjective is com.appsbyalok.echohunter.modes.EliminationObjective
+        val isDefense = gs.activeObjective is com.appsbyalok.echohunter.modes.DefenseObjective
 
         var playedEnemyKillSound = false
         var playedEnemyHackSound = false
@@ -283,11 +282,9 @@ class CollisionSystem(
                         onScoreAdd(5)
                         gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
 
-                        if (config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ELIMINATION) && gs.gameMode == 0) {
-                            if (enemySystem.type[i] == 3) {
-                                gs.elimTargetsKilled++
-                                StoryProtocol.showIngameMessage("TARGET ELIMINATED!", 1.5f)
-                            }
+                        if (isElimination && enemySystem.type[i] == 3) {
+                            gs.elimTargetsKilled++
+                            StoryProtocol.showIngameMessage("TARGET ELIMINATED!", 1.5f)
                         }
                         enemySystem.killEnemy(i, gs, width, height)
                     }
@@ -403,14 +400,12 @@ class CollisionSystem(
         effectSystem.spawnFloatingText(gs.bossX, gs.bossY, 50, GameColors.YELLOW)
         EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 500)
 
-        if (gs.gameMode == 0) {
-            if (gs.activeObjective.checkWinCondition(gs)) {
-                gs.isLevelCleared = true
-            }
-        } else {
-            if (gs.currentSector > 5 && gs.gameMode == 1) {
-                onCoreUnlock(gs.hp == gs.maxHp)
-            }
+        if (gs.activeObjective.checkWinCondition(gs)) {
+            gs.isLevelCleared = true
+        }
+
+        if (gs.gameMode == 1 && gs.currentSector > 5) {
+            onCoreUnlock(gs.hp == gs.maxHp)
         }
     }
 }

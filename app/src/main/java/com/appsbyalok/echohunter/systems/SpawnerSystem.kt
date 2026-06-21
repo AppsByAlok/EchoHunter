@@ -44,7 +44,11 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
                 ny = row * ts + (ts / 2f)
             }
 
+            val config = LevelEngine.getLevelConfig(gs.currentLevel)
             val type = when {
+                config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ELIMINATION) -> {
+                    if (i < 3) 2 else Random.nextInt(0, 2)
+                }
                 i == 0 -> 0 
                 i == 1 -> 1 
                 Random.nextFloat() < 0.2f -> 2 

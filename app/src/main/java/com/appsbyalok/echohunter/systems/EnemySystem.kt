@@ -75,8 +75,8 @@ class EnemySystem {
     // NAYA: Ab dushman sirf ek specified Node (nx, ny) par paida hoga
     fun spawnAt(i: Int, nx: Float, ny: Float, gs: GameState, width: Float, height: Float, nodeType: Int = -1) {
         val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
-        val isElimination = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ELIMINATION) && gs.gameMode == 0
-        val isDefense = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE) && gs.gameMode == 0
+        val isElimination = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ELIMINATION)
+        val isDefense = gs.activeObjective is com.appsbyalok.echohunter.modes.DefenseObjective
 
         ex[i] = nx
         ey[i] = ny

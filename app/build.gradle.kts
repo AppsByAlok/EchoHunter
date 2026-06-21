@@ -15,8 +15,8 @@ android {
         minSdk = 21
         //noinspection OldTargetApi
         targetSdk = 36
-        versionCode = 14
-        versionName = "0.7.0"
+        versionCode = 15
+        versionName = "0.7.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -30,7 +30,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
         }
     }
 //    splits {
