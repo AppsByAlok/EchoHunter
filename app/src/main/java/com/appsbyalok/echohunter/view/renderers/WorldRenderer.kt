@@ -64,31 +64,48 @@ class WorldRenderer(
 
         if (!showSpawners) return
 
-        // --- NAYA: DRAW SPAWNER NODES PROGRESS ---
+        // --- NAYA: SPAWNER NODES (CIRCUIT CHIP LOOK) ---
         for (node in gs.spawnerNodes) {
             val nx = node.x - gs.cameraX
             val ny = node.y - gs.cameraY
-            
-            // Back Ring
-            p.style = Paint.Style.STROKE
-            p.strokeWidth = scale * 0.015f
-            p.color = if (node.type == 1) 0x66FF0000.toInt() else 0x6600FFFF.toInt()
-            c.drawCircle(nx, ny, scale * 0.08f, p)
-            
-            // Progress Arc
-            p.color = if (node.type == 1) GameColors.RED else GameColors.PULSE
+            val r = scale * 0.035f // Smaller size to reduce clutter
+
+            val nodeColor = when(node.type) {
+                1 -> GameColors.RED
+                2 -> GameColors.YELLOW
+                else -> GameColors.PULSE
+            }
+
+            // 1. Chip Base (Semi-transparent)
+            p.style = Paint.Style.FILL
+            p.color = (0x33 shl 24) or (nodeColor and 0xFFFFFF)
+            c.drawRect(nx - r, ny - r, nx + r, ny + r, p)
+
+            // 2. Progress Fill (Chip charging up)
             val progress = 1f - (node.cooldownTimer / node.maxCooldown)
-            c.drawArc(
-                nx - scale * 0.08f, ny - scale * 0.08f,
-                nx + scale * 0.08f, ny + scale * 0.08f,
-                -90f, progress * 360f, false, p
-            )
-            
-            // Queue Text
+            p.color = (0x66 shl 24) or (nodeColor and 0xFFFFFF)
+            c.drawRect(nx - r, ny + r - (2 * r * progress), nx + r, ny + r, p)
+
+            // 3. Border & Pins
+            p.style = Paint.Style.STROKE
+            p.strokeWidth = scale * 0.005f
+            p.color = nodeColor
+            c.drawRect(nx - r, ny - r, nx + r, ny + r, p)
+
+            p.strokeWidth = scale * 0.002f
+            val pin = r * 0.4f
+            for (idx in -1..1) {
+                val off = idx * r * 0.6f
+                c.drawLine(nx - r - pin, ny + off, nx - r, ny + off, p) // Left pins
+                c.drawLine(nx + r, ny + off, nx + r + pin, ny + off, p) // Right pins
+            }
+
+            // 4. Queue Count
             if (node.queue > 0) {
-                p.style = Paint.Style.FILL
-                p.textSize = scale * 0.035f
-                c.drawText("${node.queue}", nx, ny + scale * 0.01f, p)
+                pText.textSize = scale * 0.022f
+                pText.color = 0xFFFFFFFF.toInt()
+                pText.textAlign = Paint.Align.CENTER
+                c.drawText("${node.queue}", nx, ny + scale * 0.008f, pText)
             }
         }
     }

@@ -1,4 +1,4 @@
-package com.appsbyalok.echohunter.terminal
+package com.appsbyalok.echohunter.ui.terminal
 
 import com.appsbyalok.echohunter.engine.GameState
 
