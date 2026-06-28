@@ -21,6 +21,7 @@ import com.appsbyalok.echohunter.statemachine.AppStateManager
 import com.appsbyalok.echohunter.systems.CollisionSystem
 import com.appsbyalok.echohunter.systems.EffectSystem
 import com.appsbyalok.echohunter.systems.EnemySystem
+import com.appsbyalok.echohunter.systems.triggerCinematicFocus
 import com.appsbyalok.echohunter.ui.UIArchives
 import com.appsbyalok.echohunter.ui.UIArsenal
 import com.appsbyalok.echohunter.ui.UIDecompiler
@@ -344,9 +345,14 @@ class GameView(context: Context) : View(context) {
         gs.bossX = safeX
         gs.bossY = safeY
         gs.isBossRage = false
-        gs.shakeAmount = scale * 0.08f
+        gs.shakeAmount = scale * 0.12f // Stronger shake on boss spawn
         gs.damageFlash = 0.3f
         gs.chromaticIntensity = 0.5f
+
+        // --- NAYA: CENTRALIZED CINEMATIC FOCUS ---
+        gs.triggerCinematicFocus(safeX, safeY, zoom = 1.4f, duration = 1.5f, hitStop = 0.2f)
+        gs.shakeAmount = scale * 0.15f // Intense vibration on boss arrival
+
         StoryProtocol.startBossIntro(type)
         gs.showGlobalMessage(context.getString(StoryProtocol.currentBossNameRes), 4f)
         EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 400)
@@ -420,18 +426,8 @@ class GameView(context: Context) : View(context) {
         // NAYA: StateManager updates UI logic
         stateManager.update(dt, width.toFloat(), height.toFloat(), gameScale)
 
-        canvas.save()
-        if (gs.shakeAmount > 0f) {
-            val dx = (Random.nextFloat() - 0.5f) * gs.shakeAmount
-            val dy = (Random.nextFloat() - 0.5f) * gs.shakeAmount
-            canvas.translate(dx, dy)
-            gs.shakeAmount -= dt * gameScale * 0.5f
-        }
-
         // --- NAYA: MODULAR DRAW (No more giant when block!) ---
         stateManager.draw(canvas, width.toFloat(), height.toFloat(), gameScale, dt)
-
-        canvas.restore()
 
         drawTransientOverlays(canvas, dt)
         worldRenderer.drawCRTOverlay(canvas, gs, width.toFloat(), height.toFloat())

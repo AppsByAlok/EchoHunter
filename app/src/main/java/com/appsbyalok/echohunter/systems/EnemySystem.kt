@@ -239,11 +239,6 @@ class EnemySystem {
 
         behavior.updateSpecial(dt, gs, this, scale)
 
-        if (!gs.bossActive) {
-            gs.bossActive = true
-            gs.bossLockTimer = 1.0f // Force aim for 1 second on spawn
-        }
-
         // Visibility handling
         if (gs.difficulty == 1) {
             if ((gs.pulse && bDistSq in gs.innerRSq..gs.outerRSq) || bDistSq < gs.passiveAuraRadiusSq) gs.bossVis = 1.0f

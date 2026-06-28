@@ -8,7 +8,6 @@ import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.utils.EchoAudioManager
 import com.appsbyalok.echohunter.view.GameView
-import kotlin.math.sin
 
 // Blueprint (Interface) for every state
 interface IAppState {
@@ -93,21 +92,32 @@ class GameplayState(private val manager: AppStateManager) : IAppState {
     }
     override fun draw(c: Canvas, gs: GameState, width: Float, height: Float, scale: Float, dt: Float) {
         c.drawColor(0xFF050A0F.toInt()) // Base Background
-        manager.view.worldRenderer.drawGrid(c, scale, gs, width, height) // GRID RESTORED
 
         c.save()
-        if (gs.slowMoTimer > 0f) {
-            val zoom = 1.05f + sin(gs.timeSinceStart * 8.0).toFloat() * 0.015f
-            c.scale(zoom, zoom, width / 2f, height / 2f)
+        // --- HUD ISOLATION: Apply Camera Transforms ONLY to the World ---
+        
+        // 1. Zoom Logic
+        if (gs.cameraZoom != 1.0f) {
+            c.scale(gs.cameraZoom, gs.cameraZoom, width / 2f, height / 2f)
         } else if (gs.state == 9) {
             val zoom = 1f + (gs.mergeTimer * 0.5f)
             c.scale(zoom, zoom, gs.coreX - gs.cameraX, gs.coreY - gs.cameraY)
         }
 
+        // 2. Shake Logic
+        if (gs.shakeAmount > 0f) {
+            val dx = (kotlin.random.Random.nextFloat() - 0.5f) * gs.shakeAmount
+            val dy = (kotlin.random.Random.nextFloat() - 0.5f) * gs.shakeAmount
+            c.translate(dx, dy)
+        }
+
+        manager.view.worldRenderer.drawGrid(c, scale, gs, width, height)
         manager.view.worldRenderer.drawMaze(c, gs, scale, width, height)
         manager.view.worldRenderer.drawGamePlay(c, scale, gs, width, height)
+        
         c.restore()
 
+        // --- HUD remains stable (not affected by c.restore() above) ---
         if (gs.empFlashTimer <= 0.8f && gs.state != 9) manager.view.hudRenderer.drawHUD(c, scale, gs, width, height)
         if (gs.showOverclockTextTimer > 0f) manager.view.hudRenderer.renderOverclockText(c, scale, width, height)
     }

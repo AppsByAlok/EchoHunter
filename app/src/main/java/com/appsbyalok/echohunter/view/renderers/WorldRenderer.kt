@@ -92,6 +92,12 @@ class WorldRenderer(
             p.color = nodeColor
             c.drawRect(nx - r, ny - r, nx + r, ny + r, p)
 
+            // Inner technical detailing
+            p.strokeWidth = scale * 0.001f
+            c.drawCircle(nx, ny, r * 0.4f, p)
+            c.drawLine(nx - r, ny, nx + r, ny, p)
+            c.drawLine(nx, ny - r, nx, ny + r, p)
+
             p.strokeWidth = scale * 0.002f
             val pin = r * 0.4f
             for (idx in -1..1) {

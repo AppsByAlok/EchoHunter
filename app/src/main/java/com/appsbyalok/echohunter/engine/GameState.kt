@@ -182,6 +182,13 @@ class GameState {
 
     var cameraX = 0f // Current X offset of the game camera
     var cameraY = 0f // Current Y offset of the game camera
+    var camLeadX = 0f // Smoothed camera lead offset (X)
+    var camLeadY = 0f // Smoothed camera lead offset (Y)
+    var cameraZoom = 1.0f // Current zoom factor (1.0 = normal)
+    var targetZoom = 1.0f // Target zoom factor for smooth lerping
+    var cameraFocusX = -1f // Optional focus point (e.g. Boss)
+    var cameraFocusY = -1f 
+    var cameraFocusWeight = 0f // 0.0 = Player, 1.0 = Focus Point
 
     var damageFlash = 0f // Visual effect timer for screen flash when taking damage
     var sectorFlash = 0f // Visual effect timer for sector transitions
@@ -308,6 +315,13 @@ class GameState {
         overclockMeter = 0f; overclockTimer = 0f
         cameraX = 0f
         cameraY = 0f
+        camLeadX = 0f
+        camLeadY = 0f
+        cameraZoom = 1.0f
+        targetZoom = 1.0f
+        cameraFocusWeight = 0f
+        cameraFocusX = -1f
+        cameraFocusY = -1f
         currentSector = 1; sectorTarget = 30; bossActive = false
         empFlashTimer = 0f; comboBreakTimer = 0f
 
@@ -401,8 +415,10 @@ class GameState {
         if (empFlashTimer > 0f) empFlashTimer -= dt
         if (slowMoTimer > 0f) slowMoTimer -= dt
         if (bossDeathTimer > 0f) bossDeathTimer -= dt
+        if (bossLockTimer > 0f) bossLockTimer -= dt
         if (attackCooldown > 0f) attackCooldown -= dt
         if (sonarTimer > 0f) sonarTimer -= dt
+        if (shakeAmount > 0f) shakeAmount -= dt * scale * 0.5f
 
         val target = targetClarity
         val visionUpdateRate = if (difficulty == 1) 0.04f else 0.8f

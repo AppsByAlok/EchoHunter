@@ -14,7 +14,6 @@
     - **Sudden Dash**: High-speed lunges towards the player's current position.
     - **EMP Traps**: Deploy static zones that debuff player speed or temporarily scramble the HUD.
     - **Projectiles**: Pattern-based attacks like fireball spreads or laser sweeps.
-- **VISUALS**: Add a 1-second "cinematic look-at" slo-mo effect when a boss spawns.
 - **BOSS AI**: Integrate state-machine logic in `EnemyAI.kt` specifically for Boss-class entities to cycle through these abilities.
 
 ### 4. Classic Mode (Data Orbs)
@@ -49,9 +48,7 @@
     - Fine-tune screen shake and hit-stop duration for each weapon type.
     - Balance Glitch effects; restrict them to specific events to avoid visual fatigue.
 
-### 10. Camera Improvements
-- **DYNAMIC ZOOM**: Implement zoom-out at high velocities and zoom-in during static/low-speed moments.
-- **OFFSET**: Add a slight camera lead based on player movement direction to improve forward visibility.
+### 10. [RESERVED] - Future UI/UX Extension
 
 ### 11. Onboarding / Tutorial
 - **PROMPTS**: Add contextual UI prompts in the first 2-3 levels explaining Overclock mechanics, Trap placement, and Sonar pings.
@@ -66,6 +63,9 @@
 ---
 
 ## [COMPLETED / RECENTLY IMPROVED]
+- **Centralized Camera System**: Moved tracking, zoom, and lead logic to `CameraSystem.kt`.
+- **Cinematic Focus & Shake**: Implemented `triggerCinematicFocus` and `shakeCamera()` for boss arrivals.
+- **Dynamic Zoom & Lead**: Camera now zooms out at high speeds and leads the player's movement direction.
 - **HVT/Target Spawn Reliability**: `GameState.resetGame()` now correctly resets mission counters and level targets.
 - **Yellow Enemy HP Logic**: Basic index-recycling and dead-state checks added to `CollisionSystem`.
 - **Defense Mode Base**: Core HP, defense visuals, and basic objective flow implemented.

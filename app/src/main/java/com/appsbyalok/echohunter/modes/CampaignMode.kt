@@ -8,8 +8,8 @@ import com.appsbyalok.echohunter.data.LevelEngine
 import com.appsbyalok.echohunter.data.LevelFeature
 import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.engine.GameState
+import com.appsbyalok.echohunter.systems.updateCameraLogic
 import com.appsbyalok.echohunter.utils.GameColors
-import kotlin.math.max
 import kotlin.random.Random
 
 // Game Mode 0: The Sandbox Simulation (Act 1: First Contact)
@@ -30,23 +30,8 @@ class CampaignMode : GameModeStrategy {
     override fun getIntroLines() = sandboxIntroLines
 
     override fun updateCameraAndMovement(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {
-        val screenPx = gs.px - gs.cameraX
-        val screenPy = gs.py - gs.cameraY
-
-        // --- Smooth 2D Camera Tracking Logic ---
-        val lerpFactor = 5f * dt
-
-        // Horizontal Tracking (X) - 40/60 window
-        if (screenPx > width * 0.6f) gs.cameraX += (screenPx - width * 0.6f) * lerpFactor
-        else if (screenPx < width * 0.4f) gs.cameraX += (screenPx - width * 0.4f) * lerpFactor
-
-        // Vertical Tracking (Y) - Portrait Safe
-        if (screenPy > height * 0.6f) gs.cameraY += (screenPy - height * 0.6f) * lerpFactor
-        else if (screenPy < height * 0.4f) gs.cameraY += (screenPy - height * 0.4f) * lerpFactor
-
-        // Boundaries Clamp (Uses dynamic height now)
-        gs.cameraX = gs.cameraX.coerceIn(0f, max(0f, gs.mapWidth - width))
-        gs.cameraY = gs.cameraY.coerceIn(0f, max(0f, gs.mapHeight - height))
+        // Use the centralized camera engine with mode-specific settings
+        gs.updateCameraLogic(dt, width, height, baseZoom = 1.0f, leadMult = 0.15f)
     }
 
     override fun checkProgression(

@@ -271,7 +271,8 @@ class CollisionSystem(
                     // Dash Deals 2 Damage!
                     enemySystem.hp[i] -= 2
                     effectSystem.spawnParticles(enemySystem.ex[i], enemySystem.ey[i], 1, scale)
-                    gs.hitStopTimer = max(gs.hitStopTimer, 0.05f)
+                    gs.hitStopTimer = max(gs.hitStopTimer, 0.12f) // Crunchy hit-stop
+                    gs.shakeAmount = max(gs.shakeAmount, scale * 0.05f) // Small impact shake
                     
                     if (!playedEnemyKillSound) {
                         EchoAudioManager.playSound(ToneGenerator.TONE_SUP_INTERCEPT, 50)
@@ -399,6 +400,12 @@ class CollisionSystem(
 
         effectSystem.spawnFloatingText(gs.bossX, gs.bossY, 50, GameColors.YELLOW)
         EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 500)
+
+        // Reset inverted controls after boss death
+        if (StoryProtocol.areControlsInverted) {
+            StoryProtocol.areControlsInverted = false
+            StoryProtocol.showIngameMessage("SYSTEM: UPLINK STABILIZED. CONTROLS RESTORED.", 2f)
+        }
 
         if (gs.activeObjective.checkWinCondition(gs)) {
             gs.isLevelCleared = true

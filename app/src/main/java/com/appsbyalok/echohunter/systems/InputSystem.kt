@@ -9,7 +9,6 @@ class InputSystem(private val gs: GameState) {
 
     fun update(dt: Float, scale: Float, enemySys: EnemySystem?) {
         val menuThreshold = scale * 0.18f // Increased to prevent accidental triggers
-        val selectThreshold = scale * 0.28f 
 
         // --- ATTACK / WEAPON MENU ---
         if (gs.controls.isAttackTouching) {
@@ -29,7 +28,7 @@ class InputSystem(private val gs: GameState) {
         } else {
             if (gs.controls.isWeaponMenuOpen) {
                 if (gs.controls.selectedWeaponIdx != -1) {
-                    gs.controls.activeAttackMode = AttackMode.values()[gs.controls.selectedWeaponIdx]
+                    gs.controls.activeAttackMode = AttackMode.entries.toTypedArray()[gs.controls.selectedWeaponIdx]
                 }
                 gs.controls.isWeaponMenuOpen = false
                 gs.controls.selectedWeaponIdx = -1
@@ -127,7 +126,7 @@ class InputSystem(private val gs: GameState) {
         val arcRange = 120f
         
         // Exclude the right/bottom area
-        if (normalized < 100 || normalized > 340) return -1 
+        if (normalized !in 100.0..340.0) return -1
         
         // Map 160...280 to 0...count-1
         var relativeAngle = normalized - startArc
@@ -149,11 +148,6 @@ class InputSystem(private val gs: GameState) {
         gs.controls.attackPullDist = 0f
 
         if (enemySys != null) {
-            // Update boss lock timer
-            if (gs.bossLockTimer > 0f) {
-                gs.bossLockTimer -= gs.lastDt // Use a delta time if available, or just subtract a small amount
-            }
-
             // Priority 0: Forced Boss Lock (1 second when boss first appears)
             if (gs.bossActive && gs.bossLockTimer > 0f) {
                 val dx = gs.bossX - gs.px
