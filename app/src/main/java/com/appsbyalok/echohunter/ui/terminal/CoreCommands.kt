@@ -4,6 +4,7 @@ import android.media.ToneGenerator
 import android.os.Handler
 import android.os.Looper
 import com.appsbyalok.echohunter.data.SaveManager
+import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.utils.EchoAudioManager
 import java.text.SimpleDateFormat
@@ -15,16 +16,25 @@ class HelpCommand : TerminalCommand {
     override val name = "HELP"
     override val description = "Lists available commands and usage info"
     override fun execute(args: List<String>, context: CommandContext): String {
-        val unlockedCmds = CommandRegistry.getAllCommands(context.gameState)
-            .filter { it.isUnlocked(context.gameState) }
-            .map { it.name }
-            .sorted()
+        val gs = context.gameState
+        val unlockedCmds = CommandRegistry.getAllCommands(gs)
+            .filter { it.isUnlocked(gs) }
+            .sortedBy { it.name }
         
-        val sb = StringBuilder("AVAILABLE COMMANDS:\n")
-        unlockedCmds.chunked(4).forEach { chunk ->
-            sb.append("  ${chunk.joinToString(", ")}\n")
+        val sb = StringBuilder("=== NANO-OS HELP SYSTEM ===\n")
+        sb.append("OBJECTIVE: ${if (gs.currentLevel == 1 && SaveManager.maxCampaignLevel == 1) "Access Archives or CONFIG." else "Clear Ring ${gs.currentLevel}."}\n\n")
+        
+        sb.append("AVAILABLE COMMANDS:\n")
+        unlockedCmds.forEach { cmd ->
+            sb.append("  ${cmd.name.padEnd(10)} - ${cmd.description}\n")
         }
-        sb.append("\nMATH: Type expression like '5 + 5'")
+
+        sb.append("\nUPCOMING UNLOCKS:\n")
+        if (SaveManager.maxCampaignLevel <= 2) sb.append("  - SCAN: Ring 2\n")
+        if (!SaveManager.isHardModeUnlocked) sb.append("  - SUDO/GOD/DEBUG: Complete 3 Story Acts\n")
+        if (!SaveManager.isStoryModeUnlocked) sb.append("  - STORY_LOG: Reach Ring 15\n")
+
+        sb.append("\nTIP: Type math like '12 * 4' directly.\n")
         return sb.toString()
     }
 }
@@ -81,6 +91,7 @@ class VerCommand : TerminalCommand {
     override val description = "Displays NANO-OS version information"
     override fun execute(args: List<String>, context: CommandContext): String {
         return """
+            
             NANO-OS v4.2.1-STABLE
             BUILD: 2024.11.12-RELEASE
             KERNEL: ECHO-CORE-9000
@@ -121,8 +132,7 @@ class CatCommand : TerminalCommand {
     override val description = "Displays the contents of a file"
     override fun execute(args: List<String>, context: CommandContext): String {
         if (args.isEmpty()) return "USAGE: CAT [FILENAME]"
-        val filename = args[0].uppercase()
-        return when (filename) {
+        return when (val filename = args[0].uppercase()) {
             "ROOT_TERM.SH" -> """
                 #!/BIN/NANO-OS
                 ECHO 'INITIATING ECHO PROTOCOL...'
@@ -227,5 +237,91 @@ class GodModeCommand : TerminalCommand {
     override fun execute(args: List<String>, context: CommandContext): String {
         context.gameState.modGodMode = !context.gameState.modGodMode
         return "GOD MODE: ${if (context.gameState.modGodMode) "ENABLED" else "DISABLED"}"
+    }
+}
+
+class ConfigCommand : TerminalCommand {
+    override val name = "CONFIG"
+    override val description = "Manage game settings: SOUND, VIBE, FX"
+    override val aliases = listOf("SETTINGS", "SET")
+    override fun execute(args: List<String>, context: CommandContext): String {
+        if (args.isEmpty()) {
+            return """
+                SYSTEM CONFIGURATION:
+                SOUND  : ${if (SaveManager.isSoundEnabled) "ON" else "OFF"}
+                VIBE   : ${if (SaveManager.isVibrationEnabled) "ON" else "OFF"}
+                FX     : ${if (SaveManager.isEffectsEnabled) "ON" else "OFF"}
+                
+                USAGE: CONFIG [KEY] [ON/OFF]
+            """.trimIndent()
+        }
+        
+        if (args.size < 2) return "ERR: MISSING VALUE (ON/OFF)"
+        
+        val key = args[0].uppercase()
+        val value = args[1].uppercase() == "ON"
+        
+        return when (key) {
+            "SOUND" -> {
+                SaveManager.setSoundEnabled(value)
+                "SOUND SYSTEM ${if (value) "INITIALIZED" else "DISABLED"}"
+            }
+            "VIBE", "VIBRATION" -> {
+                SaveManager.setVibrationEnabled(value)
+                "HAPTIC FEEDBACK ${if (value) "ACTIVE" else "MUTED"}"
+            }
+            "FX", "EFFECTS" -> {
+                SaveManager.setEffectsEnabled(value)
+                "VISUAL EFFECTS ${if (value) "MAXIMIZED" else "OPTIMIZED (MINIMAL)"}"
+            }
+            else -> "ERR: UNKNOWN CONFIG KEY '$key'"
+        }
+    }
+}
+
+class LevelCommand : TerminalCommand {
+    override val name = "START"
+    override val description = "Jump to a specific Ring (Level)"
+    override val aliases = listOf("GOTO", "LEVEL")
+    override fun execute(args: List<String>, context: CommandContext): String {
+        if (args.isEmpty()) return "USAGE: START [LEVEL_NUMBER]"
+        val level = args[0].toIntOrNull() ?: return "ERR: INVALID LEVEL NUMBER"
+        
+        if (level !in 1..200) return "ERR: LEVEL OUT OF RANGE (1-200)"
+        
+        context.gameState.currentLevel = level
+        // We might want to close terminal and start the game immediately
+        // But for now, we just set the level. 
+        // Returning a message is better.
+        return "SECTOR LOCKED. RING $level READY FOR INITIALIZATION."
+    }
+}
+
+class StoryLogCommand : TerminalCommand {
+    override val name = "STORY_LOG"
+    override val description = "Displays all story text (requires Story completion)"
+    override fun isUnlocked(gs: GameState): Boolean = SaveManager.isStoryModeUnlocked
+    override fun execute(args: List<String>, context: CommandContext): String {
+        if (SaveManager.unlockedStoryStreak < 3) {
+            return "ERR: ENCRYPTION DETECTED. COMPLETE ALL 3 ACTS TO DECRYPT LOGS."
+        }
+        
+        val androidContext = context.androidContext
+        val sb = StringBuilder("--- DECRYPTED STORY LOGS ---\n")
+        
+        val allStoryRes = StoryProtocol.storyIntroLines + StoryProtocol.storyMidLines + 
+                        StoryProtocol.storyPerfectEnding + StoryProtocol.storyNeutralEnding + 
+                        StoryProtocol.badEndingLines
+                        
+        allStoryRes.forEach { resId ->
+            try {
+                val text = androidContext.getString(resId)
+                sb.append("- $text\n\n")
+            } catch (e: Exception) {
+                // Skip if resource not found or other error
+            }
+        }
+        
+        return sb.toString().trim()
     }
 }

@@ -1,24 +1,8 @@
 <resources>
     <string name="app_name">Echo Hunter</string>
 
-    <!-- Menu Titles -->
-    <string name="menu_endless">ENDLESS WAVES</string>
-    <string name="menu_story">STORY: CLEANUP</string>
-    <string name="menu_firewall">FIREWALL BREACH</string>
-
-    <string name="menu_sub_endless">Survive infinite waves. Boss every 5 waves.</string>
-    <string name="menu_sub_story">Hunt 5 Mutating Sector Guardians.</string>
-    <string name="menu_sub_firewall">Treadmill Escape. Dodge gates.</string>
-
     <!-- UI Elements -->
-    <string name="ui_data">DATA: %1$d TB</string>
-    <string name="ui_banked">BANKED: %1$d TB</string>
     <string name="ui_core_signal">CORE SIGNAL: %1$dm</string>
-    <string name="ui_vis">VIS</string>
-    <string name="ui_ovr">OVR</string>
-    <string name="ui_combo">COMBO x%1$d</string>
-    <string name="ui_combo_broken">COMBO BROKEN</string>
-    <string name="ui_overclock_ready">OVERCLOCK READY!</string>
     <string name="ui_tap_continue">TAP BOTTOM HALF TO CONTINUE</string>
     <string name="ui_mode_easy">[ MODE: EASY ]</string>
     <string name="ui_mode_hard">[ MODE: HARD ]</string>
@@ -32,40 +16,13 @@
     <string name="ui_hint_initializing">&gt; INITIALIZING… &lt;</string>
 
     <!-- Help Screen -->
-    <string name="help_title">ECHO PROTOCOL v2.0</string>
-    <string name="help_how_to_survive">&gt; HOW TO SURVIVE &lt;</string>
-    <string name="help_controls">Tap to Pulse (Reveals map). Drag to Move.</string>
-    <string name="help_vision_blur">Pulsing rapidly causes Vision Blur!</string>
-    <string name="help_item_yellow">[+] YELLOW: Data Fragments (Points)</string>
-    <string name="help_item_blue">[V] BLUE: Clarity Shards / Slows Firewall</string>
-    <string name="help_item_purple">[S] PURPLE: Shield Protocol</string>
-    <string name="help_item_red">[-] RED: Corrupted Entities (AVOID/DESTROY)</string>
-    <string name="help_overclock_title">--- OVERCLOCK &amp; COMBAT ---</string>
-    <string name="help_overclock_desc">Build Combos without taking damage to fill Overclock.</string>
-    <string name="help_overclock_combat">When active, RAM into Enemies &amp; Bosses to DESTROY them!</string>
-    <string name="help_hard_mode_desc">HARD MODE: Fast fade, Inverted Glitches, Hidden Bosses.</string>
-    <string name="ui_repair_system">REPAIR SYSTEM</string>
     <string name="ui_system_repaired">SYSTEM REPAIRED</string>
-    <string name="ui_repair_protocol">RUN_CLEAN_PROTOCOL.EXE</string>
-    <string name="help_tap_return">[ TAP TO RETURN ]</string>
 
     <!-- Pause / System Messages -->
     <string name="pause_title">SYSTEM PAUSED</string>
     <string name="pause_resume">&gt; RESUME &lt;</string>
     <string name="pause_menu">&gt; MAIN MENU &lt;</string>
-    <string name="msg_core_unlocked">SYSTEM CORE UNLOCKED. FOLLOW THE SIGNAL.</string>
     <string name="msg_damage_detected">SYSTEM DAMAGE DETECTED</string>
-    <string name="msg_emp_detected">SYSTEM EMP DETECTED</string>
-    <string name="msg_glitch">SYSTEM GLITCH… DON\'T TRUST YOUR EYES</string>
-    <string name="msg_fighting_back">THE SYSTEM IS FIGHTING BACK!</string>
-
-    <!-- Game Modes Specific -->
-    <string name="wave_count">WAVE %1$d</string>
-    <string name="sector_count">SECTOR %1$d</string>
-    <string name="sector_target">TARGET: %1$d TB</string>
-    <string name="msg_sector_corrupted">SECTOR CORRUPTED.</string>
-    <string name="msg_system_failing">SYSTEM FAILING.</string>
-    <string name="msg_guardian_active">WARNING: GUARDIAN ACTIVE</string>
 
     <!-- Boss Names -->
     <string name="boss_0">GUARDIAN-01: THE WATCHER</string>
@@ -75,28 +32,12 @@
     <string name="boss_omega">GUARDIAN-OMEGA: THE ARCHITECT</string>
 
     <!-- Story Lines - Endless -->
-    <string name="story_endless_1">&gt; SYSTEM TRAP DETECTED.</string>
-    <string name="story_endless_2">&gt; THERE IS NO EXIT.</string>
-    <string name="story_endless_3">&gt; THIS IS NOT A MISSION ANYMORE…</string>
-    <string name="story_endless_4">&gt; THIS IS SURVIVAL.</string>
-
-    <string name="popup_endless_1">THEY ARE WATCHING YOU…</string>
-    <string name="popup_endless_2">HOW LONG CAN YOU LAST?</string>
-    <string name="popup_endless_3">SIGNAL LOST…</string>
-    <string name="popup_endless_4">SYSTEM MEMORY LEAKING…</string>
 
     <!-- Story Lines - Sandbox (Act 1) -->
     <string name="lore_sandbox_1">&gt; UNKNOWN SIGNAL INTERCEPTED…</string>
     <string name="lore_sandbox_2">&gt; CONNECTING TO MAINTENANCE DRONE: PROBE-7…</string>
     <string name="lore_sandbox_3">&gt; UPLINK ESTABLISHED. MANUAL CONTROL ACTIVE.</string>
-    <string name="lore_sandbox_breached">&gt; UNAUTHORIZED UPLINK DETECTED. HUMAN OPERATOR LOCATED.</string>
     <string name="lore_system_overflow">CONNECTION TIMEOUT.\nYOU HAVE HACKED TOO FAR AND BROKE THE LOOP.\n(Seriously, disconnect and touch some grass.)</string>
-    <string name="msg_warden_approaching">ADMIN: \"WHO IS CONTROLLING THAT DRONE?\"</string>
-    <string name="msg_node_cleared">NODE BYPASSED. DOWNLOADING DATA…</string>
-
-    <string name="ui_security_ring">SECURITY RING %1$d</string>
-    <string name="ui_target_data">TARGET: %1$d KB</string>
-    <string name="msg_warden_active">WARNING: WARDEN ACTIVE</string>
 
     <!-- Story Lines - Mainframe (Act 2) -->
     <string name="story_main_1">&gt; MAINFRAME FIREWALL BYPASSED.</string>
@@ -118,17 +59,6 @@
     <string name="story_neutral_2">&gt; CONNECTION FORCIBLY CUT.</string>
     <string name="story_neutral_3">&gt; THEY HAVE YOUR MAC ADDRESS…</string>
     <string name="story_neutral_4">&gt; REBOOT YOUR ROUTER. NOW.</string>
-
-    <!-- Story Lines - Firewall / Purge (Act 3) -->
-    <string name="story_firewall_1">&gt; ADMIN: \"I SEE YOU BEHIND THAT SCREEN.\"</string>
-    <string name="story_firewall_2">&gt; ADMIN: \"BURNING THE SERVERS TO TRAP YOU.\"</string>
-    <string name="story_firewall_3">&gt; PURGE PROTOCOL ENGAGED.</string>
-    <string name="story_firewall_4">&gt; DISCONNECT BEFORE YOUR DEVICE FRIES.</string>
-
-    <string name="popup_firewall_1">ADMIN: \"STOP RUNNING.\"</string>
-    <string name="popup_firewall_2">ADMIN: \"WE ARE TRACING YOU.\"</string>
-    <string name="popup_firewall_3">CPU OVERHEATING…</string>
-    <string name="popup_firewall_4">THERE IS NOWHERE TO HIDE.</string>
 
     <!-- Bad Ending -->
     <string name="story_bad_1">&gt; CONNECTION LOST.</string>

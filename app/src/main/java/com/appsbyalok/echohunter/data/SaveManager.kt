@@ -20,9 +20,32 @@ object SaveManager {
     var isAutoNextLevelEnabled: Boolean = false
         private set
 
+    // --- GAME SETTINGS ---
+    var isSoundEnabled: Boolean = true
+        private set
+    var isVibrationEnabled: Boolean = true
+        private set
+    var isEffectsEnabled: Boolean = true
+        private set
+
     fun setAutoNextLevel(enabled: Boolean) {
         isAutoNextLevelEnabled = enabled
         prefs.edit().putBoolean("isAutoNextLevelEnabled", isAutoNextLevelEnabled).apply()
+    }
+
+    fun setSoundEnabled(enabled: Boolean) {
+        isSoundEnabled = enabled
+        prefs.edit().putBoolean("isSoundEnabled", isSoundEnabled).apply()
+    }
+
+    fun setVibrationEnabled(enabled: Boolean) {
+        isVibrationEnabled = enabled
+        prefs.edit().putBoolean("isVibrationEnabled", isVibrationEnabled).apply()
+    }
+
+    fun setEffectsEnabled(enabled: Boolean) {
+        isEffectsEnabled = enabled
+        prefs.edit().putBoolean("isEffectsEnabled", isEffectsEnabled).apply()
     }
     // --- NAYA STREAK SYSTEM (ROGUELITE) ---
     var currentStoryStreak: Int = 0
@@ -57,6 +80,9 @@ object SaveManager {
         totalData = getLongSafe("totalData")
         maxCampaignLevel = prefs.getInt("maxCampaignLevel", 1)
         isAutoNextLevelEnabled = prefs.getBoolean("isAutoNextLevelEnabled", false)
+        isSoundEnabled = prefs.getBoolean("isSoundEnabled", true)
+        isVibrationEnabled = prefs.getBoolean("isVibrationEnabled", true)
+        isEffectsEnabled = prefs.getBoolean("isEffectsEnabled", true)
 
         // Load Streaks
         currentStoryStreak = prefs.getInt("currStory", 0)

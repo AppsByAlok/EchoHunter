@@ -33,7 +33,7 @@ class UINanoOS {
         "Firmware Upgrades",
         "Hardware Weapons",
         "Simulation Memory",
-        "[ ENCRYPTED ]"
+        "System Control & Logs"
     )
 
     fun draw(c: Canvas, targetW: Float, targetH: Float, scale: Float, time: Float) {
@@ -126,24 +126,22 @@ class UINanoOS {
     }
 
     private fun drawCard(c: Canvas, rect: RectF, index: Int, scale: Float) {
-        val isLocked = (index == 3 && !SaveManager.isHardModeUnlocked)
-
         p.style = Paint.Style.FILL
-        p.color = if (isLocked) 0xFF110505.toInt() else 0xFF051515.toInt()
+        p.color = 0xFF051515.toInt()
         c.drawRoundRect(rect, scale * 0.03f, scale * 0.03f, p)
 
         p.style = Paint.Style.STROKE
-        p.color = if (isLocked) 0xFF550000.toInt() else GameColors.PULSE
+        p.color = GameColors.PULSE
         p.strokeWidth = scale * 0.005f
         c.drawRoundRect(rect, scale * 0.03f, scale * 0.03f, p)
 
         pText.textAlign = Paint.Align.LEFT
         pText.textSize = scale * 0.05f
-        pText.color = if (isLocked) GameColors.RED else GameColors.PULSE
+        pText.color = GameColors.PULSE
         c.drawText(titles[index], rect.left + scale * 0.05f, rect.top + scale * 0.08f, pText)
 
         pText.textSize = scale * 0.035f
-        pText.color = if (isLocked) 0xFF880000.toInt() else GameColors.CLARITY
+        pText.color = GameColors.CLARITY
         c.drawText(subs[index], rect.left + scale * 0.05f, rect.bottom - scale * 0.04f, pText)
     }
 
@@ -157,13 +155,8 @@ class UINanoOS {
 
             for (i in 0..3) {
                 if (cardRects[i].contains(x, y)) {
-                    if (i == 3 && !SaveManager.isHardModeUnlocked) {
-                        // Terminal is Locked until Hard Mode is unlocked
-                        EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
-                    } else {
-                        EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
-                        onAppSelect(i) // i: 0=Decompiler, 1=Arsenal, 2=Archives, 3=Terminal
-                    }
+                    EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
+                    onAppSelect(i) // i: 0=Decompiler, 1=Arsenal, 2=Archives, 3=Terminal
                     return true
                 }
             }

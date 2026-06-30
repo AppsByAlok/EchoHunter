@@ -1,5 +1,6 @@
 package com.appsbyalok.echohunter.ui.terminal
 
+import android.content.Context
 import com.appsbyalok.echohunter.engine.GameState
 
 /**
@@ -30,5 +31,7 @@ data class CommandContext(
     val gameState: GameState,
     val terminalLines: MutableList<String>,
     val onExit: () -> Unit,
-    val files: Map<String, String> // Virtual File System placeholder
+    val files: Map<String, String>, // Virtual File System placeholder
+    val onAddLines: (String) -> Unit = {},
+    val androidContext: Context
 )

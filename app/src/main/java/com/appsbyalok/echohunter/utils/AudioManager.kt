@@ -17,6 +17,7 @@ object EchoAudioManager {
 
     // Play sound with a small cooldown to prevent overlapping audio glitches
     fun playSound(toneType: Int, duration: Int) {
+        if (!com.appsbyalok.echohunter.data.SaveManager.isSoundEnabled) return
         val now = System.currentTimeMillis()
         if (now - lastToneTime > 40) {
             try {

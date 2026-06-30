@@ -287,7 +287,7 @@ class SubMenuState(private val manager: AppStateManager) : IAppState {
             11 -> manager.view.uiArchives.draw(c, width, height, gs, scale)
             13 -> manager.view.uiArsenal.draw(c, width, height, scale, gs)
             14 -> manager.view.uiNanoOS.draw(c, width, height, scale, gs.timeSinceStart)
-            15 -> manager.view.uiTerminal.draw(c, width, height, scale, gs)
+            15 -> manager.view.uiTerminal.draw(c, width, height, scale, gs, manager.view.context)
         }
     }
     override fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean {
@@ -304,7 +304,7 @@ class SubMenuState(private val manager: AppStateManager) : IAppState {
                     3 -> manager.view.changeState(15)
                 }
             }, manager.view.onDisconnect)
-            15 -> manager.view.uiTerminal.onTouch(vx, vy, action, gs, manager.view.onAppClose)
+            15 -> manager.view.uiTerminal.onTouch(vx, vy, action, gs, manager.view.context, manager.view.onAppClose)
             else -> true
         }
     }

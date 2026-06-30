@@ -1,5 +1,6 @@
 package com.appsbyalok.echohunter.ui
 
+import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
@@ -8,11 +9,13 @@ import android.media.ToneGenerator
 import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
+import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.ui.terminal.CatCommand
 import com.appsbyalok.echohunter.ui.terminal.ClearCommand
 import com.appsbyalok.echohunter.ui.terminal.CommandContext
 import com.appsbyalok.echohunter.ui.terminal.CommandRegistry
+import com.appsbyalok.echohunter.ui.terminal.ConfigCommand
 import com.appsbyalok.echohunter.ui.terminal.DataInjectCommand
 import com.appsbyalok.echohunter.ui.terminal.DateCommand
 import com.appsbyalok.echohunter.ui.terminal.DirCommand
@@ -20,8 +23,10 @@ import com.appsbyalok.echohunter.ui.terminal.EchoCommand
 import com.appsbyalok.echohunter.ui.terminal.ExitCommand
 import com.appsbyalok.echohunter.ui.terminal.GodModeCommand
 import com.appsbyalok.echohunter.ui.terminal.HelpCommand
+import com.appsbyalok.echohunter.ui.terminal.LevelCommand
 import com.appsbyalok.echohunter.ui.terminal.RebootCommand
 import com.appsbyalok.echohunter.ui.terminal.ScanCommand
+import com.appsbyalok.echohunter.ui.terminal.StoryLogCommand
 import com.appsbyalok.echohunter.ui.terminal.SudoCommand
 import com.appsbyalok.echohunter.ui.terminal.SysInfoCommand
 import com.appsbyalok.echohunter.ui.terminal.UnlockAllCommand
@@ -39,9 +44,20 @@ class UITerminal {
     }
     private val pBg = Paint().apply { isAntiAlias = true }
 
-    private val lines = mutableListOf<String>()
+    private val lines = mutableListOf<String>() // Raw lines history
+    private val wrappedLines = mutableListOf<String>() // Wrapped lines for display
+    private val tokenRegex = Regex("(?<=\\s)|(?=\\s)")
     private var currentInput = ""
     
+    private var scrollOffset = 0
+    private var lastTouchY = 0f
+    private var isDragging = false
+    private val scrollToBottomRect = RectF()
+    private var maxTextWidth = 0f
+    private var lastW = 0f
+    private var lastH = 0f
+    private var lastScale = 0f
+
     private val files = mapOf(
         "ROOT_TERM.SH" to "1.2 KB",
         "ECHO_PROTOCOL.CFG" to "4.0 KB",
@@ -71,6 +87,7 @@ class UITerminal {
     private var isCapsLock = false
     private var isCtrlActive = false
     private var isAltActive = false
+    private var isKeyboardVisible = true
     private var lastShiftTapTime = 0L
 
     private val commandHistory = mutableListOf<String>()
@@ -84,7 +101,7 @@ class UITerminal {
 
     // Alphabetic Keyboard Layout
     private val kbAlpha = listOf(
-        listOf("CTRL", "ALT", "HELP", "EXIT"),
+        listOf("CTRL", "ALT", "HELP", "HIDE"),
         listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0"),
         listOf("Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"),
         listOf("A", "S", "D", "F", "G", "H", "J", "K", "L"),
@@ -94,7 +111,7 @@ class UITerminal {
 
     // Symbols Keyboard Layout
     private val kbSymbol = listOf(
-        listOf("CTRL", "ALT", "HELP", "EXIT"),
+        listOf("CTRL", "ALT", "HELP", "HIDE"),
         listOf("+", "-", "*", "/", "=", "_", ".", ",", "?", "!"),
         listOf("[", "]", "(", ")", "{", "}", "<", ">", "\\"),
         listOf("@", "#", "$", "%", "^", "&", "|", "'", "\""),
@@ -120,11 +137,95 @@ class UITerminal {
         CommandRegistry.register(DataInjectCommand())
         CommandRegistry.register(SysInfoCommand())
         CommandRegistry.register(GodModeCommand())
+        CommandRegistry.register(ConfigCommand())
+        CommandRegistry.register(LevelCommand())
+        CommandRegistry.register(StoryLogCommand())
 
-        lines.add("NANO-OS [Version 4.2.0-ROOT]")
-        lines.add("(c) $currentYear ECHO CORP. ALL RIGHTS RESERVED.")
-        lines.add("")
-        lines.add("TERMINAL INITIALIZED. TYPE 'HELP' FOR CMDS.")
+        addLines("NANO-OS [Version 4.2.0-ROOT]")
+        addLines("(c) $currentYear ECHO CORP. ALL RIGHTS RESERVED.")
+        addLines("")
+        addLines("TERMINAL INITIALIZED. TYPE 'HELP' FOR CMDS.")
+    }
+
+    private fun addLines(text: String) {
+        val splitLines = text.split("\n")
+        lines.addAll(splitLines)
+        
+        // Limit raw history to 200 lines
+        if (lines.size > 200) {
+            repeat(lines.size - 200) { lines.removeAt(0) }
+        }
+
+        // Add to wrappedLines
+        if (maxTextWidth > 0f) {
+            pText.textSize = lastScale * 0.03f
+            for (line in splitLines) {
+                wrappedLines.addAll(wrapLine(line, pText, maxTextWidth))
+            }
+        } else {
+            wrappedLines.addAll(splitLines)
+        }
+
+        // Limit wrapped lines for display performance
+        if (wrappedLines.size > 500) {
+            val toRemove = wrappedLines.size - 500
+            repeat(toRemove) { wrappedLines.removeAt(0) }
+            scrollOffset = (scrollOffset - toRemove).coerceAtLeast(0)
+        }
+    }
+
+    private fun rebuildWrappedLines() {
+        wrappedLines.clear()
+        if (maxTextWidth <= 0f) {
+            wrappedLines.addAll(lines)
+        } else {
+            pText.textSize = lastScale * 0.03f
+            for (line in lines) {
+                wrappedLines.addAll(wrapLine(line, pText, maxTextWidth))
+            }
+        }
+        
+        if (wrappedLines.size > 500) {
+            repeat(wrappedLines.size - 500) { wrappedLines.removeAt(0) }
+        }
+    }
+
+    private fun wrapLine(text: String, paint: Paint, maxWidth: Float): List<String> {
+        if (text.isEmpty()) return listOf("")
+        if (maxWidth <= 0f) return listOf(text)
+        
+        val result = mutableListOf<String>()
+        val tokens = text.split(tokenRegex)
+        var currentLine = StringBuilder()
+
+        for (token in tokens) {
+            val testLine = currentLine.toString() + token
+            if (paint.measureText(testLine) <= maxWidth) {
+                currentLine.append(token)
+            } else {
+                if (currentLine.isNotEmpty()) {
+                    result.add(currentLine.toString())
+                    currentLine = StringBuilder()
+                }
+                
+                // Skip leading space on new line
+                if (token.isBlank() && token != "\n") continue
+                
+                if (paint.measureText(token) > maxWidth) {
+                    var start = 0
+                    while (start < token.length) {
+                        val count = paint.breakText(token, start, token.length, true, maxWidth, null)
+                        if (count <= 0) break
+                        result.add(token.substring(start, start + count))
+                        start += count
+                    }
+                } else {
+                    currentLine.append(token)
+                }
+            }
+        }
+        if (currentLine.isNotEmpty()) result.add(currentLine.toString())
+        return result
     }
 
     private fun getKeyWeight(key: String): Float {
@@ -137,52 +238,115 @@ class UITerminal {
         }
     }
 
-    fun draw(c: Canvas, targetW: Float, targetH: Float, scale: Float, gs: GameState) {
+    fun draw(c: Canvas, targetW: Float, targetH: Float, scale: Float, gs: GameState, context: Context) {
+        val sizeChanged = targetW != lastW || scale != lastScale
+        lastW = targetW; lastH = targetH; lastScale = scale
         c.drawColor(0xFF050505.toInt())
 
         val isLandscape = targetW > targetH
-        val kbHeight = if (isLandscape) targetH * 0.68f else targetH * 0.5f
+        val kbHeight = if (isKeyboardVisible) {
+            if (isLandscape) targetH * 0.68f else targetH * 0.5f
+        } else 0f
         val startY = targetH - kbHeight
 
         val padding = scale * 0.04f
         val textSize = scale * 0.03f
         pText.textSize = textSize
         val lineHeight = textSize * 1.5f
+        
+        val newMaxWidth = targetW - padding * 2
+        if (sizeChanged || newMaxWidth != maxTextWidth) {
+            maxTextWidth = newMaxWidth
+            rebuildWrappedLines()
+        }
 
         // Available height for terminal lines and prompt
-        // We reserve space for the prompt and some margin above keyboard
         val availableHeight = startY - padding * 2 - lineHeight
         val dynamicMaxLines = (availableHeight / lineHeight).toInt().coerceAtLeast(1)
 
         // Draw Terminal Output
-        var currY = padding + textSize
         pText.textAlign = Paint.Align.LEFT
-        pText.color = GameColors.HP
+        pText.color = if (StoryProtocol.isGlitchActive) GameColors.RED else GameColors.HP
+        
+        if (StoryProtocol.isGlitchActive) {
+            pText.alpha = (150 + (Math.random() * 105).toInt())
+        } else {
+            pText.alpha = 255
+        }
 
-        val visibleLines = if (lines.size > dynamicMaxLines) lines.takeLast(dynamicMaxLines) else lines
+        val maxScroll = (wrappedLines.size - dynamicMaxLines).coerceAtLeast(0)
+        scrollOffset = scrollOffset.coerceIn(0, maxScroll)
+
+        val startIndex = (wrappedLines.size - dynamicMaxLines - scrollOffset).coerceAtLeast(0)
+        val endIndex = (wrappedLines.size - scrollOffset).coerceAtLeast(0)
+        val visibleLines = if (wrappedLines.isNotEmpty()) wrappedLines.subList(startIndex, endIndex) else emptyList()
+
+        var currY = padding + textSize
         for (line in visibleLines) {
             c.drawText(line, padding, currY, pText)
             currY += lineHeight
         }
 
-        // Draw Input Prompt
-        val blink = (System.currentTimeMillis() / 600) % 2 == 0L
-        val prompt = "> $currentInput"
-        pText.color = 0xFFFFFFFF.toInt()
-        
-        // Ensure prompt doesn't go under keyboard
-        val promptY = currY.coerceAtMost(startY - padding * 0.5f)
-        c.drawText(prompt, padding, promptY, pText)
+        // Draw Input Prompt (Only if at the bottom)
+        if (scrollOffset == 0) {
+            val blink = (System.currentTimeMillis() / 600) % 2 == 0L
+            val prompt = "> $currentInput"
+            pText.color = 0xFFFFFFFF.toInt()
+            
+            val promptY = currY.coerceAtMost(startY - padding * 0.5f)
+            c.drawText(prompt, padding, promptY, pText)
 
-        // Block Cursor
-        if (blink) {
-            val promptWidth = pText.measureText(prompt)
-            c.drawRect(padding + promptWidth + 2f, promptY - textSize * 0.8f,
-                       padding + promptWidth + textSize * 0.6f, promptY + textSize * 0.2f, pText)
+            if (blink) {
+                val promptWidth = pText.measureText(prompt)
+                c.drawRect(padding + promptWidth + 2f, promptY - textSize * 0.8f,
+                           padding + promptWidth + textSize * 0.6f, promptY + textSize * 0.2f, pText)
+            }
+        }
+
+        // Keyboard Toggle / Show Button (when hidden)
+        if (!isKeyboardVisible) {
+            val showBtnW = scale * 0.2f
+            val showBtnH = scale * 0.08f
+            val showBtnRect = RectF(targetW - showBtnW - padding, targetH - showBtnH - padding, targetW - padding, targetH - padding)
+            pBg.color = 0xCC222222.toInt()
+            c.drawRoundRect(showBtnRect, scale * 0.01f, scale * 0.01f, pBg)
+            pText.color = 0xFFFFFFFF.toInt()
+            pText.textAlign = Paint.Align.CENTER
+            pText.textSize = scale * 0.025f
+            c.drawText("SHOW KEY", showBtnRect.centerX(), showBtnRect.centerY() + pText.textSize * 0.35f, pText)
+            
+            // Store for touch
+            keyRects["SHOW_KEY"] = showBtnRect
+        }
+
+        // Scroll to Bottom Button
+        if (scrollOffset > 0) {
+            val btnW = scale * 0.22f
+            val btnH = scale * 0.07f
+            // Adjust position if keyboard is hidden
+            val bottomAnchor = if (isKeyboardVisible) startY else targetH
+            scrollToBottomRect.set(targetW - btnW - padding, bottomAnchor - btnH - padding, targetW - padding, bottomAnchor - padding)
+            
+            pBg.color = 0xCC111111.toInt()
+            c.drawRoundRect(scrollToBottomRect, scale * 0.01f, scale * 0.01f, pBg)
+            pBg.color = GameColors.PULSE
+            pBg.style = Paint.Style.STROKE
+            pBg.strokeWidth = 2f
+            c.drawRoundRect(scrollToBottomRect, scale * 0.01f, scale * 0.01f, pBg)
+            pBg.style = Paint.Style.FILL
+            
+            pText.textAlign = Paint.Align.CENTER
+            pText.textSize = scale * 0.025f
+            pText.color = GameColors.PULSE
+            c.drawText("▼ BOTTOM", scrollToBottomRect.centerX(), scrollToBottomRect.centerY() + pText.textSize * 0.35f, pText)
+        } else {
+            scrollToBottomRect.setEmpty()
         }
 
         // Draw Keyboard
-        drawKeyboard(c, targetW, targetH, scale, kbHeight, startY)
+        if (isKeyboardVisible) {
+            drawKeyboard(c, targetW, targetH, scale, kbHeight, startY)
+        }
     }
 
     private fun drawKeyboard(c: Canvas, targetW: Float, targetH: Float, scale: Float, kbHeight: Float, startY: Float) {
@@ -258,9 +422,37 @@ class UITerminal {
         }
     }
 
-    fun onTouch(x: Float, y: Float, action: Int, gs: GameState, onExit: () -> Unit): Boolean {
+    fun onTouch(x: Float, y: Float, action: Int, gs: GameState, context: Context, onExit: () -> Unit): Boolean {
         when (action) {
             MotionEvent.ACTION_DOWN -> {
+                if (scrollToBottomRect.contains(x, y)) {
+                    scrollOffset = 0
+                    EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 50)
+                    return true
+                }
+
+                if (!isKeyboardVisible) {
+                    val showRect = keyRects["SHOW_KEY"]
+                    if (showRect != null && showRect.contains(x, y)) {
+                        isKeyboardVisible = true
+                        EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 50)
+                        return true
+                    }
+                }
+
+                // Dragging start check (above keyboard area)
+                val isLandscape = lastW > lastH
+                val kbHeight = if (isKeyboardVisible) {
+                    if (isLandscape) lastH * 0.68f else lastH * 0.5f
+                } else 0f
+                val kbStartY = lastH - kbHeight
+                
+                if (y < kbStartY || !isKeyboardVisible) {
+                    isDragging = true
+                    lastTouchY = y
+                    return true
+                }
+
                 for ((key, rect) in keyRects) {
                     if (rect.contains(x, y)) {
                         EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 50)
@@ -273,20 +465,33 @@ class UITerminal {
                             handler.removeCallbacks(delRunnable)
                             handler.postDelayed(delRunnable, 500)
                         } else {
-                            handleKeyPress(key, gs, onExit)
+                            handleKeyPress(key, gs, context, onExit)
                         }
                         return true
                     }
                 }
             }
+            MotionEvent.ACTION_MOVE -> {
+                if (isDragging) {
+                    val deltaY = y - lastTouchY
+                    val lineHeight = (lastScale * 0.03f) * 1.5f
+                    if (Math.abs(deltaY) >= lineHeight) {
+                        val linesToScroll = (deltaY / lineHeight).toInt()
+                        scrollOffset += linesToScroll
+                        lastTouchY = y
+                    }
+                    return true
+                }
+            }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                isDragging = false
                 handler.removeCallbacks(delRunnable)
             }
         }
         return true
     }
 
-    private fun handleKeyPress(key: String, gs: GameState, onExit: () -> Unit) {
+    private fun handleKeyPress(key: String, gs: GameState, context: Context, onExit: () -> Unit) {
         if (key != "TAB" && key != "SHIFT" && key != "CTRL" && key != "ALT") {
             autocompleteMatches = emptyList()
             autocompleteIndex = -1
@@ -299,7 +504,7 @@ class UITerminal {
                         commandHistory.add(currentInput)
                     }
                     historyIndex = commandHistory.size
-                    processCommand(currentInput, gs, onExit)
+                    processCommand(currentInput, gs, context, onExit)
                     currentInput = ""
                 }
                 isShiftActive = false
@@ -307,6 +512,12 @@ class UITerminal {
                 isAltActive = false
             }
             "EXIT" -> onExit()
+            "HIDE" -> {
+                isKeyboardVisible = false
+                isShiftActive = false
+                isCtrlActive = false
+                isAltActive = false
+            }
             "SPACE" -> currentInput += " "
             "TAB" -> handleAutocomplete(gs)
             "?123", "ABC" -> {
@@ -328,7 +539,7 @@ class UITerminal {
             }
             "CTRL" -> isCtrlActive = !isCtrlActive
             "ALT" -> isAltActive = !isAltActive
-            "SCAN", "DIR", "HELP" -> processCommand(key, gs, onExit)
+            "SCAN", "DIR", "HELP" -> processCommand(key, gs, context, onExit)
             "..." -> currentInput += "..."
             else -> {
                 if (isCtrlActive) {
@@ -481,16 +692,16 @@ class UITerminal {
             val s = result.toString()
             if (s.endsWith(".0")) s.substringBefore(".0")
             else String.format(Locale.US, "%.3f", result).trimEnd('0').trimEnd('.')
-        } catch (e: ArithmeticException) { "ERR: DIV/0" } catch (e: Exception) { null }
+        } catch (_: ArithmeticException) { "ERR: DIV/0" } catch (_: Exception) { null }
     }
 
-    private fun processCommand(cmd: String, gs: GameState, onExit: () -> Unit) {
-        lines.add("> $cmd")
+    private fun processCommand(cmd: String, gs: GameState, androidContext: Context, onExit: () -> Unit) {
+        addLines("> $cmd")
         
         // 1. Math Calculation Check (Special Fallback)
         val calcResult = tryCalculate(cmd)
         if (calcResult != null) {
-            lines.add("= $calcResult")
+            addLines("= $calcResult")
             return
         }
 
@@ -508,22 +719,29 @@ class UITerminal {
                     gameState = gs,
                     terminalLines = lines,
                     onExit = onExit,
-                    files = files
+                    files = files,
+                    onAddLines = { t: String -> addLines(t) },
+                    androidContext = androidContext
                 )
                 val result = command.execute(args, context)
+                
+                // Sync wrapped lines if list was cleared (e.g. CLEAR command)
+                if (lines.isEmpty()) {
+                    wrappedLines.clear()
+                    scrollOffset = 0
+                }
+
                 if (result != null) {
-                    lines.addAll(result.split("\n"))
+                    addLines(result)
                 }
             } else {
-                lines.add("ERR: ACCESS DENIED. COMMAND LOCKED.")
+                addLines("ERR: ACCESS DENIED. COMMAND LOCKED.")
             }
         } else {
-            lines.add("ERR: UNKNOWN COMMAND '$mainCmdName'")
+            addLines("ERR: UNKNOWN COMMAND '$mainCmdName'")
         }
-
-        if (lines.size > 50) {
-            val toRemove = lines.size - 50
-            repeat(toRemove) { lines.removeAt(0) }
-        }
+        
+        // Auto-scroll to bottom on command execution
+        scrollOffset = 0
     }
 }
