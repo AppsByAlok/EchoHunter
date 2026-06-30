@@ -2,7 +2,8 @@ package com.appsbyalok.echohunter
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.appsbyalok.echohunter.data.MazeGenerator
-import org.junit.Assert.*
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -10,37 +11,56 @@ import org.junit.runner.RunWith
 class MazeGeneratorInstrumentedTest {
 
     @Test
-    fun testMazeGenerationOnDevice() {
-        // FIXED: Using a normal level (Level 4) to test the standard size scaling formula
-        val level = 4
-        val seed = 500
+    fun testLevel143ConnectivityAndSpawn() {
+        val level = 143
+        val gameMode = 0 // Campaign
+        val difficulty = 1 // Hard
 
-        // Level 4 normal calculation: 21 + (4 * 2) = 29.
-        val expectedWidth = 29
+        // 1. Check Grid Generation
+        val grid = MazeGenerator.generateLevelMap(level, gameMode, difficulty, System.currentTimeMillis().toInt())
+        assertNotNull("Grid should not be null for Level 143", grid)
+        
+        // 2. Connectivity Test: Can we reach DEST_NODE (Core) from PLAYER_SPAWN?
+        var startX = -1
+        var startY = -1
+        var endX = -1
+        var endY = -1
 
-        val grid = MazeGenerator.generateLevelMap(
-            level = level,
-            gameMode = 0,
-            difficulty = 1, // Hard mode allows max grid up to 251, so 29 is well within limits
-            seed = seed
-        )
-
-        assertNotNull("Grid should not be null", grid)
-        assertEquals("Grid width should automatically scale with level", expectedWidth, grid.size)
-
-        println("Generated Grid Size on Device: ${grid.size} x ${grid[0].size}")
-
-        // Ensure Phase 2 Anti-Trap Logic placed the Player Spawn Marker (4) correctly
-        var foundPlayer = false
-        var foundDest = false
         for (x in grid.indices) {
             for (y in grid[0].indices) {
-                if (grid[x][y] == MazeGenerator.PLAYER_SPAWN) foundPlayer = true
-                if (grid[x][y] == MazeGenerator.DEST_NODE) foundDest = true
+                if (grid[x][y] == MazeGenerator.PLAYER_SPAWN) { startX = x; startY = y }
+                if (grid[x][y] == MazeGenerator.DEST_NODE) { endX = x; endY = y }
             }
         }
 
-        assertTrue("Grid must contain exactly one PLAYER_SPAWN", foundPlayer)
-        assertTrue("Grid must contain exactly one DEST_NODE", foundDest)
+        assertTrue("Player spawn must exist", startX != -1)
+        assertTrue("Destination node must exist", endX != -1)
+
+        // Simple BFS to check if path exists
+        val visited = Array(grid.size) { BooleanArray(grid[0].size) }
+        val queue = mutableListOf<Pair<Int, Int>>()
+        queue.add(startX to startY)
+        visited[startX][startY] = true
+
+        var pathFound = false
+        while (queue.isNotEmpty()) {
+            val (currX, currY) = queue.removeAt(0)
+            if (currX == endX && currY == endY) {
+                pathFound = true
+                break
+            }
+
+            val dirs = arrayOf(0 to 1, 0 to -1, 1 to 0, -1 to 0)
+            for (d in dirs) {
+                val nx = currX + d.first
+                val ny = currY + d.second
+                if (nx in grid.indices && ny in grid[0].indices && !visited[nx][ny] && grid[nx][ny] != MazeGenerator.WALL) {
+                    visited[nx][ny] = true
+                    queue.add(nx to ny)
+                }
+            }
+        }
+
+        assertTrue("Path must exist from spawn to core in Level 143", pathFound)
     }
 }

@@ -51,17 +51,18 @@ class UINanoOS {
         c.drawRect(0f, headerH - scale * 0.005f, targetW, headerH, p)
 
         pText.textAlign = Paint.Align.LEFT
-        pText.textSize = scale * 0.04f
+        pText.textSize = if (isPortrait) scale * 0.032f else scale * 0.04f
         pText.color = GameColors.HP
 
         // Blinking Uplink Dot
         val blink = (sin(time * 5f) > 0)
-        if (blink) c.drawCircle(scale * 0.06f, headerH * 0.5f, scale * 0.015f, p)
-        c.drawText("PROBE-7 UPLINK : STABLE", scale * 0.1f, headerH * 0.6f, pText)
+        val dotX = scale * 0.05f
+        if (blink) c.drawCircle(dotX, headerH * 0.5f, scale * 0.012f, p)
+        c.drawText("UPLINK: STABLE", dotX + scale * 0.04f, headerH * 0.62f, pText)
 
         pText.textAlign = Paint.Align.RIGHT
         pText.color = GameColors.CLARITY
-        c.drawText("DATA: ${SaveManager.formatDataString(SaveManager.dataCoinsKB)}", targetW - scale * 0.05f, headerH * 0.6f, pText)
+        c.drawText(SaveManager.formatDataString(SaveManager.dataCoinsKB), targetW - scale * 0.05f, headerH * 0.62f, pText)
 
         // --- 2. THE APP GRID (MODULE CARDS) ---
         pText.textAlign = Paint.Align.CENTER

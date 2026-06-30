@@ -62,11 +62,13 @@ class TouchController(private val gs: GameState) {
                         onPauseClicked?.invoke()
                         return true
                     } else if (isInsideCircle(vx, vy, pulseX, pulseY, btnRadius * 1.1f)) {
-                        gs.touch.sonarTouchId = pointerId
-                        gs.controls.isSonarPressed = true
-                        gs.controls.sonarTouchX = vx
-                        gs.controls.sonarTouchY = vy
-                        return true
+                        if (gs.isDarknessLevel || com.appsbyalok.echohunter.data.StoryProtocol.isBlackoutActive) {
+                            gs.touch.sonarTouchId = pointerId
+                            gs.controls.isSonarPressed = true
+                            gs.controls.sonarTouchX = vx
+                            gs.controls.sonarTouchY = vy
+                            return true
+                        }
                     } else if (isInsideCircle(vx, vy, ovrX, ovrY, btnRadius * 1.1f)) {
                         if (gs.overclockMeter >= 100f && !gs.isOverclocked) {
                             gs.controls.isOverclockPressed = true

@@ -32,6 +32,10 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
             deploySonar()
             gs.controls.isSonarPressed = false
         }
+
+        if (gs.controls.isTrapPressed && gs.trapCooldownTimer <= 0f) {
+            deployTrap()
+        }
     }
 
     fun fireWeapon(scale: Float) {
@@ -55,16 +59,31 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
         gs.controls.attackRequested = false
 
         // DYNAMIC WEAPON FIRE
+        val multiShot = UpgradeSystem.getMultiShotCount()
+        
         when (gs.controls.currentWeapon) {
-            0 -> fireSingle(dx, dy, scale, 0)
+            0 -> { // STANDARD
+                fireSingle(dx, dy, scale, 0)
+                for (i in 1..multiShot) {
+                    val spread = i * 0.15f
+                    fireSingle(dx - dy * spread, dy + dx * spread, scale, 0)
+                }
+            }
             1 -> { // SHOTGUN
-                fireSingle(dx, dy, scale, 1)
-                fireSingle(dx - dy * 0.3f, dy + dx * 0.3f, scale, 1)
-                fireSingle(dx + dy * 0.3f, dy - dx * 0.3f, scale, 1)
+                val extraPellets = multiShot * 2
+                val totalPellets = 3 + extraPellets
+                for (i in 0 until totalPellets) {
+                    val spread = (i - totalPellets / 2f) * 0.25f
+                    fireSingle(dx - dy * spread, dy + dx * spread, scale, 1)
+                }
                 gs.attackCooldown *= 1.8f
             }
             2 -> { // SNIPER
                 fireSingle(dx, dy, scale * 2.5f, 2)
+                if (multiShot >= 1) {
+                    // Sniper gets a trailing second shot or narrow spread
+                    fireSingle(dx - dy * 0.05f, dy + dx * 0.05f, scale * 2.5f, 2)
+                }
                 gs.attackCooldown *= 3.0f
             }
         }
@@ -104,7 +123,8 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
         if (gs.modInfinityTraps) {
             gs.trapCooldownTimer = 0f
         } else {
-            gs.trapCooldownTimer = 8f // Traps have a long cooldown
+            val baseCooldown = 8f
+            gs.trapCooldownTimer = baseCooldown * UpgradeSystem.getTrapCooldownMultiplier()
         }
         EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
 

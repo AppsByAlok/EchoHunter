@@ -24,7 +24,7 @@ class GameEngine(
 
     var onChangeState: ((Int) -> Unit)? = null
     var onDamage: ((Float) -> Unit)? = null
-    var onScore: ((Int) -> Unit)? = null
+    var onScore: ((Long) -> Unit)? = null
     var onCoreUnlock: ((Boolean) -> Unit)? = null
     var onBossTrigger: ((Int, Float) -> Unit)? = null
     var onStoryState: ((IntArray, Int) -> Unit)? = null

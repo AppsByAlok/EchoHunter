@@ -47,7 +47,39 @@ class PlayerAI(private val gs: GameState, private val enemySys: EnemySystem) {
             decisionTimer = 0.2f
         }
 
+        handleTacticalAbilities(dt, scale)
         steerWithTacticalKiting(dt, scale)
+    }
+
+    private fun handleTacticalAbilities(dt: Float, scale: Float) {
+        // 1. AUTO-SONAR: Trigger if vision is compromised
+        val isDark = gs.isDarknessLevel || com.appsbyalok.echohunter.data.StoryProtocol.isBlackoutActive
+        if (isDark && gs.visionClarity < 0.35f && gs.sonarTimer <= 0f) {
+            gs.controls.isSonarPressed = true
+        }
+
+        // 2. AUTO-TRAPS: Deploy defensively when swarmed or critically approached
+        if (gs.trapCooldownTimer <= 0f) {
+            var enemiesNearCount = 0
+            var extremeThreat = false
+            val ts = gs.tileSize
+
+            for (i in 0 until enemySys.n) {
+                if (enemySys.vis[i] > 0.1f) {
+                    val dx = enemySys.ex[i] - gs.px
+                    val dy = enemySys.ey[i] - gs.py
+                    val distSq = dx * dx + dy * dy
+                    
+                    if (distSq < (ts * 1.8f) * (ts * 1.8f)) extremeThreat = true
+                    if (distSq < (ts * 4f) * (ts * 4f)) enemiesNearCount++
+                }
+            }
+
+            // Strategy: Use trap if someone is about to touch us, OR if 3+ enemies are in mid-range
+            if (extremeThreat || enemiesNearCount >= 3) {
+                gs.controls.isTrapPressed = true
+            }
+        }
     }
 
     /**
@@ -208,7 +240,13 @@ class PlayerAI(private val gs: GameState, private val enemySys: EnemySystem) {
         // 3. Vector Blending Core Calculation
         var finalDirX = pathDirX
         var finalDirY = pathDirY
-        val kiteTriggerRadius = ts * 2.5f // Critically close at less than 2.5 tiles
+        
+        // WEAPON-AWARE KITING: Snipers stay further back, Shotguns get closer
+        val kiteTriggerRadius = when(gs.controls.currentWeapon) {
+            2 -> ts * 6.5f // Sniper: High distance
+            1 -> ts * 1.8f // Shotgun: Close quarters
+            else -> ts * 3.2f // Standard
+        }
 
         if (closestEnemyIdx != -1 && minEnemyDistSq < (kiteTriggerRadius * kiteTriggerRadius)) {
             val currentEnemyDist = sqrt(minEnemyDistSq)
@@ -250,13 +288,24 @@ class PlayerAI(private val gs: GameState, private val enemySys: EnemySystem) {
             gs.controls.moveDirY = dirY
 
             // Aiming behavior: Face the enemy while retreating, otherwise look where moving
-            if (closestEnemyIdx != -1 && minEnemyDistSq < (ts * 6f) * (ts * 6f)) {
+            if (closestEnemyIdx != -1 && minEnemyDistSq < (ts * 8f) * (ts * 8f)) {
                 val aimDx = enemySys.ex[closestEnemyIdx] - gs.px
                 val aimDy = enemySys.ey[closestEnemyIdx] - gs.py
                 val aimDist = sqrt(aimDx * aimDx + aimDy * aimDy)
                 if (aimDist > 0f) {
-                    gs.lastFacingX = aimDx / aimDist
-                    gs.lastFacingY = aimDy / aimDist
+                    val adx = aimDx / aimDist
+                    val ady = aimDy / aimDist
+                    gs.lastFacingX = adx
+                    gs.lastFacingY = ady
+
+                    // AUTO-ATTACK: If within range and cooldown is over, request fire
+                    // Range is slightly higher for Sniper (Weapon Index 2)
+                    val attackRange = if (gs.controls.currentWeapon == 2) ts * 15f else ts * 6.5f
+                    if (minEnemyDistSq < attackRange * attackRange && gs.attackCooldown <= 0f) {
+                        gs.controls.aimDirX = adx
+                        gs.controls.aimDirY = ady
+                        gs.controls.attackRequested = true
+                    }
                 }
             } else {
                 gs.lastFacingX = dirX

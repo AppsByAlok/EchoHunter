@@ -65,8 +65,8 @@ object StoryProtocol {
         R.string.story_bad_1, R.string.story_bad_2, R.string.story_bad_3
     )
 
-    fun triggerRandomGlitch(score: Int, gameMode: Int, difficulty: Int) {
-        if (score > 150 && Random.nextDouble() < 0.05) {
+    fun triggerRandomGlitch(score: Long, gameMode: Int, difficulty: Int) {
+        if (score > 150L && Random.nextDouble() < 0.05) {
             isGlitchActive = true
             showIngameMessage("ADMIN: \"I FOUND YOUR IP.\"", 2f)
         }

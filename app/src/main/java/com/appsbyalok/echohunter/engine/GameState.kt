@@ -146,7 +146,7 @@ class GameState {
     var showOverclockTextTimer = 0f // Timer for displaying the "OVERCLOCK" UI announcement
     val isOverclocked: Boolean get() = overclockTimer > 0f // Derived status of being in overclock mode
 
-    var score = 0 // Player's total accumulated score
+    var score: Long = 0L // Player's total accumulated score
     var combo = 0 // Current streak of consecutive hits or actions
     var wave = 1 // Current wave number in survival or campaign phases
 
@@ -177,6 +177,7 @@ class GameState {
         }
 
     var comboBreakTimer = 0f // Grace period before the combo counter resets
+    private var regenTimer = 0f // NAYA: Passive Regen Timer
     var currentSector = 1 // Current subsection of the level (e.g., Sector 1 of 3)
     var sectorTarget = 30 // Objective target required to clear the current sector
 
@@ -189,6 +190,9 @@ class GameState {
     var cameraFocusX = -1f // Optional focus point (e.g. Boss)
     var cameraFocusY = -1f 
     var cameraFocusWeight = 0f // 0.0 = Player, 1.0 = Focus Point
+
+    var pvx = 0f // Player velocity X
+    var pvy = 0f // Player velocity Y
 
     var damageFlash = 0f // Visual effect timer for screen flash when taking damage
     var sectorFlash = 0f // Visual effect timer for sector transitions
@@ -222,6 +226,10 @@ class GameState {
     var bossDeathY = 0f // World Y position where the boss was defeated
     var isBossRage = false // Whether the boss is in its high-intensity "rage" phase
 
+    var bossAttackTimer = 0f // Timer to manage boss attack patterns
+    var bossAttackState = 0 // Current attack state (0: Idle, 1: Charging, 2: Executing)
+    var bossZ = 0f // Height offset for "Jump" attacks
+
     var isEnemyNear = false // Proximity flag for general enemy presence
     var isEnemyVeryNear = false // Proximity flag for immediate enemy threats
     var radarPingTimer = 0f // Timer for the periodic radar UI pulse
@@ -250,7 +258,7 @@ class GameState {
     fun saveState(b: Bundle) {
         b.putInt("state", state)
         b.putInt("difficulty", difficulty)
-        b.putInt("score", score)
+        b.putLong("score", score)
         b.putInt("gameMode", gameMode)
         b.putInt("hp", hp)
         b.putInt("nextStateAfterStory", nextStateAfterStory)
@@ -270,6 +278,7 @@ class GameState {
         b.putBoolean("isPerfectEnd", isPerfectEnd)
         b.putFloat("coreX", coreX)
         b.putFloat("coreY", coreY)
+        b.putFloat("coreRadius", coreRadius)
         b.putFloat("mergeTimer", mergeTimer)
         b.putInt("coreHp", coreHp)
         b.putInt("coreMaxHp", coreMaxHp)
@@ -279,7 +288,7 @@ class GameState {
     fun restoreState(b: Bundle) {
         state = b.getInt("state", 5)
         difficulty = b.getInt("difficulty", 0)
-        score = b.getInt("score", 0)
+        score = b.getLong("score", 0)
         gameMode = b.getInt("gameMode", 0)
         hp = b.getInt("hp", 3)
         nextStateAfterStory = b.getInt("nextStateAfterStory", 0)
@@ -299,6 +308,7 @@ class GameState {
         isPerfectEnd = b.getBoolean("isPerfectEnd", false)
         coreX = b.getFloat("coreX", 0f)
         coreY = b.getFloat("coreY", 0f)
+        coreRadius = b.getFloat("coreRadius", 0f)
         mergeTimer = b.getFloat("mergeTimer", 0f)
         coreHp = b.getInt("coreHp", 10)
         coreMaxHp = b.getInt("coreMaxHp", 10)
@@ -343,8 +353,8 @@ class GameState {
         activeObjective = when {
             gameMode == 1 -> com.appsbyalok.echohunter.modes.StoryObjective()
             config.features.contains(LevelFeature.BOMB) -> com.appsbyalok.echohunter.modes.BombObjective()
-            config.features.contains(LevelFeature.DEFENSE) -> com.appsbyalok.echohunter.modes.DefenseObjective()
             config.features.contains(LevelFeature.ESCAPE) -> com.appsbyalok.echohunter.modes.EscapeObjective()
+            config.features.contains(LevelFeature.DEFENSE) -> com.appsbyalok.echohunter.modes.DefenseObjective()
             config.features.contains(LevelFeature.ELIMINATION) -> com.appsbyalok.echohunter.modes.EliminationObjective()
             else -> StandardObjective()
         }
@@ -392,9 +402,6 @@ class GameState {
         controls.isSonarPressed = false
         controls.isAutoSonarLocked = false
 
-        controls.currentWeapon = 1
-        controls.currentTrap = 2
-
         defEnemiesToSpawn = 0
         defEnemiesAlive = 0
         elimTargetsKilled = 0
@@ -407,6 +414,18 @@ class GameState {
 
     fun updateTimers(dt: Float, scale: Float) {
         if (playerIframe > 0f) playerIframe -= dt
+
+        // --- NAYA: PASSIVE REGEN LOGIC ---
+        val regenInterval = UpgradeSystem.getRegenInterval()
+        if (regenInterval > 0f && hp < maxHp && state == 1) {
+            regenTimer += dt
+            if (regenTimer >= regenInterval) {
+                hp = min(maxHp, hp + 1)
+                regenTimer = 0f
+            }
+        } else {
+            regenTimer = 0f
+        }
         if (showOverclockTextTimer > 0f) showOverclockTextTimer -= dt
         if (comboBreakTimer > 0f) comboBreakTimer -= dt
         if (shieldTimer > 0f) shieldTimer -= dt
@@ -470,6 +489,10 @@ class GameState {
             vx = -vx
             vy = -vy
         }
+
+        // Update velocity for AI prediction
+        pvx = vx / dt
+        pvy = vy / dt
 
         val playerRadius = scale * 0.015f
 

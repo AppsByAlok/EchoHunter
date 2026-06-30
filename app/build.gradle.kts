@@ -4,19 +4,16 @@ plugins {
 
 android {
     namespace = "com.appsbyalok.echohunter"
-    compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
-    }
+    testNamespace = "com.appsbyalok.echohunter.test"
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.appsbyalok.echohunter"
         minSdk = 21
         //noinspection OldTargetApi
         targetSdk = 36
-        versionCode = 15
-        versionName = "0.7.1"
+        versionCode = 16
+        versionName = "0.7.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -30,7 +27,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
         }
     }
 //    splits {
@@ -45,13 +41,19 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
-    // Local Unit Tests (Fast, runs on your PC's JVM - For testing Maze Math)
+    // Local Unit Tests
     testImplementation(libs.androidx.junit.ktx)
 
-    // Android Instrumented Tests (Runs on Emulator / Physical Device)
+    // Android Instrumented Tests
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.rules)
 }

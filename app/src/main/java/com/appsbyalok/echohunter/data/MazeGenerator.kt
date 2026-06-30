@@ -62,6 +62,8 @@ object MazeGenerator {
         var startX = 2; var startY = 2
         var destX = w - 3; var destY = h - 3
 
+        val isHybridDefenseEscape = config.features.contains(LevelFeature.ESCAPE) && config.features.contains(LevelFeature.DEFENSE)
+
         when (type) {
             MazeType.QUARANTINE -> {
                 generateQuarantine(grid, w, h)
@@ -84,13 +86,32 @@ object MazeGenerator {
                 if (rooms.isNotEmpty()) {
                     startX = rooms.first().centerX
                     startY = rooms.first().centerY
-                    destX = rooms.last().centerX
-                    destY = rooms.last().centerY
+                    destX = if (isHybridDefenseEscape) w / 2 else rooms.last().centerX
+                    destY = if (isHybridDefenseEscape) h / 2 else rooms.last().centerY
                 }
             }
             MazeType.LABYRINTH -> {
                 generateLabyrinth(grid, w, h, rand)
                 startX = 2; startY = 2
+                if (isHybridDefenseEscape) {
+                    destX = w / 2
+                    destY = h / 2
+                }
+            }
+        }
+
+        if (isHybridDefenseEscape) {
+            // Clear a larger 7x7 room in the center for the hybrid Defense+Escape objective
+            destX = w / 2
+            destY = h / 2
+            for (dx in -3..3) {
+                for (dy in -3..3) {
+                    val nx = destX + dx
+                    val ny = destY + dy
+                    if (nx in 1 until w - 1 && ny in 1 until h - 1) {
+                        grid[nx][ny] = PATH
+                    }
+                }
             }
         }
 

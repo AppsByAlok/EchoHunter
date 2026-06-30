@@ -64,7 +64,8 @@ class EnemySystem {
         ex[i] = -9999f
         ey[i] = -9999f
 
-        if (gs.activeObjective is com.appsbyalok.echohunter.modes.DefenseObjective) {
+        val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
+        if (config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE)) {
             gs.defEnemiesAlive--
             if (gs.defEnemiesAlive < 0) gs.defEnemiesAlive = 0
         }
@@ -74,30 +75,34 @@ class EnemySystem {
 
     // NAYA: Ab dushman sirf ek specified Node (nx, ny) par paida hoga
     fun spawnAt(i: Int, nx: Float, ny: Float, gs: GameState, width: Float, height: Float, nodeType: Int = -1) {
-        val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
+        val config = com.appsbyalok.echohunter.data.LevelEngine.getSaturatedValue(gs.currentLevel, 1f, 18f, 200f).let {
+            com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
+        }
         val isElimination = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ELIMINATION)
-        val isDefense = gs.activeObjective is com.appsbyalok.echohunter.modes.DefenseObjective
+        val hasDefense = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE)
 
         ex[i] = nx
         ey[i] = ny
 
         val hunterProb = 0.2f + (gs.difficulty * 0.15f)
 
-        when (nodeType) {
-            1 -> { // Glitch Tear (Swarmers)
-                type[i] = 1; enemyBrains[i] = HunterBehavior
-            }
-            2 -> { // Admin Gateway (HVTs or Elites)
-                if (isElimination) {
-                    type[i] = 3; enemyBrains[i] = TargetBehavior
-                } else {
+        // NAYA: If it's a Defense level, force BLUE (Kamikaze) enemies for the entire level
+        // This ensures red/yellow enemies don't leak in during prep phases or transitions.
+        if (hasDefense) {
+            type[i] = 2; enemyBrains[i] = KamikazeBehavior
+        } else {
+            when (nodeType) {
+                1 -> { // Glitch Tear (Swarmers)
                     type[i] = 1; enemyBrains[i] = HunterBehavior
                 }
-            }
-            else -> { // Compiler (Normal)
-                if (isDefense) {
-                    type[i] = 2; enemyBrains[i] = KamikazeBehavior
-                } else {
+                2 -> { // Admin Gateway (HVTs or Elites)
+                    if (isElimination) {
+                        type[i] = 3; enemyBrains[i] = TargetBehavior
+                    } else {
+                        type[i] = 1; enemyBrains[i] = HunterBehavior
+                    }
+                }
+                else -> { // Compiler (Normal)
                     type[i] = if (kotlin.random.Random.nextFloat() < hunterProb) 1 else 0
                     enemyBrains[i] = if (type[i] == 1) HunterBehavior else PatrolBehavior
                 }
@@ -138,6 +143,7 @@ class EnemySystem {
         }
 
         val enemyRadius = scale * 0.02f
+        val stealthCamoMult = 1.0f - (com.appsbyalok.echohunter.data.UpgradeSystem.getLevel(com.appsbyalok.echohunter.data.UpgradeType.STEALTH_CAMO) * 0.1f)
 
         for (i in 0 until n) {
             if (ex[i] < -1000f) continue
@@ -157,8 +163,11 @@ class EnemySystem {
 
             if (type[i] == 1) {
                 val hitDistSq = (scale * 0.045f) * (scale * 0.045f)
-                if (d2 < hitDistSq * 15f) gs.isEnemyNear = true
-                if (d2 < hitDistSq * 4f) gs.isEnemyVeryNear = true
+                val detectionDistSq = hitDistSq * 15f * stealthCamoMult * stealthCamoMult
+                val immediateDistSq = hitDistSq * 4f * stealthCamoMult * stealthCamoMult
+
+                if (d2 < detectionDistSq) gs.isEnemyNear = true
+                if (d2 < immediateDistSq) gs.isEnemyVeryNear = true
             }
 
             if (hitByPulse || d2 < gs.passiveAuraRadiusSq) vis[i] = 1f
@@ -166,9 +175,8 @@ class EnemySystem {
 
             val maxAllowedDistSq = if (gs.bossActive || gs.coreRadius > 0f) (width * 1.5f) * (width * 1.5f) else (width * 4.0f) * (width * 4.0f)
             if (d2 > maxAllowedDistSq) {
-                // NAYA: Player se door gaye toh seedha despawn. SpawnerSystem apne aap nayi node se nikal dega
-                ex[i] = -9999f
-                ey[i] = -9999f
+                // Using killEnemy ensures defEnemiesAlive is decremented if in Defense mode.
+                killEnemy(i, gs, width, height)
                 vis[i] = 0f
             }
         }
@@ -195,8 +203,15 @@ class EnemySystem {
     }
 
     fun spawnSwarmIfNeeded(gs: GameState, width: Float, height: Float) {
-        // Swarm logic is now partially handled by SpawnerSystem's queueing
-        // or by calling spawnAt if needed for specific boss points.
+        // Find an empty slot and spawn a Hunter near the boss
+        for (i in 0 until n) {
+            if (ex[i] < -1000f) {
+                val angle = kotlin.random.Random.nextFloat() * 6.28f
+                val dist = width * 0.1f // Spawn close to boss
+                spawnAt(i, gs.bossX + kotlin.math.cos(angle) * dist, gs.bossY + kotlin.math.sin(angle) * dist, gs, width, height, 1)
+                break
+            }
+        }
     }
 
     fun updateBoss(dt: Float, gs: GameState, scale: Float) {
@@ -207,28 +222,62 @@ class EnemySystem {
             2 -> StalkerBossBehavior
             3 -> GlitchBossBehavior
             4 -> OmegaBossBehavior
-            else -> GuardianBossBehavior // Type 0 is also Guardian
+            5 -> UltimaBossBehavior
+            else -> GuardianBossBehavior
+        }
+
+        // Initialize Boss Data on first frame or if needed
+        if (gs.bossHp <= 0 && gs.bossMaxHp == 0) { // Safety check or first spawn logic
+             // Assuming hp is already set by GameView or LevelEngine, but we can set metadata
         }
 
         val bdx = gs.px - gs.bossX; val bdy = gs.py - gs.bossY
         val bDistSq = bdx * bdx + bdy * bdy
         val bDist = sqrt(bDistSq)
 
-        val bSpeed = scale * (if (gs.bossType == 3 || gs.bossType == 4) 0.8f else 0.45f) * (if (gs.difficulty == 0) 0.7f else 1.0f) * (if (gs.isBossRage) 2.0f else 1.0f)
+        // Speed calculation using behavior multiplier
+        val baseSpeed = scale * 0.45f * behavior.baseSpeedMult
+        val difficultyMult = if (gs.difficulty == 0) 0.7f else 1.0f
+        val rageMult = if (gs.isBossRage) 2.0f else 1.0f
+        val bSpeed = baseSpeed * difficultyMult * rageMult
 
         if (bDist > 0f) {
+            val hasDefense = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel).features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE)
+            
+            // Determine primary target distance for "Closing In" logic
+            val targetDistSq = if (hasDefense && gs.coreRadius > 0f) {
+                val cdx = gs.coreX - gs.bossX; val cdy = gs.coreY - gs.bossY
+                cdx * cdx + cdy * cdy
+            } else bDistSq
+
+            val engagementRange = scale * 1.5f
+            val isClosingIn = targetDistSq > engagementRange * engagementRange
+
             val (vx, vy) = if (gs.gridMap != null) {
-                // steerByPlayerHeatMap internally uses decoy coordinates if gs.isDecoyActive is true
-                ai.steerByPlayerHeatMap(gs.bossX, gs.bossY, 0f, 0f, bSpeed * 5f, gs)
+                if (hasDefense && gs.coreRadius > 0f) {
+                    // Hybrid Targeting: Switch to Player only if they are aggressively close
+                    if (bDistSq < (scale * 1.0f) * (scale * 1.0f)) {
+                        ai.steerByPlayerHeatMap(gs.bossX, gs.bossY, 0f, 0f, bSpeed * 5f, gs)
+                    } else {
+                        ai.steerByCoreHeatMap(gs.bossX, gs.bossY, 0f, 0f, bSpeed * 5f, gs)
+                    }
+                } else {
+                    ai.steerByPlayerHeatMap(gs.bossX, gs.bossY, 0f, 0f, bSpeed * 5f, gs)
+                }
             } else {
-                val tx = if (gs.isDecoyActive) gs.decoyX else gs.px
-                val ty = if (gs.isDecoyActive) gs.decoyY else gs.py
+                val tx = if (gs.isDecoyActive) gs.decoyX else if (hasDefense && gs.coreRadius > 0f && bDistSq > (scale * 1.5f) * (scale * 1.5f)) gs.coreX else gs.px
+                val ty = if (gs.isDecoyActive) gs.decoyY else if (hasDefense && gs.coreRadius > 0f && bDistSq > (scale * 1.5f) * (scale * 1.5f)) gs.coreY else gs.py
                 val tdx = tx - gs.bossX; val tdy = ty - gs.bossY
                 val tDist = sqrt(tdx * tdx + tdy * tdy)
                 if (tDist > 0f) Pair((tdx / tDist) * bSpeed, (tdy / tDist) * bSpeed) else Pair(0f, 0f)
             }
 
-            val (finalVx, finalVy) = behavior.applyMovementPattern(vx, vy, dt, gs, scale)
+            // --- NAYA: FAST CLOSING LOGIC ---
+            val (finalVx, finalVy) = if (isClosingIn) {
+                Pair(vx * 1.5f, vy * 1.5f)
+            } else {
+                behavior.applyMovementPattern(vx, vy, dt, gs, scale)
+            }
 
             val bossRadius = scale * 0.08f
             val nextBx = gs.bossX + finalVx * dt
@@ -389,26 +438,77 @@ class EnemySystem {
         }
 
         if (gs.bossActive) {
-            val bossRadius = scale * 0.08f
+            val behavior = when (gs.bossType) {
+                1 -> GuardianBossBehavior
+                2 -> StalkerBossBehavior
+                3 -> GlitchBossBehavior
+                4 -> OmegaBossBehavior
+                5 -> UltimaBossBehavior
+                else -> GuardianBossBehavior
+            }
+
+            val bossRadius = scale * 0.08f * behavior.sizeMult
             val screenBx = gs.bossX - gs.cameraX
-            val screenBy = gs.bossY - gs.cameraY
+            val screenBy = gs.bossY - gs.cameraY - gs.bossZ // Apply Jump Offset
             val bossAlpha = (gs.bossVis * 255).toInt()
 
             p.style = Paint.Style.FILL
             val pulseOffset = sin(gs.timeSinceStart * 15f) * (scale * 0.015f)
 
-            p.color = (bossAlpha shl 24) or (GameColors.BOSS and 0xFFFFFF)
+            // DRAW SHADOW WHEN JUMPING
+            if (gs.bossZ > 0) {
+                p.color = (bossAlpha / 2 shl 24) or 0x000000
+                c.drawOval(
+                    gs.bossX - gs.cameraX - bossRadius * 0.6f,
+                    gs.bossY - gs.cameraY - bossRadius * 0.2f,
+                    gs.bossX - gs.cameraX + bossRadius * 0.6f,
+                    gs.bossY - gs.cameraY + bossRadius * 0.2f,
+                    p
+                )
+            }
+
+            p.color = (bossAlpha shl 24) or (behavior.color and 0xFFFFFF)
             c.drawCircle(screenBx, screenBy, bossRadius + pulseOffset, p)
 
             p.color = if (gs.bossIframe > 0f) (bossAlpha shl 24) or 0xFFFFFF else (bossAlpha shl 24) or (GameColors.RED and 0xFFFFFF)
-            c.drawCircle(screenBx, screenBy, bossRadius * 0.5f, p)
+            
+            // Draw core shape based on attack type
+            when (behavior.attackType) {
+                "MELEE_SEISMIC" -> c.drawRect(screenBx - bossRadius*0.3f, screenBy - bossRadius*0.3f, screenBx + bossRadius*0.3f, screenBy + bossRadius*0.3f, p)
+                "RANGED_KINETIC" -> {
+                    entityPath.reset()
+                    entityPath.moveTo(screenBx, screenBy - bossRadius*0.4f)
+                    entityPath.lineTo(screenBx + bossRadius*0.4f, screenBy + bossRadius*0.4f)
+                    entityPath.lineTo(screenBx - bossRadius*0.4f, screenBy + bossRadius*0.4f)
+                    entityPath.close()
+                    c.drawPath(entityPath, p)
+                }
+                "HACKER_PHASE" -> {
+                    p.style = Paint.Style.STROKE; p.strokeWidth = scale * 0.01f
+                    c.drawCircle(screenBx, screenBy, bossRadius * 0.4f, p)
+                    p.style = Paint.Style.FILL
+                }
+                else -> c.drawCircle(screenBx, screenBy, bossRadius * 0.4f, p)
+            }
 
+            // BOSS NAME & ATTACK TYPE
+            if (gs.bossVis > 0.8f) {
+                pText.color = (bossAlpha shl 24) or (behavior.color and 0xFFFFFF)
+                pText.textSize = scale * 0.03f
+                c.drawText(behavior.name, screenBx, screenBy - bossRadius - scale * 0.06f, pText)
+                pText.textSize = scale * 0.02f
+                pText.color = (bossAlpha shl 24) or 0xBBBBBB
+                c.drawText(behavior.attackType, screenBx, screenBy - bossRadius - scale * 0.035f, pText)
+            }
+
+            // HP BAR follows boss
+            val hpY = gs.bossY - gs.cameraY - bossRadius - scale * 0.02f
             p.color = (bossAlpha shl 24) or (GameColors.RED and 0xFFFFFF)
-            c.drawRect(screenBx - bossRadius, screenBy - bossRadius - scale * 0.02f, screenBx + bossRadius, screenBy - bossRadius - scale * 0.01f, p)
+            c.drawRect(screenBx - bossRadius, hpY, screenBx + bossRadius, hpY + scale * 0.01f, p)
 
             p.color = (bossAlpha shl 24) or (GameColors.HP and 0xFFFFFF)
             val hpWidth = (bossRadius * 2f) * (gs.bossHp.toFloat() / gs.bossMaxHp)
-            c.drawRect(screenBx - bossRadius, screenBy - bossRadius - scale * 0.02f, screenBx - bossRadius + hpWidth, screenBy - bossRadius - scale * 0.01f, p)
+            c.drawRect(screenBx - bossRadius, hpY, screenBx - bossRadius + hpWidth, hpY + scale * 0.01f, p)
         }
     }
 }

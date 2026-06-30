@@ -70,7 +70,7 @@ class StoryMode : GameModeStrategy {
             if (Random.nextDouble() < 0.015) StoryProtocol.triggerRandomGlitch(gs.score, modeId, gs.difficulty)
 
             // Just before the Omega Guardian on the 4th run, hint at the Blackout Protocol
-            if (gs.currentSector == 5 && !gs.bossActive && gs.score == gs.sectorTarget - 5) {
+            if (gs.currentSector == 5 && !gs.bossActive && gs.score >= gs.sectorTarget - 5) {
                 if (!StoryProtocol.isBlackoutActive) {
                     StoryProtocol.showIngameMessage("ADMIN: \"APT CLASSIFICATION CONFIRMED. BLACKOUT PROTOCOL ENGAGED.\"", 4f)
                     StoryProtocol.isBlackoutActive = true

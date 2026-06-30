@@ -22,21 +22,29 @@ object PatrolBehavior : IEnemyBehavior {
         val td2 = tdx * tdx + tdy * tdy
 
         val hitDistSq = (scale * 0.045f) * (scale * 0.045f)
-        val speed = scale * (if (gs.difficulty == 0) 0.25f else 0.4f)
+        
+        // Intelligence Scaling: Reaction speed increases with level
+        val reactionThreshold = scale * (1.5f + (gs.currentLevel * 0.02f))
+        
+        val speedMult = 1.0f + (gs.currentLevel * 0.005f)
+        val speed = scale * (if (gs.difficulty == 0) 0.25f else 0.4f) * speedMult
+        
         val hitByPulse = (gs.pulse && td2 in gs.innerRSq..gs.outerRSq)
-
-        val heardSound = hitByPulse || (gs.localAttackAlert && td2 < (scale * 1.5f) * (scale * 1.5f))
+        val heardSound = hitByPulse || (gs.localAttackAlert && td2 < reactionThreshold * reactionThreshold)
 
         if (heardSound && (enemySys.eState[i] != 2 || enemySys.investigateTimer[i] < 2.5f)) {
             enemySys.eState[i] = 2
             enemySys.invX[i] = gs.px
             enemySys.invY[i] = gs.py
-            enemySys.investigateTimer[i] = 3.0f
+            enemySys.investigateTimer[i] = 3.0f + (gs.currentLevel * 0.01f) // Stay alert longer
             if (gs.gridMap != null) ai.updateAlertHeatMap(gs, gs.px, gs.py)
         }
 
         if (enemySys.eState[i] == 2) {
-            val inLoS = ai.hasLineOfSight(enemySys.ex[i], enemySys.ey[i], gs.px, gs.py, gs)
+            // High level enemies use predictive pathing (simulated by better LoS checks)
+            val losRange = (scale * 7f) + (gs.currentLevel * 0.1f)
+            val inLoS = td2 < losRange * losRange && ai.hasLineOfSight(enemySys.ex[i], enemySys.ey[i], gs.px, gs.py, gs)
+            
             if (inLoS && td2 < hitDistSq * 50f) {
                 // Transform to Hunter
                 enemySys.type[i] = 1
@@ -77,16 +85,30 @@ object HunterBehavior : IEnemyBehavior {
         val tdy = targetY - enemySys.ey[i]
         val td2 = tdx * tdx + tdy * tdy
 
-        val speed = scale * (if (gs.difficulty == 0) 0.25f else 0.4f)
+        val speedMult = 1.0f + (gs.currentLevel * 0.008f)
+        val speed = scale * (if (gs.difficulty == 0) 0.25f else 0.4f) * speedMult
+        
+        // Predictive Movement Logic: High level enemies anticipate player movement
+        val leadAmount = (gs.currentLevel * 0.05f).coerceAtMost(1.0f)
+        val pvx = gs.pvx
+        val pvy = gs.pvy
+        
+        val predX = targetX + pvx * leadAmount
+        val predY = targetY + pvy * leadAmount
+        
+        val ptdx = predX - enemySys.ex[i]
+        val ptdy = predY - enemySys.ey[i]
+        val ptd2 = ptdx * ptdx + ptdy * ptdy
+
         val inLoS = ai.hasLineOfSight(enemySys.ex[i], enemySys.ey[i], targetX, targetY, gs)
 
         if (inLoS) {
             enemySys.eState[i] = 1
-            val eDist = sqrt(td2)
+            val eDist = sqrt(ptd2)
             val chaseSpeed = speed * (if (gs.isOverclocked && !gs.isDecoyActive) -0.5f else 1.2f)
             if (eDist > 0f) {
-                enemySys.evx[i] = (enemySys.evx[i] * 0.9f) + ((tdx / eDist) * chaseSpeed * 0.1f)
-                enemySys.evy[i] = (enemySys.evy[i] * 0.9f) + ((tdy / eDist) * chaseSpeed * 0.1f)
+                enemySys.evx[i] = (enemySys.evx[i] * 0.9f) + ((ptdx / eDist) * chaseSpeed * 0.1f)
+                enemySys.evy[i] = (enemySys.evy[i] * 0.9f) + ((ptdy / eDist) * chaseSpeed * 0.1f)
             }
         } else {
             enemySys.eState[i] = 2
@@ -123,11 +145,14 @@ object TargetBehavior : IEnemyBehavior {
         val tdy = targetY - enemySys.ey[i]
         val td2 = tdx * tdx + tdy * tdy
 
-        val speed = scale * (if (gs.difficulty == 0) 0.25f else 0.35f)
+        val speedMult = 1.0f + (gs.currentLevel * 0.006f)
+        val speed = scale * (if (gs.difficulty == 0) 0.25f else 0.35f) * speedMult
+        
+        val panicDist = scale * (0.8f + (gs.currentLevel * 0.01f))
         val inLoS = ai.hasLineOfSight(enemySys.ex[i], enemySys.ey[i], targetX, targetY, gs)
 
         // Agar player close hai aur line of sight me hai, toh panic mode (Run!)
-        if (inLoS && td2 < (scale * 0.8f) * (scale * 0.8f)) {
+        if (inLoS && td2 < panicDist * panicDist) {
             enemySys.eState[i] = 2 // Alert state
             val dist = sqrt(td2)
             if (dist > 0f) {
@@ -152,50 +177,249 @@ object TargetBehavior : IEnemyBehavior {
 // =========================================================
 
 interface IBossBehavior {
+    val name: String
+    val color: Int
+    val sizeMult: Float
+    val baseHpMult: Float
+    val baseSpeedMult: Float
+    val attackType: String
+    val spawnMessage: String
+
     fun applyMovementPattern(vx: Float, vy: Float, dt: Float, gs: GameState, scale: Float): Pair<Float, Float>
-    fun updateSpecial(dt: Float, gs: GameState, enemySys: EnemySystem, scale: Float) {}
+    fun updateSpecial(dt: Float, gs: GameState, enemySys: EnemySystem, scale: Float)
 }
 
-// 1. GUARDIAN (Type 0/1 - Sine Wave movement)
-object GuardianBossBehavior : IBossBehavior {
+// 0. ULTIMA (Type 5 - Level 100 Ultra Boss)
+object UltimaBossBehavior : IBossBehavior {
+    override val name = "ULTIMA_OVERLORD"
+    override val color = 0xFFFF00FF.toInt() // Neon Magenta
+    override val sizeMult = 1.8f
+    override val baseHpMult = 5.0f
+    override val baseSpeedMult = 1.2f
+    override val attackType = "OMNI-HYBRID"
+    override val spawnMessage = "CRITICAL: ADMINISTRATIVE ENTITY 'ULTIMA' DETECTED."
+
     override fun applyMovementPattern(vx: Float, vy: Float, dt: Float, gs: GameState, scale: Float): Pair<Float, Float> {
-        val rageMult = if (gs.isBossRage) 2.0f else 1.0f
-        return Pair(vx, vy + kotlin.math.sin(gs.timeSinceStart * (4f * rageMult)) * scale * 0.4f)
+        val rageMult = if (gs.isBossRage) 1.5f else 1.0f
+        return Pair(vx * 0.4f * rageMult, vy * 0.4f * rageMult)
+    }
+    // ... existing updateSpecial ...
+
+    override fun updateSpecial(dt: Float, gs: GameState, enemySys: EnemySystem, scale: Float) {
+        gs.bossAttackTimer += dt
+        
+        // Phase-based multi-attack logic
+        val cycle = (gs.bossAttackTimer % 15f)
+        
+        when {
+            cycle < 4f -> { // Phase 1: Drone Rain
+                if (gs.bossAttackTimer % 1.5f < dt) {
+                    enemySys.spawnSwarmIfNeeded(gs, scale * 10f, scale * 10f)
+                }
+            }
+            cycle < 8f -> { // Phase 2: Glitch Storm
+                gs.chromaticIntensity = 0.5f
+                if (gs.bossAttackTimer % 0.5f < dt) {
+                    gs.empFlashTimer = 0.2f
+                    // Random projectile bursts
+                    spawnProjectile(gs, scale, (Math.random() * 6.28f).toFloat())
+                }
+            }
+            cycle < 12f -> { // Phase 3: Seismic Pulsar
+                if (gs.bossAttackTimer % 3f < dt) {
+                    gs.shakeAmount = scale * 0.3f
+                    gs.shockwaveActive = true
+                    gs.shockwaveX = gs.bossX
+                    gs.shockwaveY = gs.bossY
+                    gs.shockwaveR = 0f
+                    // Global damage if not moving (hypothetical mechanic: stay in motion)
+                }
+            }
+            else -> { // Phase 4: Recovery/Teleport
+                if (cycle > 14.5f) {
+                    val angle = (Math.random() * 6.28).toFloat()
+                    gs.bossX = gs.px + kotlin.math.cos(angle) * scale * 1.5f
+                    gs.bossY = gs.py + kotlin.math.sin(angle) * scale * 1.5f
+                }
+            }
+        }
+    }
+
+    private fun spawnProjectile(gs: GameState, scale: Float, angle: Float) {
+        for (i in 0 until gs.maxSpikes) {
+            if (!gs.spikeActive[i]) {
+                gs.spikeActive[i] = true
+                gs.spikeX[i] = gs.bossX
+                gs.spikeY[i] = gs.bossY
+                gs.spikeLife[i] = 3.0f
+                gs.spikeType[i] = 3
+                val speed = scale * 1.2f
+                gs.spikeVx[i] = kotlin.math.cos(angle) * speed
+                gs.spikeVy[i] = kotlin.math.sin(angle) * speed
+                break
+            }
+        }
     }
 }
 
-// 2. STALKER (Type 2 - Aggressive Dash & EMP)
+// 1. GUARDIAN (Type 0/1 - Seismic Jump & Tanky Movement)
+object GuardianBossBehavior : IBossBehavior {
+    override val name = "GUARDIAN_UNIT"
+    override val color = 0xFF555555.toInt() // Iron Grey
+    override val sizeMult = 1.4f
+    override val baseHpMult = 2.5f
+    override val baseSpeedMult = 0.7f
+    override val attackType = "MELEE_SEISMIC"
+    override val spawnMessage = "GUARDIAN: SECTOR LOCKDOWN INITIATED."
+
+    override fun applyMovementPattern(vx: Float, vy: Float, dt: Float, gs: GameState, scale: Float): Pair<Float, Float> {
+        // Guardian is slow but steady. Stops when jumping.
+        if (gs.bossAttackState != 0) return Pair(0f, 0f)
+
+        val rageMult = if (gs.isBossRage) 1.5f else 1.0f
+        return Pair(vx * 0.8f, vy + kotlin.math.sin(gs.timeSinceStart * (3f * rageMult)) * scale * 0.3f)
+    }
+
+    override fun updateSpecial(dt: Float, gs: GameState, enemySys: EnemySystem, scale: Float) {
+        val attackCooldown = if (gs.isBossRage) 3f else 5f
+        gs.bossAttackTimer += dt
+
+        if (gs.bossAttackState == 0 && gs.bossAttackTimer > attackCooldown) {
+            gs.bossAttackState = 1 // Charging Jump
+            gs.bossAttackTimer = 0f
+        }
+
+        if (gs.bossAttackState == 1) {
+            if (gs.bossAttackTimer > 1.0f) {
+                gs.bossAttackState = 2 // In Air
+                gs.bossAttackTimer = 0f
+                com.appsbyalok.echohunter.utils.EchoAudioManager.playSound(android.media.ToneGenerator.TONE_CDMA_PIP, 100)
+            }
+        } else if (gs.bossAttackState == 2) {
+            // Parabolic Jump
+            val jumpDuration = 1.0f
+            val t = gs.bossAttackTimer / jumpDuration
+            gs.bossZ = kotlin.math.sin(t * kotlin.math.PI.toFloat()) * scale * 0.5f
+
+            if (t >= 1.0f) {
+                gs.bossAttackState = 0
+                gs.bossAttackTimer = 0f
+                gs.bossZ = 0f
+                // SEISMIC SLAM EFFECT
+                gs.shakeAmount = scale * 0.2f
+                gs.shockwaveActive = true
+                gs.shockwaveX = gs.bossX
+                gs.shockwaveY = gs.bossY
+                gs.shockwaveR = 0f
+                com.appsbyalok.echohunter.utils.EchoAudioManager.playSound(android.media.ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 200)
+
+                // Damage player if close
+                val dx = gs.px - gs.bossX
+                val dy = gs.py - gs.bossY
+                if (dx * dx + dy * dy < (scale * 0.6f) * (scale * 0.6f) && gs.playerIframe <= 0f) {
+                    gs.playerIframe = 1.0f
+                    gs.hp--
+                    gs.damageFlash = 0.5f
+                }
+            }
+        }
+    }
+}
+
+// 2. STALKER (Type 2 - Debris Throw & Quick Dashes)
 object StalkerBossBehavior : IBossBehavior {
+    override val name = "STALKER_PROTOTYPE"
+    override val color = 0xFF44FF44.toInt() // Toxic Green
+    override val sizeMult = 1.0f
+    override val baseHpMult = 1.5f
+    override val baseSpeedMult = 1.6f
+    override val attackType = "RANGED_KINETIC"
+    override val spawnMessage = "STALKER: TARGET ACQUIRED. NO ESCAPE."
+
     override fun applyMovementPattern(vx: Float, vy: Float, dt: Float, gs: GameState, scale: Float): Pair<Float, Float> {
         val rageMult = if (gs.isBossRage) 2.0f else 1.0f
         var nvx = vx; var nvy = vy
-        if (gs.timeSinceStart % (2.5f / rageMult) < 0.2f) {
-            nvx *= 4.5f; nvy *= 4.5f
+        // Occasional Dash
+        if (gs.timeSinceStart % (3.0f / rageMult) < 0.3f) {
+            nvx *= 4.0f; nvy *= 4.0f
         }
         return Pair(nvx, nvy)
     }
 
     override fun updateSpecial(dt: Float, gs: GameState, enemySys: EnemySystem, scale: Float) {
-        if (kotlin.random.Random.nextFloat() < 0.6f * dt) {
-            gs.empFlashTimer = 1.0f
-            com.appsbyalok.echohunter.utils.EchoAudioManager.playSound(android.media.ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
-            com.appsbyalok.echohunter.data.StoryProtocol.showIngameMessage(com.appsbyalok.echohunter.R.string.msg_emp_detected, 1f)
+        gs.bossAttackTimer += dt
+        val throwCooldown = if (gs.isBossRage) 2f else 4f
+
+        if (gs.bossAttackTimer > throwCooldown) {
+            gs.bossAttackTimer = 0f
+            // DEBRIS THROW: Spawns a custom projectile (spike type 3)
+            for (i in 0 until gs.maxSpikes) {
+                if (!gs.spikeActive[i]) {
+                    gs.spikeActive[i] = true
+                    gs.spikeX[i] = gs.bossX
+                    gs.spikeY[i] = gs.bossY
+                    gs.spikeLife[i] = 2.0f
+                    gs.spikeType[i] = 3 // NEW TYPE: Enemy Projectile
+                    val dx = gs.px - gs.bossX
+                    val dy = gs.py - gs.bossY
+                    val dist = kotlin.math.sqrt(dx * dx + dy * dy)
+                    val speed = scale * 1.5f
+                    gs.spikeVx[i] = (dx / dist) * speed
+                    gs.spikeVy[i] = (dy / dist) * speed
+                    com.appsbyalok.echohunter.utils.EchoAudioManager.playSound(android.media.ToneGenerator.TONE_SUP_DIAL, 50)
+                    break
+                }
+            }
+        }
+
+        if (kotlin.random.Random.nextFloat() < 0.3f * dt) {
+            gs.empFlashTimer = 0.5f
         }
     }
 }
 
-// 3. GLITCH (Type 3 - High Jitter/Teleporting feel)
+// 3. GLITCH (Type 3 - Teleporting & Glitch Pulse)
 object GlitchBossBehavior : IBossBehavior {
+    override val name = "GLITCH_ENTITY"
+    override val color = 0xFF00FFFF.toInt() // Neon Cyan
+    override val sizeMult = 1.2f
+    override val baseHpMult = 1.8f
+    override val baseSpeedMult = 1.1f
+    override val attackType = "HACKER_PHASE"
+    override val spawnMessage = "GLITCH: SYST3M... ERR0R... DELETE(YOU)."
+
     override fun applyMovementPattern(vx: Float, vy: Float, dt: Float, gs: GameState, scale: Float): Pair<Float, Float> {
         val rageMult = if (gs.isBossRage) 2.0f else 1.0f
-        val jx = (kotlin.random.Random.nextFloat() - 0.5f) * scale * 0.8f * rageMult
-        val jy = (kotlin.random.Random.nextFloat() - 0.5f) * scale * 0.8f * rageMult
-        return Pair(vx + jx, vy + jy)
+        // Jittery movement
+        val jx = (kotlin.random.Random.nextFloat() - 0.5f) * scale * 1.2f * rageMult
+        val jy = (kotlin.random.Random.nextFloat() - 0.5f) * scale * 1.2f * rageMult
+        return Pair(vx * 0.5f + jx, vy * 0.5f + jy)
+    }
+
+    override fun updateSpecial(dt: Float, gs: GameState, enemySys: EnemySystem, scale: Float) {
+        gs.bossAttackTimer += dt
+        if (gs.bossAttackTimer > 6f) {
+            gs.bossAttackTimer = 0f
+            // Teleport near player
+            val angle = kotlin.random.Random.nextFloat() * 6.28f
+            gs.bossX = gs.px + kotlin.math.cos(angle) * scale * 1.0f
+            gs.bossY = gs.py + kotlin.math.sin(angle) * scale * 1.0f
+            com.appsbyalok.echohunter.utils.EchoAudioManager.playSound(android.media.ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
+            gs.chromaticIntensity = 0.8f
+        }
     }
 }
 
-// 4. OMEGA (Type 4 - Master Pattern + Multi-Glitch)
+// 4. OMEGA (Type 4 - Multi-Threat & Drone Swarm)
 object OmegaBossBehavior : IBossBehavior {
+    override val name = "OMEGA_COMMANDER"
+    override val color = 0xFFFF3333.toInt() // Crimson Red
+    override val sizeMult = 1.5f
+    override val baseHpMult = 3.0f
+    override val baseSpeedMult = 1.0f
+    override val attackType = "HYBRID_COMMAND"
+    override val spawnMessage = "OMEGA: WE ARE THE SWARM. WE ARE MANY."
+
     override fun applyMovementPattern(vx: Float, vy: Float, dt: Float, gs: GameState, scale: Float): Pair<Float, Float> {
         val rageMult = if (gs.isBossRage) 2.0f else 1.0f
         val svy = vy + kotlin.math.cos(gs.timeSinceStart * (5f * rageMult)) * scale * 0.6f
@@ -204,10 +428,14 @@ object OmegaBossBehavior : IBossBehavior {
     }
 
     override fun updateSpecial(dt: Float, gs: GameState, enemySys: EnemySystem, scale: Float) {
-        if (kotlin.random.Random.nextFloat() < 0.6f * dt) {
-            gs.empFlashTimer = 1.0f
-            com.appsbyalok.echohunter.utils.EchoAudioManager.playSound(android.media.ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
-            com.appsbyalok.echohunter.data.StoryProtocol.showIngameMessage(com.appsbyalok.echohunter.R.string.msg_emp_detected, 1f)
+        gs.bossAttackTimer += dt
+        if (gs.bossAttackTimer > 8f) {
+            gs.bossAttackTimer = 0f
+            // Spawn Hunter Swarm
+            for (i in 0 until 3) {
+                enemySys.spawnSwarmIfNeeded(gs, scale * 10f, scale * 10f) // Simplified call
+            }
+            com.appsbyalok.echohunter.data.StoryProtocol.showIngameMessage("OMEGA: DEPLOYING SWARM UNITS", 2f)
         }
     }
 }

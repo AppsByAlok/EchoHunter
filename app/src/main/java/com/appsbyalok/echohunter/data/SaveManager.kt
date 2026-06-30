@@ -11,7 +11,7 @@ object SaveManager {
     var dataCoinsKB: Long = 0L
         private set
 
-    var totalData: Int = 0
+    var totalData: Long = 0L
         private set
 
     var maxCampaignLevel: Int = 1
@@ -45,16 +45,16 @@ object SaveManager {
     val isManualAimUnlocked: Boolean
         get() = unlockedStoryStreak >= 1 || maxCampaignLevel > 20
 
-    var highScore: Int = 0
+    var highScore: Long = 0L
         private set
-    var previousScore: Int = 0
+    var previousScore: Long = 0L
         private set
 
     fun init(context: Context) {
         prefs = context.getSharedPreferences("EchoSaveInfo", Context.MODE_PRIVATE)
 
-        dataCoinsKB = prefs.getLong("dataCoinsKB", 0L)
-        totalData = prefs.getInt("totalData", 0)
+        dataCoinsKB = getLongSafe("dataCoinsKB")
+        totalData = getLongSafe("totalData")
         maxCampaignLevel = prefs.getInt("maxCampaignLevel", 1)
         isAutoNextLevelEnabled = prefs.getBoolean("isAutoNextLevelEnabled", false)
 
@@ -64,26 +64,50 @@ object SaveManager {
         currentHardStreak = prefs.getInt("currHard", 0)
         unlockedHardStreak = prefs.getInt("unlockHard", 0)
 
-        highScore = prefs.getInt("highScore", 0)
-        previousScore = prefs.getInt("previousScore", 0)
+        highScore = getLongSafe("highScore")
+        previousScore = getLongSafe("previousScore")
+    }
+
+    /**
+     * Safely retrieves a Long value from SharedPreferences.
+     * If the value was previously stored as an Int (migration), it converts and saves it as a Long.
+     */
+    private fun getLongSafe(key: String, defaultValue: Long = 0L): Long {
+        return try {
+            // Case 1: Value is already Long (Normal flow)
+            prefs.getLong(key, defaultValue)
+        } catch (_: Exception) {
+            try {
+                // Case 2: Value is Int (Legacy data)
+                val legacyValue = prefs.getInt(key, defaultValue.toInt())
+                val migratedValue = legacyValue.toLong()
+                
+                // Auto-migrate: overwrite with Long for next time
+                prefs.edit().putLong(key, migratedValue).apply()
+                migratedValue
+            } catch (_: Exception) {
+                // Case 3: Value is something else or corrupted
+                defaultValue
+            }
+        }
     }
 
     fun addData(kbAmount: Long) {
         dataCoinsKB += kbAmount
-        totalData = (dataCoinsKB / 1024L).toInt()
+        totalData = (dataCoinsKB / 1024L)
         prefs.edit()
             .putLong("dataCoinsKB", dataCoinsKB)
-            .putInt("totalData", totalData)
+            .putLong("totalData", totalData)
             .apply()
     }
 
     fun spendData(kbCost: Long): Boolean {
         if (dataCoinsKB >= kbCost) {
             dataCoinsKB -= kbCost
-            totalData = (dataCoinsKB / 1024L).toInt()
+            totalData = (dataCoinsKB / 1024L)
             prefs.edit()
                 .putLong("dataCoinsKB", dataCoinsKB)
-                .putInt("totalData", totalData)
+                .putLong("totalData", totalData)
                 .apply()
             return true
         }
@@ -130,14 +154,14 @@ object SaveManager {
             .apply()
     }
 
-    fun saveRunResult(currentScore: Int) {
+    fun saveRunResult(currentScore: Long) {
         previousScore = currentScore
         if (currentScore > highScore) {
             highScore = currentScore
         }
         prefs.edit()
-            .putInt("previousScore", previousScore)
-            .putInt("highScore", highScore)
+            .putLong("previousScore", previousScore)
+            .putLong("highScore", highScore)
             .apply()
     }
 
@@ -148,7 +172,9 @@ object SaveManager {
         val gb = mb / 1024.0
         if (gb < 1024.0) return String.format(Locale.US,"%.2f GB", gb)
         val tb = gb / 1024.0
-        return String.format(Locale.US,"%.2f TB", tb)
+        if (tb < 1024.0) return String.format(Locale.US,"%.2f TB", tb)
+        val pb = tb / 1024.0
+        return String.format(Locale.US,"%.2f PB", pb)
     }
 
     fun debugSetLevel(level: Int) {
@@ -162,18 +188,18 @@ object SaveManager {
     }
 
     fun debugUnlockAll() {
-        maxCampaignLevel = 100
+        maxCampaignLevel = 200
         unlockedStoryStreak = 3
         unlockedHardStreak = 3
-        dataCoinsKB = Int.MAX_VALUE.toLong()
-        totalData = (dataCoinsKB / 1024L).toInt()
+        dataCoinsKB = 999_999_999_999L // ~1 PB (Petabyte)
+        totalData = (dataCoinsKB / 1024L)
         
         prefs.edit()
             .putInt("maxCampaignLevel", maxCampaignLevel)
             .putInt("unlockStory", unlockedStoryStreak)
             .putInt("unlockHard", unlockedHardStreak)
             .putLong("dataCoinsKB", dataCoinsKB)
-            .putInt("totalData", totalData)
+            .putLong("totalData", totalData)
             .apply()
         
         UpgradeSystem.debugMaxAll()
@@ -181,15 +207,15 @@ object SaveManager {
 
     fun clearAllData() {
         dataCoinsKB = 0L
-        totalData = 0
+        totalData = 0L
         maxCampaignLevel = 1
         isAutoNextLevelEnabled = false
         currentStoryStreak = 0
         unlockedStoryStreak = 0
         currentHardStreak = 0
         unlockedHardStreak = 0
-        highScore = 0
-        previousScore = 0
+        highScore = 0L
+        previousScore = 0L
 
         prefs.edit().clear().apply()
         UpgradeSystem.clearAllData()

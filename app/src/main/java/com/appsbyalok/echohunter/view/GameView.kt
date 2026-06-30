@@ -21,6 +21,11 @@ import com.appsbyalok.echohunter.statemachine.AppStateManager
 import com.appsbyalok.echohunter.systems.CollisionSystem
 import com.appsbyalok.echohunter.systems.EffectSystem
 import com.appsbyalok.echohunter.systems.EnemySystem
+import com.appsbyalok.echohunter.systems.GlitchBossBehavior
+import com.appsbyalok.echohunter.systems.GuardianBossBehavior
+import com.appsbyalok.echohunter.systems.OmegaBossBehavior
+import com.appsbyalok.echohunter.systems.StalkerBossBehavior
+import com.appsbyalok.echohunter.systems.UltimaBossBehavior
 import com.appsbyalok.echohunter.systems.triggerCinematicFocus
 import com.appsbyalok.echohunter.ui.UIArchives
 import com.appsbyalok.echohunter.ui.UIArsenal
@@ -64,7 +69,7 @@ class GameView(context: Context) : View(context) {
     internal var storyStep = 0
     internal var currentStoryLines = StoryProtocol.storyIntroLines
 
-    // --- NAYA: THE APP STATE MANAGER HOOK ---
+    // --- THE APP STATE MANAGER HOOK ---
     internal val stateManager = AppStateManager(this, gs)
 
     var gameScale = 1f
@@ -267,7 +272,7 @@ class GameView(context: Context) : View(context) {
         }
     }
 
-    private fun addScore(points: Int) {
+    private fun addScore(points: Long) {
         gs.score += points
 //        if (gs.score > SaveManager.highScore) {
 //            // Can trigger a small sound effect for high score
@@ -311,13 +316,23 @@ class GameView(context: Context) : View(context) {
 
     private fun triggerBoss(type: Int, scale: Float) {
         gs.bossActive = true
-        gs.bossType = type
-        gs.bossLockTimer = 1.0f // Trigger Auto-Aim lock for 1 second on spawn
+        var bType = type
+        if (gs.currentLevel % 100 == 0) bType = 5 // Force Ultra Boss on level 100/200/etc
         
-        // --- NAYA: BOSS HP SCALING (Saturated Growth Curve) ---
-        // Base 25 + Max 475 = 500 HP Cap at extreme levels
+        gs.bossType = bType
+        gs.bossLockTimer = 1.0f 
+
+        val behavior = when (bType) {
+            1 -> GuardianBossBehavior
+            2 -> StalkerBossBehavior
+            3 -> GlitchBossBehavior
+            4 -> OmegaBossBehavior
+            5 -> UltimaBossBehavior
+            else -> GuardianBossBehavior
+        }
+        
         val bossScaling = com.appsbyalok.echohunter.data.LevelEngine.getSaturatedValue(gs.currentLevel, 0f, 475f, 300f)
-        gs.bossHp = (25 + bossScaling).toInt()
+        gs.bossHp = ((25 + bossScaling) * behavior.baseHpMult).toInt()
         gs.bossMaxHp = gs.bossHp
         var safeX = gs.px + scale * 1.2f
         var safeY = gs.py
@@ -353,8 +368,8 @@ class GameView(context: Context) : View(context) {
         gs.triggerCinematicFocus(safeX, safeY, zoom = 1.4f, duration = 1.5f, hitStop = 0.2f)
         gs.shakeAmount = scale * 0.15f // Intense vibration on boss arrival
 
-        StoryProtocol.startBossIntro(type)
-        gs.showGlobalMessage(context.getString(StoryProtocol.currentBossNameRes), 4f)
+        StoryProtocol.startBossIntro(bType)
+        gs.showGlobalMessage(behavior.spawnMessage, 4f)
         EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 400)
         enemySys.spawnSwarmIfNeeded(gs, width.toFloat(), height.toFloat())
     }

@@ -74,7 +74,7 @@ class EffectSystem {
         }
     }
 
-    fun spawnFloatingText(x: Float, y: Float, value: Int, color: Int) {
+    fun spawnFloatingText(x: Float, y: Float, value: Long, color: Int) {
         for (i in 0 until ftn) {
             if (ftLife[i] <= 0f) {
                 ftX[i] = x; ftY[i] = y; ftLife[i] = 1f; ftColor[i] = color

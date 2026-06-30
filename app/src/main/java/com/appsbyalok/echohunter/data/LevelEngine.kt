@@ -16,7 +16,7 @@ enum class LevelFeature {
 
 data class LevelConfig(
     val features: Set<LevelFeature>,
-    val targetScore: Int,
+    val targetScore: Long,
     val speedMultiplier: Float,
     val hpMultiplier: Float,
     val spawnRateMultiplier: Float,
@@ -39,7 +39,7 @@ object LevelEngine {
      */
     private fun determineLevelFeatures(level: Int): Set<LevelFeature> {
         // Core Easter Egg
-        if (level % 100 == 0) return setOf(LevelFeature.ADMIN_BONUS)
+        if (level % 100 == 0) return setOf(LevelFeature.ADMIN_BONUS, LevelFeature.BOSS)
 
         // Level 1 is always a safe tutorial infiltration
         if (level == 1) return setOf(LevelFeature.CLASSIC)
@@ -87,7 +87,7 @@ object LevelEngine {
         // AI Intelligence tuning (Level 1 starts dumb, Level 100 is expert)
         val aiIntel = getSaturatedValue(level, 0.2f, 0.8f, 50f)       // Max 1.0
 
-        val targetScore = getSaturatedValue(level, 50f, 1950f, 400f).toInt() // Max 2000 score
+        val targetScore = getSaturatedValue(level, 50f, 1950f, 400f).toLong() // Max 2000 score
 
         // --- NAYA: SMOOTH REWARD SCALING (Prevents Long Overflow) ---
         val baseClear = 100f

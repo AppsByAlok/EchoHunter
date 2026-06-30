@@ -32,6 +32,11 @@ interface IGameObjective {
         
         // 3. Score Check (Classic)
         if (config.features.contains(LevelFeature.CLASSIC) && gs.score < config.targetScore) return false
+
+        // 4. Defense Check
+        if (config.features.contains(LevelFeature.DEFENSE)) {
+            if (gs.defWaveCurrent <= gs.defWaveMax || gs.coreHp <= 0) return false
+        }
         
         return true
     }
@@ -77,6 +82,8 @@ class StandardObjective : IGameObjective {
 
 // 2. DEFENSE OBJECTIVE (Wave based, Protect Core)
 class DefenseObjective : IGameObjective {
+    private var trickleTimer = 2f
+
     override fun setupObjective(gs: GameState, targetW: Float, targetH: Float, scale: Float) {
         gs.defWaveMax = when {
             gs.currentLevel <= 30 -> 1
@@ -113,6 +120,23 @@ class DefenseObjective : IGameObjective {
     }
 
     override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
+        // --- ESCAPE HYBRID TRICKLE ---
+        val config = LevelEngine.getLevelConfig(gs.currentLevel)
+        if (config.features.contains(LevelFeature.ESCAPE)) {
+            trickleTimer -= dt
+            if (trickleTimer <= 0f) {
+                var activeCount = 0
+                for (i in 0 until enemySys.n) if (enemySys.ex[i] > -1000f) activeCount++
+                val baseLimit = if (gs.difficulty == 1) 16f else 12f
+                val limit = LevelEngine.getSaturatedValue(gs.currentLevel, baseLimit, 35f - baseLimit, 120f).toInt()
+                val queued = spawnerSys.getTotalQueue(gs)
+                if (activeCount + queued < limit) {
+                    spawnerSys.queueSpawns(limit - (activeCount + queued), gs)
+                }
+                trickleTimer = 1.5f
+            }
+        }
+
         when (gs.defWaveState) {
             0, 2 -> { // Buffer or Cooldown Phase
                 gs.defWaveTimer -= dt
@@ -135,6 +159,7 @@ class DefenseObjective : IGameObjective {
                 if (gs.defEnemiesAlive <= 0 && gs.defEnemiesToSpawn <= 0) {
                     if (gs.defWaveCurrent >= gs.defWaveMax) {
                         gs.defWaveCurrent++ // Win condition check increments this to > Max
+                        gs.defWaveState = 3 // Finished
                     } else {
                         gs.defWaveCurrent++
                         gs.defWaveState = 2
@@ -161,44 +186,227 @@ class DefenseObjective : IGameObjective {
 class EscapeObjective : IGameObjective {
     private var trickleTimer = 2f
 
+    private var coreReached = false
+    private var exitX = -9999f
+    private var exitY = -9999f
+
     override fun setupObjective(gs: GameState, targetW: Float, targetH: Float, scale: Float) {
         gs.escapeGateActive = false
+        coreReached = false
+        
         val grid = gs.gridMap
         if (grid != null) {
+            // 1. Locate Exit Portal (2) and store it
             for (x in 0 until grid.size) {
                 for (y in 0 until grid[0].size) {
                     if (grid[x][y] == 2) {
-                        gs.coreX = x * gs.tileSize + (gs.tileSize / 2f)
-                        gs.coreY = y * gs.tileSize + (gs.tileSize / 2f)
-                        gs.coreRadius = scale * 0.12f
-                        return
+                        exitX = x * gs.tileSize + (gs.tileSize / 2f)
+                        exitY = y * gs.tileSize + (gs.tileSize / 2f)
                     }
                 }
             }
+
+            // 2. Set initial Core to map center (Defense Hub)
+            val centerX = grid.size / 2
+            val centerY = grid[0].size / 2
+            
+            var foundPath = false
+            for (d in 0..6) {
+                for (dx in -d..d) {
+                    for (dy in -d..d) {
+                        val nx = centerX + dx
+                        val ny = centerY + dy
+                        if (nx in grid.indices && ny in grid[0].indices && grid[nx][ny] == 0) {
+                            gs.coreX = nx * gs.tileSize + (gs.tileSize / 2f)
+                            gs.coreY = ny * gs.tileSize + (gs.tileSize / 2f)
+                            foundPath = true; break
+                        }
+                    }
+                    if (foundPath) break
+                }
+                if (foundPath) break
+            }
+            
+            if (!foundPath) {
+                gs.coreX = centerX * gs.tileSize + (gs.tileSize / 2f)
+                gs.coreY = centerY * gs.tileSize + (gs.tileSize / 2f)
+            }
+        } else {
+            gs.coreX = gs.px + (if (Math.random() > 0.5) 1f else -1f) * targetW * 0.8f
+            gs.coreY = gs.py + (if (Math.random() > 0.5) 1f else -1f) * targetH * 0.8f
         }
-        gs.coreX = gs.px + (if (Math.random() > 0.5) 1f else -1f) * targetW * 0.8f
-        gs.coreY = gs.py + (if (Math.random() > 0.5) 1f else -1f) * targetH * 0.8f
+        
         gs.coreRadius = scale * 0.12f
+
+        // --- DEFENSE HYBRID SETUP ---
+        val config = LevelEngine.getLevelConfig(gs.currentLevel)
+        if (config.features.contains(LevelFeature.DEFENSE)) {
+            gs.defWaveMax = when {
+                gs.currentLevel <= 70 -> 1
+                gs.currentLevel <= 150 -> 2
+                else -> 3
+            }
+            gs.defWaveCurrent = 1
+            gs.defWaveState = -1 // Waiting for core reach
+            gs.defWaveTimer = 0f
+            gs.coreMaxHp = LevelEngine.getSaturatedValue(gs.currentLevel, 10f, 15f, 150f).toInt()
+            gs.coreHp = gs.coreMaxHp
+        }
     }
     override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
         trickleTimer -= dt
         if (trickleTimer <= 0f) {
+            // SUPPRESS TRICKLE DURING ACTIVE WAVES to keep slots for wave enemies
+            val waveActive = gs.defWaveState == 1
+            
             var activeCount = 0
             for (i in 0 until enemySys.n) if (enemySys.ex[i] > -1000f) activeCount++
             val baseLimit = if (gs.difficulty == 1) 16f else 12f
             val limit = LevelEngine.getSaturatedValue(gs.currentLevel, baseLimit, 35f - baseLimit, 120f).toInt()
             val queued = spawnerSys.getTotalQueue(gs)
-            if (activeCount + queued < limit) {
+            
+            if (!waveActive && activeCount + queued < limit) {
                 spawnerSys.queueSpawns(limit - (activeCount + queued), gs)
             }
             trickleTimer = 1f
         }
 
+        val config = LevelEngine.getLevelConfig(gs.currentLevel)
+        val hasDefense = config.features.contains(LevelFeature.DEFENSE)
+
+        // UI Label Logic
+        if (!gs.escapeGateActive) {
+            if (hasDefense && !coreReached) {
+                gs.objectiveLabel = "LOCATE CORE UPLINK"
+                val dx = gs.px - gs.coreX
+                val dy = gs.py - gs.coreY
+                val dist = sqrt(dx * dx + dy * dy)
+                gs.objectiveProgress = (1f - (dist / (gs.mapWidth * 0.5f))).coerceIn(0f, 0.95f)
+            } else if (hasDefense && gs.defWaveCurrent <= gs.defWaveMax) {
+                gs.objectiveLabel = "DEFEND CORE - WAVE ${gs.defWaveCurrent}/${gs.defWaveMax}"
+                // PROGRESS: Ratio of enemies killed in current wave
+                val waveTotal = 6f * (if (gs.difficulty == 1) 1.5f else 1.0f)
+                val expectedTotal = LevelEngine.getSaturatedValue(gs.currentLevel, waveTotal, 22f, 100f).toInt()
+                
+                val currentRemaining = gs.defEnemiesToSpawn + gs.defEnemiesAlive
+                gs.objectiveProgress = if (expectedTotal > 0) {
+                   (1f - (currentRemaining.toFloat() / expectedTotal)).coerceIn(0f, 1f)
+                } else 1f
+            } else {
+                gs.objectiveLabel = "BYPASSING SECURITY..."
+                // Progress based on secondary features
+                var progress = 0f
+                if (config.features.contains(LevelFeature.ELIMINATION)) progress = (gs.elimTargetsKilled.toFloat() / gs.elimTargetsRequired)
+                gs.objectiveProgress = progress.coerceIn(0f, 1f)
+            }
+        } else {
+            gs.objectiveLabel = "EXIT PORTAL ACTIVE"
+            gs.objectiveProgress = 1f
+        }
+
         // Hybrid check: Gate activates ONLY when all other features are met
         if (areSecondaryFeaturesMet(gs) && !gs.escapeGateActive) {
             gs.escapeGateActive = true
+            
+            // NAYA: Relocate core marker to the actual Exit Portal
+            if (exitX > 0) {
+                gs.coreX = exitX
+                gs.coreY = exitY
+            }
+            
             StoryProtocol.showIngameMessage("SYSTEM BREACHED! EXIT PORTAL OPEN!", 4f)
             EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 300)
+        }
+
+        // --- DEFENSE HYBRID UPDATE ---
+        if (hasDefense) {
+            if (!coreReached) {
+                val dx = gs.px - gs.coreX
+                val dy = gs.py - gs.coreY
+                if (dx * dx + dy * dy < (gs.coreRadius * 2.8f) * (gs.coreRadius * 2.8f)) {
+                    coreReached = true
+                    gs.defWaveState = 0
+                    gs.defWaveTimer = 3f
+                    StoryProtocol.showIngameMessage("CORE LOCATED! DEFENSE SYSTEMS ONLINE!", 3f)
+                    EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 200)
+                    
+                    // Force all spawners to relocate near the core area (7x7 room)
+                    val grid = gs.gridMap
+                    if (grid != null) {
+                        val centerX = (gs.coreX / gs.tileSize).toInt()
+                        val centerY = (gs.coreY / gs.tileSize).toInt()
+                        
+                        for (i in gs.spawnerNodes.indices) {
+                            val node = gs.spawnerNodes[i]
+                            node.queue = 0 // Purana trickle clear karo
+                            node.cooldownTimer = 0.5f + (i * 0.2f) // Staggered entry
+                            
+                            // Core ke charo taraf circle mein spawners set karo (5.5 tiles door)
+                            val angle = (i.toFloat() / gs.spawnerNodes.size) * 6.283f
+                            val radius = 5.5f 
+                            var nx = (centerX + kotlin.math.cos(angle) * radius).toInt().coerceIn(1, grid.size - 2)
+                            var ny = (centerY + kotlin.math.sin(angle) * radius).toInt().coerceIn(1, grid[0].size - 2)
+                            
+                            // Ensure spawner lands on a PATH, search nearby if blocked
+                            if (grid[nx][ny] != 0) {
+                                var found = false
+                                for (dx in -1..1) {
+                                    for (dy in -1..1) {
+                                        if (grid[nx + dx][ny + dy] == 0) {
+                                            nx += dx
+                                            ny += dy
+                                            found = true
+                                            break
+                                        }
+                                    }
+                                    if (found) break
+                                }
+                            }
+                            
+                            node.x = nx * gs.tileSize + gs.tileSize/2f
+                            node.y = ny * gs.tileSize + gs.tileSize/2f
+                        }
+                    }
+                }
+            } else {
+                updateDefenseSubLogic(dt, gs, spawnerSys)
+            }
+        }
+    }
+
+    private fun updateDefenseSubLogic(dt: Float, gs: GameState, spawnerSys: SpawnerSystem) {
+        when (gs.defWaveState) {
+            -1 -> { // Exploration Phase
+                gs.objectiveLabel = "SEARCH FOR CORE UPLINK"
+                // No timer logic here, waiting for coreReached = true
+            }
+            0, 2 -> {
+                gs.defWaveTimer -= dt
+                if (gs.defWaveTimer <= 0f) {
+                    gs.defWaveState = 1
+                    val diffMult = if (gs.difficulty == 1) 1.5f else 1.0f
+                    val baseCount = 6f * diffMult
+                    val count = LevelEngine.getSaturatedValue(gs.currentLevel, baseCount, 22f, 100f).toInt()
+                    
+                    gs.defEnemiesToSpawn = count
+                    gs.defEnemiesAlive = 0
+                    spawnerSys.queueSpawns(count, gs)
+                    StoryProtocol.showIngameMessage("WAVE ${gs.defWaveCurrent} INCOMING!", 2f)
+                }
+            }
+            1 -> {
+                if (gs.defEnemiesAlive <= 0 && gs.defEnemiesToSpawn <= 0) {
+                    if (gs.defWaveCurrent < gs.defWaveMax) {
+                        gs.defWaveCurrent++
+                        gs.defWaveState = 2
+                        gs.defWaveTimer = 7f
+                        StoryProtocol.showIngameMessage("WAVE CLEAR! REGROUPING...", 2f)
+                    } else {
+                        gs.defWaveCurrent++ // Win condition
+                        gs.defWaveState = 3 // Finished - enables normal spawns for escape
+                    }
+                }
+            }
         }
     }
     override fun checkWinCondition(gs: GameState): Boolean {

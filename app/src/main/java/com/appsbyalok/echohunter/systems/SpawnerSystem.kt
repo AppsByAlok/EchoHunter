@@ -1,6 +1,7 @@
 package com.appsbyalok.echohunter.systems
 
 import com.appsbyalok.echohunter.data.LevelEngine
+import com.appsbyalok.echohunter.data.LevelFeature
 import com.appsbyalok.echohunter.engine.GameState
 import kotlin.random.Random
 
@@ -118,12 +119,16 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
             }
 
             if (node.cooldownTimer <= 0f && node.queue > 0) {
+                // Determine if we should count this as a defense enemy
+                val config = LevelEngine.getLevelConfig(gs.currentLevel)
+                val isDefenseWave = config.features.contains(LevelFeature.DEFENSE) && gs.defWaveState == 1
+
                 for (i in 0 until enemySys.n) {
                     if (enemySys.ex[i] < -1000f) {
                         enemySys.spawnAt(i, node.x, node.y, gs, targetW, targetH, node.type)
                         node.queue--
 
-                        if (gs.activeObjective is com.appsbyalok.echohunter.modes.DefenseObjective) {
+                        if (isDefenseWave) {
                             gs.defEnemiesAlive++
                             gs.defEnemiesToSpawn--
                             if (gs.defEnemiesToSpawn < 0) gs.defEnemiesToSpawn = 0
