@@ -33,7 +33,7 @@ class EnemyAI {
             map = Array(w) { IntArray(h) }
         }
 
-        for(x in 0 until w) for(y in 0 until h) map!![x][y] = 9999
+        for(x in 0 until w) for(y in 0 until h) map[x][y] = 9999
 
         val ts = gs.tileSize
         val pxC = (targetX / ts).toInt().coerceIn(0, w - 1)
@@ -41,7 +41,7 @@ class EnemyAI {
 
         var head = 0; var tail = 0
         qX[tail] = pxC; qY[tail] = pyC; tail++
-        map!![pxC][pyC] = 0
+        map[pxC][pyC] = 0
 
         val dirsX = intArrayOf(0, 0, -1, 1)
         val dirsY = intArrayOf(-1, 1, 0, 0)
@@ -65,12 +65,12 @@ class EnemyAI {
         return map
     }
 
-    fun steerByPlayerHeatMap(ex: Float, ey: Float, evx: Float, evy: Float, speed: Float, gs: GameState): Pair<Float, Float> {
-        return steerByMap(playerHeatMap, ex, ey, evx, evy, speed, gs)
+    fun steerByPlayerHeatMap(ex: Float, ey: Float, evx: Float, evy: Float, speed: Float, gs: GameState, dt: Float): Pair<Float, Float> {
+        return steerByMap(playerHeatMap, ex, ey, evx, evy, speed, gs, dt)
     }
 
-    fun steerByCoreHeatMap(ex: Float, ey: Float, evx: Float, evy: Float, speed: Float, gs: GameState): Pair<Float, Float> {
-        return steerByMap(coreHeatMap, ex, ey, evx, evy, speed, gs)
+    fun steerByCoreHeatMap(ex: Float, ey: Float, evx: Float, evy: Float, speed: Float, gs: GameState, dt: Float): Pair<Float, Float> {
+        return steerByMap(coreHeatMap, ex, ey, evx, evy, speed, gs, dt)
     }
 
     fun updateAlertHeatMap(gs: GameState, targetX: Float, targetY: Float) {
@@ -126,11 +126,11 @@ class EnemyAI {
         }
     }
 
-    fun steerByAlertHeatMap(ex: Float, ey: Float, evx: Float, evy: Float, speed: Float, gs: GameState): Pair<Float, Float> {
-        return steerByMap(alertHeatMap, ex, ey, evx, evy, speed, gs)
+    fun steerByAlertHeatMap(ex: Float, ey: Float, evx: Float, evy: Float, speed: Float, gs: GameState, dt: Float): Pair<Float, Float> {
+        return steerByMap(alertHeatMap, ex, ey, evx, evy, speed, gs, dt)
     }
 
-    private fun steerByMap(hm: Array<IntArray>?, ex: Float, ey: Float, evx: Float, evy: Float, speed: Float, gs: GameState): Pair<Float, Float> {
+    private fun steerByMap(hm: Array<IntArray>?, ex: Float, ey: Float, evx: Float, evy: Float, speed: Float, gs: GameState, dt: Float): Pair<Float, Float> {
         if (hm == null) return Pair(evx, evy)
         val ts = gs.tileSize
         val cx = (ex / ts).toInt()
@@ -138,9 +138,9 @@ class EnemyAI {
 
         if (cx !in hm.indices || cy !in hm[0].indices) return Pair(evx, evy)
 
-        val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
+        val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel, gs.difficulty)
         if (kotlin.random.Random.nextFloat() > config.aiIntelligence) {
-            return Pair(evx + (kotlin.random.Random.nextFloat() - 0.5f) * speed * 0.5f, evy + (kotlin.random.Random.nextFloat() - 0.5f) * speed * 0.5f)
+            return Pair(evx + (kotlin.random.Random.nextFloat() - 0.5f) * speed * dt * 5f, evy + (kotlin.random.Random.nextFloat() - 0.5f) * speed * dt * 5f)
         }
 
         var bestVal = hm[cx][cy]
@@ -160,8 +160,16 @@ class EnemyAI {
 
         val dx = targetX - ex; val dy = targetY - ey
         val dist = sqrt(dx * dx + dy * dy)
-        return if (dist > 0f) Pair((evx * 0.8f) + ((dx / dist) * speed * 0.2f), (evy * 0.8f) + ((dy / dist) * speed * 0.2f))
-        else Pair(evx, evy)
+        
+        // --- DIFFICULTY-BASED STEERING ---
+        // Normal (0): 5f (Smooth turns), Hard (1): 10f (Sharp turns)
+        val steerSharpness = if (gs.difficulty == 1) 10f else 5f
+        val lerpFactor = (dt * steerSharpness).coerceIn(0f, 1f)
+        
+        return if (dist > 0f) {
+            Pair((evx * (1f - lerpFactor)) + ((dx / dist) * speed * lerpFactor), 
+                 (evy * (1f - lerpFactor)) + ((dy / dist) * speed * lerpFactor))
+        } else Pair(evx, evy)
     }
 
     fun hasLineOfSight(x0: Float, y0: Float, x1: Float, y1: Float, gs: GameState): Boolean {

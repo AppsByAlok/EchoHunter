@@ -111,8 +111,9 @@ class GameEngine(
             }
         }
 
-        gs.updateVisibilityMath(scale, targetW * 0.75f)
-        gs.updatePulseRadius(simDt, targetW * 0.75f)
+        val maxSonarRad = targetW * 0.75f * UpgradeSystem.getSonarRangeMultiplier()
+        gs.updateVisibilityMath(scale, maxSonarRad, simDt)
+        gs.updatePulseRadius(simDt, maxSonarRad)
 
 
         if (gs.isLevelCleared && gs.state == 1 && gs.gameMode == 0) {
@@ -183,6 +184,9 @@ class GameEngine(
 
         val columns = gs.gridMap!!.size
         val rows = gs.gridMap!![0].size
+        
+        // NAYA: Initialize wall visibility map
+        gs.wallVisMap = Array(columns) { FloatArray(rows) { 0f } }
 
         gs.tileSize = scale * 0.15f
         gs.mapWidth = columns * gs.tileSize

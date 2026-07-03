@@ -84,10 +84,11 @@ fun GameState.updateCameraLogic(dt: Float, width: Float, height: Float, baseZoom
     val centerX = targetX - (width / 2f) / cameraZoom
     val centerY = targetY - (height / 2f) / cameraZoom
 
-    // Use faster tracking during cinematic focus (20f) vs standard (6f)
-    val lerpFactor = if (cameraFocusWeight > 0.1f) 20f * dt else 6f * dt
-    cameraX += (centerX - cameraX) * lerpFactor
-    cameraY += (centerY - cameraY) * lerpFactor
+    // FIX: Sub-pixel camera jitter by using a higher lerp factor for standard tracking 
+    // and syncing it exactly with player movement.
+    val lerpFactor = (if (cameraFocusWeight > 0.1f) 20f else 12f) * dt
+    cameraX += (centerX - cameraX) * lerpFactor.coerceAtMost(1.0f)
+    cameraY += (centerY - cameraY) * lerpFactor.coerceAtMost(1.0f)
 
     val maxCamX = 0f.coerceAtLeast(mapWidth - width / cameraZoom)
     val maxCamY = 0f.coerceAtLeast(mapHeight - height / cameraZoom)

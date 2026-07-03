@@ -14,6 +14,7 @@ enum class UpgradeType {
     QUANTUM_CORE,       // ELITE: Massive HP
     DATA_SYNDICATE,     // ELITE: 10TB Data God
     OVERCLOCK_DUR,      // Extends Overclock
+    OPTIC_SENSORS,      // NEW: Passive Vision Radius
     
     // ENFORCER (COMBAT)
     SPIKE_PAYLOAD,      
@@ -27,7 +28,10 @@ enum class UpgradeType {
     STEALTH_CAMO,       
     SHIELD_RECOVERY,    
     TRAP_COOLDOWN,      
-    GHOST_PROTOCOL      // ELITE: Massive I-Frames
+    GHOST_PROTOCOL,      // ELITE: Massive I-Frames
+    SONAR_RANGE,        // NEW: Increased Pulse Radius
+    SILENT_SONAR,       // NEW: Reduced Enemy Alert Range
+    SONAR_DUR           // NEW: Enemies stay visible longer
 }
 
 data class UpgradeConfig(
@@ -56,6 +60,7 @@ object UpgradeSystem {
         UpgradeType.QUANTUM_CORE to UpgradeConfig(UpgradeType.QUANTUM_CORE, "QUANTUM_WALL.SYS", "Ultra-dense health layers.", 3, ONE_TB, 5.0f),
         UpgradeType.DATA_SYNDICATE to UpgradeConfig(UpgradeType.DATA_SYNDICATE, "NEURAL_NET_SIPHON.EXE", "Total data control. 500% Rewards.", 5, TEN_TB, 10.0f),
         UpgradeType.OVERCLOCK_DUR to UpgradeConfig(UpgradeType.OVERCLOCK_DUR, "BRUTE_FORCE.BIN", "Extends Overclock duration by 1.0s.", 10, 500L, 1.5f),
+        UpgradeType.OPTIC_SENSORS to UpgradeConfig(UpgradeType.OPTIC_SENSORS, "PHOTON_COLLECTOR.SYS", "Passive vision radius +15%.", 5, 600L, 1.8f),
         
         // --- ENFORCER BRANCH ---
         UpgradeType.SPIKE_PAYLOAD to UpgradeConfig(UpgradeType.SPIKE_PAYLOAD, "FIREWALL_BREACHER.SH", "Fire rate +15%.", 6, 300L, 1.8f),
@@ -69,7 +74,10 @@ object UpgradeSystem {
         UpgradeType.STEALTH_CAMO to UpgradeConfig(UpgradeType.STEALTH_CAMO, "PACKET_DISSOLVER.EXE", "Detection range reduced 10%.", 5, 1200L, 1.8f),
         UpgradeType.TRAP_COOLDOWN to UpgradeConfig(UpgradeType.TRAP_COOLDOWN, "OVERCLOCK_DECOY.SYS", "Decoy/Trap CD -15%.", 5, 800L, 1.7f),
         UpgradeType.SHIELD_RECOVERY to UpgradeConfig(UpgradeType.SHIELD_RECOVERY, "RECOVERY_PROTOCOL.EXE", "Shield regen +15%.", 5, 600L, 2.0f),
-        UpgradeType.GHOST_PROTOCOL to UpgradeConfig(UpgradeType.GHOST_PROTOCOL, "ZERO_DAY.VOID", "Massive I-Frames on hit.", 5, ONE_TB / 4, 3.0f)
+        UpgradeType.GHOST_PROTOCOL to UpgradeConfig(UpgradeType.GHOST_PROTOCOL, "ZERO_DAY.VOID", "Massive I-Frames on hit.", 5, ONE_TB / 4, 3.0f),
+        UpgradeType.SONAR_RANGE to UpgradeConfig(UpgradeType.SONAR_RANGE, "WIDE_PING.BAT", "Sonar scan radius +20%.", 5, 400L, 1.7f),
+        UpgradeType.SILENT_SONAR to UpgradeConfig(UpgradeType.SILENT_SONAR, "ACOUSTIC_DAMPING.EXE", "Sonar alert range -20%.", 5, 1000L, 1.8f),
+        UpgradeType.SONAR_DUR to UpgradeConfig(UpgradeType.SONAR_DUR, "PERSISTENT_TRACE.BIN", "Enemies visible for +1.5s.", 5, 500L, 1.6f)
     )
 
     fun init(context: Context) {
@@ -127,12 +135,17 @@ object UpgradeSystem {
 
     fun getIframeDurationBonus(): Float = getLevel(UpgradeType.GHOST_PROTOCOL) * 1.5f
     fun getSpeedMultiplier(): Float = 1.0f + (getLevel(UpgradeType.THRUSTER_OPTIMIZE) * 0.05f)
+    fun getVisionRadiusMultiplier(): Float = 1.0f + (getLevel(UpgradeType.OPTIC_SENSORS) * 0.15f)
     fun getDataMagnetRadiusMultiplier(): Float = 1.0f + (getLevel(UpgradeType.DATA_MAGNET) * 0.5f)
     fun getStealthDetectionMultiplier(): Float = 1.0f - (getLevel(UpgradeType.STEALTH_CAMO) * 0.15f)
     
     fun getSpikeCooldownMultiplier(): Float = 1.0f / (1.0f + getLevel(UpgradeType.SPIKE_PAYLOAD) * 0.15f)
     fun getPulseCooldownMultiplier(): Float = 1.0f - (getLevel(UpgradeType.PULSE_FREQUENCY) * 0.10f)
     fun getTrapCooldownMultiplier(): Float = 1.0f - (getLevel(UpgradeType.TRAP_COOLDOWN) * 0.15f)
+
+    fun getSonarRangeMultiplier(): Float = 1.0f + (getLevel(UpgradeType.SONAR_RANGE) * 0.20f)
+    fun getSonarSilenceMultiplier(): Float = 1.0f - (getLevel(UpgradeType.SILENT_SONAR) * 0.20f)
+    fun getSonarDurationBonus(): Float = 2.0f + (getLevel(UpgradeType.SONAR_DUR) * 1.5f) // Base 2.0s + bonus
 
     fun getRewardBonusPercent(): Float = getLevel(UpgradeType.DATA_SYNDICATE) * 4.0f
     fun getCritDamageMultiplier(): Int = if (getLevel(UpgradeType.KINETIC_OVERLOAD) > 0) 3 else 2

@@ -35,7 +35,7 @@ class EnemySystem {
     val eState = IntArray(n)
     val investigateTimer = FloatArray(n)
     
-    // --- NAYA: ENEMY HEALTH SYSTEM ---
+    // --- NEW: ENEMY HEALTH SYSTEM ---
     val hp = IntArray(n)
     val maxHp = IntArray(n)
     val invX = FloatArray(n)
@@ -51,7 +51,7 @@ class EnemySystem {
 
     fun respawnAll(gs: GameState, width: Float, height: Float) {
         for (i in 0 until pwn) pwActive[i] = false
-        // Level start hote hi map khaali hoga. SpawnerSystem Nodes se dushmano ko nikalega.
+        // Clear map on level start. SpawnerSystem handles enemy spawns.
         for (i in 0 until n) {
             ex[i] = -9999f
             ey[i] = -9999f
@@ -69,11 +69,11 @@ class EnemySystem {
             gs.defEnemiesAlive--
             if (gs.defEnemiesAlive < 0) gs.defEnemiesAlive = 0
         }
-        // NAYA: Campaign aur Story mode mein turant respawn band.
+        // NEW: Campaign aur Story mode mein turant respawn band.
         // SpawnerSystem handles respawning now via queue.
     }
 
-    // NAYA: Ab dushman sirf ek specified Node (nx, ny) par paida hoga
+    // NEW: Enemy now spawns at a specified Node (nx, ny)
     fun spawnAt(i: Int, nx: Float, ny: Float, gs: GameState, width: Float, height: Float, nodeType: Int = -1) {
         val config = com.appsbyalok.echohunter.data.LevelEngine.getSaturatedValue(gs.currentLevel, 1f, 18f, 200f).let {
             com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
@@ -86,7 +86,7 @@ class EnemySystem {
 
         val hunterProb = 0.2f + (gs.difficulty * 0.15f)
 
-        // NAYA: If it's a Defense level, force BLUE (Kamikaze) enemies for the entire level
+        // NEW: If it's a Defense level, force BLUE (Kamikaze) enemies for the entire level
         // This ensures red/yellow enemies don't leak in during prep phases or transitions.
         if (hasDefense) {
             type[i] = 2; enemyBrains[i] = KamikazeBehavior
@@ -117,7 +117,7 @@ class EnemySystem {
         invY[i] = -9999f
         investigateTimer[i] = 0f
 
-        // --- NAYA: DYNAMIC HP SCALING (Saturated Growth Curve via LevelEngine) ---
+        // --- NEW: DYNAMIC HP SCALING (Saturated Growth Curve via LevelEngine) ---
         // Level 1-10: 1 HP | Level 50: ~4 HP | Level 100: ~7 HP | Level 500: ~13 HP | Max Cap: 19 HP
         val baseHp = com.appsbyalok.echohunter.data.LevelEngine.getSaturatedValue(gs.currentLevel, 1f, 18f, 200f).toInt()
 
@@ -170,8 +170,16 @@ class EnemySystem {
                 if (d2 < immediateDistSq) gs.isEnemyVeryNear = true
             }
 
-            if (hitByPulse || d2 < gs.passiveAuraRadiusSq) vis[i] = 1f
-            vis[i] *= gs.fadeMultiplier
+            // --- NEW: PERSISTENT VISIBILITY LOGIC ---
+            if (d2 < gs.passiveAuraRadiusSq) {
+                vis[i] = 1f
+            } else {
+                if (hitByPulse) vis[i] = 1f
+                
+                // Linear decay instead of exponential for predictable duration
+                val duration = com.appsbyalok.echohunter.data.UpgradeSystem.getSonarDurationBonus()
+                vis[i] = max(0f, vis[i] - dt / duration)
+            }
 
             val maxAllowedDistSq = if (gs.bossActive || gs.coreRadius > 0f) (width * 1.5f) * (width * 1.5f) else (width * 4.0f) * (width * 4.0f)
             if (d2 > maxAllowedDistSq) {
@@ -257,22 +265,32 @@ class EnemySystem {
                 if (hasDefense && gs.coreRadius > 0f) {
                     // Hybrid Targeting: Switch to Player only if they are aggressively close
                     if (bDistSq < (scale * 1.0f) * (scale * 1.0f)) {
-                        ai.steerByPlayerHeatMap(gs.bossX, gs.bossY, 0f, 0f, bSpeed * 5f, gs)
+                        ai.steerByPlayerHeatMap(gs.bossX, gs.bossY, gs.bossVx, gs.bossVy, bSpeed * 5f, gs, dt)
                     } else {
-                        ai.steerByCoreHeatMap(gs.bossX, gs.bossY, 0f, 0f, bSpeed * 5f, gs)
+                        ai.steerByCoreHeatMap(gs.bossX, gs.bossY, gs.bossVx, gs.bossVy, bSpeed * 5f, gs, dt)
                     }
                 } else {
-                    ai.steerByPlayerHeatMap(gs.bossX, gs.bossY, 0f, 0f, bSpeed * 5f, gs)
+                    ai.steerByPlayerHeatMap(gs.bossX, gs.bossY, gs.bossVx, gs.bossVy, bSpeed * 5f, gs, dt)
                 }
             } else {
                 val tx = if (gs.isDecoyActive) gs.decoyX else if (hasDefense && gs.coreRadius > 0f && bDistSq > (scale * 1.5f) * (scale * 1.5f)) gs.coreX else gs.px
                 val ty = if (gs.isDecoyActive) gs.decoyY else if (hasDefense && gs.coreRadius > 0f && bDistSq > (scale * 1.5f) * (scale * 1.5f)) gs.coreY else gs.py
                 val tdx = tx - gs.bossX; val tdy = ty - gs.bossY
                 val tDist = sqrt(tdx * tdx + tdy * tdy)
-                if (tDist > 0f) Pair((tdx / tDist) * bSpeed, (tdy / tDist) * bSpeed) else Pair(0f, 0f)
+                
+                if (tDist > 0f) {
+                    val lerpFactor = (dt * 5f).coerceIn(0f, 1f)
+                    val targetVx = (tdx / tDist) * bSpeed
+                    val targetVy = (tdy / tDist) * bSpeed
+                    Pair(gs.bossVx + (targetVx - gs.bossVx) * lerpFactor, gs.bossVy + (targetVy - gs.bossVy) * lerpFactor)
+                } else Pair(0f, 0f)
             }
 
-            // --- NAYA: FAST CLOSING LOGIC ---
+            // Update Boss Velocity State
+            gs.bossVx = vx
+            gs.bossVy = vy
+
+            // --- NEW: FAST CLOSING LOGIC ---
             val (finalVx, finalVy) = if (isClosingIn) {
                 Pair(vx * 1.5f, vy * 1.5f)
             } else {
@@ -288,11 +306,14 @@ class EnemySystem {
 
         behavior.updateSpecial(dt, gs, this, scale)
 
-        // Visibility handling
-        if (gs.difficulty == 1) {
-            if ((gs.pulse && bDistSq in gs.innerRSq..gs.outerRSq) || bDistSq < gs.passiveAuraRadiusSq) gs.bossVis = 1.0f
-            gs.bossVis *= gs.fadeMultiplier
-            if (gs.bossVis < 0.05f) gs.bossVis = 0.05f
+        // --- NEW: BOSS PERSISTENT VISIBILITY ---
+        if (gs.isDarknessLevel) {
+            if ((gs.pulse && bDistSq in gs.innerRSq..gs.outerRSq) || bDistSq < gs.passiveAuraRadiusSq) {
+                gs.bossVis = 1.0f
+            } else {
+                val duration = com.appsbyalok.echohunter.data.UpgradeSystem.getSonarDurationBonus()
+                gs.bossVis = max(0f, gs.bossVis - dt / duration)
+            }
         } else {
             gs.bossVis = 1.0f
         }
@@ -316,7 +337,6 @@ class EnemySystem {
 
     fun drawEntities(c: Canvas, gs: GameState, width: Float, scale: Float) {
         val entityRadius = scale * 0.03f
-        val baseVisProgression = max(0f, 0.20f - (gs.timeSinceStart * 0.002f))
 
         for (i in 0 until pwn) {
             if (pwActive[i]) {
@@ -352,7 +372,9 @@ class EnemySystem {
         for (i in 0 until n) {
             val screenEx = ex[i] - gs.cameraX
             val screenEy = ey[i] - gs.cameraY
-            val effectiveVis = max(baseVisProgression, vis[i])
+            
+            // NEW: Strict Visibility - Darkness mein bina sonar/aura ke 0% 
+            val effectiveVis = if (gs.isDarknessLevel) vis[i] else max(0.1f, vis[i])
 
             if (effectiveVis > 0.02f) {
                 val a = (effectiveVis * 255).toInt()
@@ -386,16 +408,16 @@ class EnemySystem {
                         c.drawCircle(screenEx, screenEy, entityRadius * 0.3f, p)
                     }
                     3 -> {
-                        // --- NAYA: ELIMINATION TARGET (HVT) ---
-                        // Bright Red Bada Circle
+                        // --- NEW: ELIMINATION TARGET (HVT) ---
+                        // Large Bright Red Circle
                         p.color = (a shl 24) or (0xFFFF2A4D.toInt() and 0xFFFFFF)
                         c.drawCircle(screenEx, screenEy, entitySize, p)
 
-                        // Andar ek chota black circle (Holo-look)
+                        // Inner black circle (Holo-look)
                         p.color = (a shl 24) or (GameColors.BG and 0xFFFFFF)
                         c.drawCircle(screenEx, screenEy, entitySize * 0.5f, p)
 
-                        // Upar "TARGET" likha hoga
+                        // "TARGET" label above
                         pText.color = (a shl 24) or (0xFFFF2A4D.toInt() and 0xFFFFFF)
                         pText.textSize = scale * 0.025f
                         c.drawText("TARGET", screenEx, screenEy - entitySize * 1.5f, pText)
@@ -419,7 +441,7 @@ class EnemySystem {
                     }
                 }
 
-                // --- NAYA: DRAW HEALTH BAR (Sirf tab jab HP 1 se zyada ho aur dushman alert/visible ho) ---
+                // --- NEW: DRAW HEALTH BAR (When HP > 1 and visible) ---
                 if (maxHp[i] > 1 && effectiveVis > 0.5f) {
                     val hpRatio = kotlin.math.max(0f, hp[i].toFloat() / maxHp[i].toFloat())
                     val barW = scale * 0.06f
@@ -450,7 +472,10 @@ class EnemySystem {
             val bossRadius = scale * 0.08f * behavior.sizeMult
             val screenBx = gs.bossX - gs.cameraX
             val screenBy = gs.bossY - gs.cameraY - gs.bossZ // Apply Jump Offset
-            val bossAlpha = (gs.bossVis * 255).toInt()
+            
+            // NEW: Boss is always slightly visible (15%) in darkness as a shadow/ghost
+            val effectiveBossVis = if (gs.isDarknessLevel) max(0.15f, gs.bossVis) else gs.bossVis
+            val bossAlpha = (effectiveBossVis * 255).toInt()
 
             p.style = Paint.Style.FILL
             val pulseOffset = sin(gs.timeSinceStart * 15f) * (scale * 0.015f)

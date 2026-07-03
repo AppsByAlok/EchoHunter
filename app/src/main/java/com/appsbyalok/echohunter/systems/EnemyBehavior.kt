@@ -24,13 +24,19 @@ object PatrolBehavior : IEnemyBehavior {
         val hitDistSq = (scale * 0.045f) * (scale * 0.045f)
         
         // Intelligence Scaling: Reaction speed increases with level
-        val reactionThreshold = scale * (1.5f + (gs.currentLevel * 0.02f))
+        val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
+        val reactionThreshold = scale * (1.5f + (gs.currentLevel * 0.01f).coerceAtMost(1.0f))
         
-        val speedMult = 1.0f + (gs.currentLevel * 0.005f)
-        val speed = scale * (if (gs.difficulty == 0) 0.25f else 0.4f) * speedMult
+        val speed = scale * (if (gs.difficulty == 0) 0.25f else 0.4f) * config.speedMultiplier
         
         val hitByPulse = (gs.pulse && td2 in gs.innerRSq..gs.outerRSq)
-        val heardSound = hitByPulse || (gs.localAttackAlert && td2 < reactionThreshold * reactionThreshold)
+        
+        // --- NEW: SONAR ALERT LOGIC ---
+        // Base sonar alert range is high; reduced by upgrades.
+        val sonarAlertRange = scale * 8f * com.appsbyalok.echohunter.data.UpgradeSystem.getSonarSilenceMultiplier()
+        val heardPulse = hitByPulse && td2 < sonarAlertRange * sonarAlertRange
+        
+        val heardSound = heardPulse || (gs.localAttackAlert && td2 < reactionThreshold * reactionThreshold)
 
         if (heardSound && (enemySys.eState[i] != 2 || enemySys.investigateTimer[i] < 2.5f)) {
             enemySys.eState[i] = 2
@@ -58,18 +64,20 @@ object PatrolBehavior : IEnemyBehavior {
             val distToInvSq = idx * idx + idy * idy
             if (distToInvSq > (scale * 0.05f) * (scale * 0.05f)) {
                 if (gs.gridMap != null) {
-                    val (nvx, nvy) = ai.steerByAlertHeatMap(enemySys.ex[i], enemySys.ey[i], enemySys.evx[i], enemySys.evy[i], speed * 0.7f, gs)
+                    val (nvx, nvy) = ai.steerByAlertHeatMap(enemySys.ex[i], enemySys.ey[i], enemySys.evx[i], enemySys.evy[i], speed * 0.7f, gs, dt)
                     enemySys.evx[i] = nvx
                     enemySys.evy[i] = nvy
                 } else {
                     val invDist = sqrt(distToInvSq)
                     val investigateSpeed = speed * 0.7f
-                    enemySys.evx[i] = (enemySys.evx[i] * 0.8f) + ((idx / invDist) * investigateSpeed * 0.2f)
-                    enemySys.evy[i] = (enemySys.evy[i] * 0.8f) + ((idy / invDist) * investigateSpeed * 0.2f)
+                    val lerpFactor = (dt * 5f).coerceIn(0f, 1f)
+                    enemySys.evx[i] = (enemySys.evx[i] * (1f - lerpFactor)) + ((idx / invDist) * investigateSpeed * lerpFactor)
+                    enemySys.evy[i] = (enemySys.evy[i] * (1f - lerpFactor)) + ((idy / invDist) * investigateSpeed * lerpFactor)
                 }
             } else {
                 enemySys.investigateTimer[i] -= dt
-                enemySys.evx[i] *= 0.8f; enemySys.evy[i] *= 0.8f
+                val damping = (dt * 10f).coerceIn(0f, 1f)
+                enemySys.evx[i] *= (1f - damping); enemySys.evy[i] *= (1f - damping)
                 if (enemySys.investigateTimer[i] <= 0f) enemySys.eState[i] = 0
             }
         }
@@ -85,11 +93,14 @@ object HunterBehavior : IEnemyBehavior {
         val tdy = targetY - enemySys.ey[i]
         val td2 = tdx * tdx + tdy * tdy
 
-        val speedMult = 1.0f + (gs.currentLevel * 0.008f)
-        val speed = scale * (if (gs.difficulty == 0) 0.25f else 0.4f) * speedMult
+        val dist = sqrt(td2)
+        val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
+        val speed = scale * (if (gs.difficulty == 0) 0.25f else 0.4f) * config.speedMultiplier
         
-        // Predictive Movement Logic: High level enemies anticipate player movement
-        val leadAmount = (gs.currentLevel * 0.05f).coerceAtMost(1.0f)
+        // Predictive Movement Logic: Anticipate player movement but cap it by distance to prevent overshooting
+        val baseLead = (gs.currentLevel * 0.004f).coerceAtMost(0.4f)
+        val leadAmount = if (dist > 0.001f) (baseLead * (dist / scale)).coerceAtMost(baseLead) else 0f
+        
         val pvx = gs.pvx
         val pvy = gs.pvy
         
@@ -105,17 +116,22 @@ object HunterBehavior : IEnemyBehavior {
         if (inLoS) {
             enemySys.eState[i] = 1
             val eDist = sqrt(ptd2)
-            val chaseSpeed = speed * (if (gs.isOverclocked && !gs.isDecoyActive) -0.5f else 1.2f)
+            
+            // Speed Multiplier: Normal is easier, Hard is faster
+            val chaseMult = if (gs.difficulty == 1) 1.2f else 1.05f
+            val chaseSpeed = speed * (if (gs.isOverclocked && !gs.isDecoyActive) -0.5f else chaseMult)
+            
             if (eDist > 0f) {
-                enemySys.evx[i] = (enemySys.evx[i] * 0.9f) + ((ptdx / eDist) * chaseSpeed * 0.1f)
-                enemySys.evy[i] = (enemySys.evy[i] * 0.9f) + ((ptdy / eDist) * chaseSpeed * 0.1f)
+                val lerpFactor = (dt * 6f).coerceIn(0f, 1f)
+                enemySys.evx[i] = (enemySys.evx[i] * (1f - lerpFactor)) + ((ptdx / eDist) * chaseSpeed * lerpFactor)
+                enemySys.evy[i] = (enemySys.evy[i] * (1f - lerpFactor)) + ((ptdy / eDist) * chaseSpeed * lerpFactor)
             }
         } else {
             enemySys.eState[i] = 2
         }
 
         if (enemySys.eState[i] == 2 && gs.gridMap != null) {
-            val (nvx, nvy) = ai.steerByPlayerHeatMap(enemySys.ex[i], enemySys.ey[i], enemySys.evx[i], enemySys.evy[i], speed, gs)
+            val (nvx, nvy) = ai.steerByPlayerHeatMap(enemySys.ex[i], enemySys.ey[i], enemySys.evx[i], enemySys.evy[i], speed, gs, dt)
             enemySys.evx[i] = nvx
             enemySys.evy[i] = nvy
         }
@@ -128,7 +144,7 @@ object KamikazeBehavior : IEnemyBehavior {
         val speed = scale * (if (gs.difficulty == 0) 0.25f else 0.35f)
         // Relentlessly pathfind to the Core Map
         if (gs.gridMap != null) {
-            val (nvx, nvy) = ai.steerByCoreHeatMap(enemySys.ex[i], enemySys.ey[i], enemySys.evx[i], enemySys.evy[i], speed, gs)
+            val (nvx, nvy) = ai.steerByCoreHeatMap(enemySys.ex[i], enemySys.ey[i], enemySys.evx[i], enemySys.evy[i], speed, gs, dt)
             enemySys.evx[i] = nvx
             enemySys.evy[i] = nvy
         }
@@ -145,19 +161,26 @@ object TargetBehavior : IEnemyBehavior {
         val tdy = targetY - enemySys.ey[i]
         val td2 = tdx * tdx + tdy * tdy
 
-        val speedMult = 1.0f + (gs.currentLevel * 0.006f)
+        val dist = sqrt(td2)
+        val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
+        val speedMult = config.speedMultiplier
         val speed = scale * (if (gs.difficulty == 0) 0.25f else 0.35f) * speedMult
         
-        val panicDist = scale * (0.8f + (gs.currentLevel * 0.01f))
+        val panicDist = scale * (0.8f + (gs.currentLevel * 0.005f).coerceAtMost(0.5f))
         val inLoS = ai.hasLineOfSight(enemySys.ex[i], enemySys.ey[i], targetX, targetY, gs)
 
-        // Agar player close hai aur line of sight me hai, toh panic mode (Run!)
+        // If player is close and in LoS, trigger panic mode (Run!)
         if (inLoS && td2 < panicDist * panicDist) {
             enemySys.eState[i] = 2 // Alert state
-            val dist = sqrt(td2)
             if (dist > 0f) {
-                enemySys.evx[i] = -(tdx / dist) * speed * 1.5f
-                enemySys.evy[i] = -(tdy / dist) * speed * 1.5f
+                val steerSharpness = if (gs.difficulty == 1) 8f else 4f
+                val lerpFactor = (dt * steerSharpness).coerceIn(0f, 1f)
+                
+                val fleeMult = if (gs.difficulty == 1) 1.5f else 1.2f
+                val targetVx = -(tdx / dist) * speed * fleeMult
+                val targetVy = -(tdy / dist) * speed * fleeMult
+                enemySys.evx[i] = (enemySys.evx[i] * (1f - lerpFactor)) + (targetVx * lerpFactor)
+                enemySys.evy[i] = (enemySys.evy[i] * (1f - lerpFactor)) + (targetVy * lerpFactor)
             }
         } else {
             if (enemySys.eState[i] != 2) {

@@ -67,6 +67,7 @@ class GameState {
     var modInfinityTraps = false // Cheat flag for unlimited traps
 
     var gridMap: Array<IntArray>? = null // 2D layout representing walls and walkable areas
+    var wallVisMap: Array<FloatArray>? = null // NAYA: Tracks persistence of wall visibility
     var tileSize = 100f // Size of each grid cell in world units
     var mapWidth = 0f // Total width of the current map
     var mapHeight = 0f // Total height of the current map
@@ -240,6 +241,8 @@ class GameState {
     var bossMaxHp = 0 // Maximum possible health of the boss
     var bossX = -1000f // World X position of the boss
     var bossY = -1000f // World Y position of the boss
+    var bossVx = 0f // NAYA: Boss Velocity X
+    var bossVy = 0f // NAYA: Boss Velocity Y
     var bossIframe = 0f // Boss's temporary invulnerability period
     var bossType = 0 // Identifier for the type of boss encountered
     var bossVis = 1.0f // Visual alpha/visibility factor for the boss
@@ -490,9 +493,12 @@ class GameState {
             vy = -vy
         }
 
-        // Update velocity for AI prediction
-        pvx = vx / dt
-        pvy = vy / dt
+        // Update velocity for AI prediction with smoothing to prevent jitter
+        val targetPvx = vx / dt
+        val targetPvy = vy / dt
+        val smoothing = (dt * 15f).coerceAtMost(1.0f)
+        pvx += (targetPvx - pvx) * smoothing
+        pvy += (targetPvy - pvy) * smoothing
 
         val playerRadius = scale * 0.015f
 
@@ -539,14 +545,18 @@ class GameState {
         modeStrategy.updateCameraAndMovement(dt, this, width, height, scale)
     }
 
-    fun updateVisibilityMath(scale: Float, maxRad: Float) {
+    fun updateVisibilityMath(scale: Float, maxRad: Float, dt: Float) {
         val applyDarkness = isDarknessLevel || StoryProtocol.isBlackoutActive
 
-        // NAYA: Agar darkness level NAHI hai, toh full visibility (huge aura radius)
-        val passiveAuraRadius = if (modFullVisibility || !applyDarkness) scale * 100f else scale * 0.015f
+        // NAYA: Passive vision radius scales with OPTIC_SENSORS upgrade
+        // Base radius is around 15% of screen, can grow with upgrades
+        val baseAura = scale * 0.15f 
+        val visionMult = UpgradeSystem.getVisionRadiusMultiplier()
+        
+        val passiveAuraRadius = if (modFullVisibility || !applyDarkness) scale * 100f else baseAura * visionMult
         passiveAuraRadiusSq = passiveAuraRadius * passiveAuraRadius
 
-        // Fade multiplier (Background darkness)
+        // Fade multiplier (Background darkness intensity)
         fadeMultiplier = if (modFullVisibility || !applyDarkness) 1.0f else {
             val baseFade = if (difficulty == 1) 0.75f else 0.85f
             min(0.99f, baseFade + 0.15f * visionClarity)
@@ -558,9 +568,35 @@ class GameState {
             val outerR = pulseR + echoThickness
             innerRSq = innerR * innerR
             outerRSq = outerR * outerR
+
+            // NAYA: Update persistent wall visibility when pulse hits
+            val grid = gridMap
+            val vis = wallVisMap
+            if (grid != null && vis != null) {
+                for (x in grid.indices) {
+                    for (y in grid[0].indices) {
+                        if (grid[x][y] == 1) {
+                            val dx = x * tileSize + tileSize / 2f - px
+                            val dy = y * tileSize + tileSize / 2f - py
+                            val d2 = dx * dx + dy * dy
+                            if (d2 in innerRSq..outerRSq) vis[x][y] = 1f
+                        }
+                    }
+                }
+            }
         } else {
             innerRSq = 0f
             outerRSq = 0f
+        }
+
+        // NAYA: Decay wall visibility over time using Upgrade bonus
+        val decayDuration = UpgradeSystem.getSonarDurationBonus()
+        wallVisMap?.let { vis ->
+            for (x in vis.indices) {
+                for (y in vis[0].indices) {
+                    if (vis[x][y] > 0f) vis[x][y] = kotlin.math.max(0f, vis[x][y] - dt / decayDuration)
+                }
+            }
         }
     }
 }

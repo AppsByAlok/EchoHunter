@@ -70,18 +70,23 @@ class UIDecompiler {
         buyButtons.clear()
 
         val branches = listOf(
-            "--- [ ARCHITECT ] ---" to listOf(UpgradeType.MAX_HP, UpgradeType.THRUSTER_OPTIMIZE, UpgradeType.DATA_MAGNET, UpgradeType.COMPRESSION_ALGO, UpgradeType.NANITE_REPAIR, UpgradeType.QUANTUM_CORE, UpgradeType.DATA_SYNDICATE),
-            "--- [ ENFORCER ] ---" to listOf(UpgradeType.SPIKE_PAYLOAD, UpgradeType.CRIT_CHANCE, UpgradeType.KINETIC_OVERLOAD, UpgradeType.MULTITHREAD_SPIKES, UpgradeType.COMBO_EXTENDER),
-            "--- [ GHOST ] ---" to listOf(UpgradeType.PULSE_FREQUENCY, UpgradeType.STEALTH_CAMO, UpgradeType.TRAP_COOLDOWN, UpgradeType.SHIELD_RECOVERY, UpgradeType.GHOST_PROTOCOL)
+            Triple("--- [ ARCHITECT ] ---", "CORE SYSTEMS & SURVIVAL", listOf(UpgradeType.MAX_HP, UpgradeType.THRUSTER_OPTIMIZE, UpgradeType.DATA_MAGNET, UpgradeType.COMPRESSION_ALGO, UpgradeType.NANITE_REPAIR, UpgradeType.QUANTUM_CORE, UpgradeType.DATA_SYNDICATE, UpgradeType.OVERCLOCK_DUR, UpgradeType.OPTIC_SENSORS)),
+            Triple("--- [ ENFORCER ] ---", "TACTICAL COMBAT & OFFENSE", listOf(UpgradeType.SPIKE_PAYLOAD, UpgradeType.CRIT_CHANCE, UpgradeType.KINETIC_OVERLOAD, UpgradeType.MULTITHREAD_SPIKES, UpgradeType.COMBO_EXTENDER)),
+            Triple("--- [ GHOST ] ---", "STEALTH & SONAR RECON", listOf(UpgradeType.PULSE_FREQUENCY, UpgradeType.STEALTH_CAMO, UpgradeType.TRAP_COOLDOWN, UpgradeType.SHIELD_RECOVERY, UpgradeType.GHOST_PROTOCOL, UpgradeType.SONAR_RANGE, UpgradeType.SILENT_SONAR, UpgradeType.SONAR_DUR))
         )
 
-        for ((branchName, types) in branches) {
+        for ((branchName, branchDesc, types) in branches) {
             // Branch Header
             pText.textAlign = Paint.Align.CENTER
-            pText.textSize = scale * 0.04f
+            pText.textSize = scale * 0.045f
             pText.color = GameColors.PULSE
-            c.drawText(branchName, targetW / 2f, currentY + scale * 0.05f, pText)
-            currentY += scale * 0.08f
+            c.drawText(branchName, targetW / 2f, currentY + scale * 0.04f, pText)
+            
+            pText.textSize = scale * 0.025f
+            pText.color = GameColors.YELLOW
+            c.drawText(branchDesc, targetW / 2f, currentY + scale * 0.075f, pText)
+            
+            currentY += scale * 0.11f
 
             for (type in types) {
                 val config = UpgradeSystem.catalog[type] ?: continue

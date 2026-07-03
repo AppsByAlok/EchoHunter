@@ -331,8 +331,12 @@ class GameView(context: Context) : View(context) {
             else -> GuardianBossBehavior
         }
         
+        val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel, gs.difficulty)
         val bossScaling = com.appsbyalok.echohunter.data.LevelEngine.getSaturatedValue(gs.currentLevel, 0f, 475f, 300f)
-        gs.bossHp = ((25 + bossScaling) * behavior.baseHpMult).toInt()
+
+        // Difficulty-based Boss HP scaling
+        val difficultyHpMult = if (gs.difficulty == 1) 1.2f else 0.7f
+        gs.bossHp = ((25 + bossScaling) * behavior.baseHpMult * config.hpMultiplier * difficultyHpMult).toInt()
         gs.bossMaxHp = gs.bossHp
         var safeX = gs.px + scale * 1.2f
         var safeY = gs.py

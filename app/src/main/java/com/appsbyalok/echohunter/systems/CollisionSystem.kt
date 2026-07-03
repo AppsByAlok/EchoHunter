@@ -4,6 +4,7 @@ import android.media.ToneGenerator
 import com.appsbyalok.echohunter.data.LevelEngine
 import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.data.UpgradeSystem
+import com.appsbyalok.echohunter.data.UpgradeType
 import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.utils.EchoAudioManager
 import com.appsbyalok.echohunter.utils.GameColors
@@ -106,7 +107,7 @@ class CollisionSystem(
                             }
                             enemySystem.killEnemy(j, gs, width, height)
                         } else {
-                            // Agar mara nahi, toh thoda push back karo
+                            // If not dead, apply push back
                             enemySystem.eState[j] = 2 
                         }
                     }
@@ -138,12 +139,37 @@ class CollisionSystem(
                         
                         // CRITICAL EXPLOIT vs BOSS
                         val isCrit = kotlin.random.Random.nextFloat() < UpgradeSystem.getCritChance()
-                        val damage = if (isCrit) 2 else 1
+                        val damage = if (isCrit) UpgradeSystem.getCritDamageMultiplier() else 1
                         gs.bossHp -= damage
 
                         if (isCrit) {
                             effectSystem.spawnFloatingText(gs.bossX, gs.bossY, damage.toLong(), GameColors.RED)
                             gs.shakeAmount = max(gs.shakeAmount, scale * 0.1f)
+
+                            // NEW: KINETIC OVERLOAD (AoE Damage on Crit)
+                            val overloadLvl = UpgradeSystem.getLevel(UpgradeType.KINETIC_OVERLOAD)
+                            if (overloadLvl > 0) {
+                                val explosionRadius = scale * (0.15f + overloadLvl * 0.15f)
+                                val explosionRadiusSq = explosionRadius * explosionRadius
+                                val splashDamage = 1 + (overloadLvl / 2) // Scales: Lvl 1-3 = 1-2, Lvl 4-5 = 3
+                                
+                                effectSystem.spawnParticles(gs.bossX, gs.bossY, 5 + overloadLvl, scale * 1.5f) // Red explosion particles
+                                
+                                // Damage nearby enemies
+                                for (j in 0 until enemySystem.n) {
+                                    if (enemySystem.ex[j] < -1000f) continue
+                                    val edx = gs.bossX - enemySystem.ex[j]
+                                    val edy = gs.bossY - enemySystem.ey[j]
+                                    if (edx * edx + edy * edy < explosionRadiusSq) {
+                                        enemySystem.hp[j] -= splashDamage
+                                        if (enemySystem.hp[j] <= 0) {
+                                            onScoreAdd(5L)
+                                            gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
+                                            enemySystem.killEnemy(j, gs, width, height)
+                                        }
+                                    }
+                                }
+                            }
                         }
 
                         if (gs.bossHp <= gs.bossMaxHp / 2 && !gs.isBossRage) {
@@ -190,7 +216,7 @@ class CollisionSystem(
                             
                             // CRITICAL EXPLOIT LOGIC
                             val isCrit = kotlin.random.Random.nextFloat() < UpgradeSystem.getCritChance()
-                            val damage = if (isCrit) 2 else 1
+                            val damage = if (isCrit) UpgradeSystem.getCritDamageMultiplier() else 1
                             
                             enemySystem.hp[i] -= damage
                             effectSystem.spawnParticles(enemySystem.ex[i], enemySystem.ey[i], if (isCrit) 3 else 1, scale)
@@ -199,10 +225,28 @@ class CollisionSystem(
                                 effectSystem.spawnFloatingText(enemySystem.ex[i], enemySystem.ey[i], damage.toLong(), GameColors.RED)
                                 EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 50)
                                 
-                                // NAYA: KINETIC OVERLOAD (Explosion on Crit)
-                                if (UpgradeSystem.getLevel(com.appsbyalok.echohunter.data.UpgradeType.KINETIC_OVERLOAD) > 0) {
-                                    effectSystem.spawnParticles(enemySystem.ex[i], enemySystem.ey[i], 5, scale * 1.5f)
-                                    // Damage nearby enemies logic could be added here
+                                // NEW: KINETIC OVERLOAD (Explosion on Crit)
+                                val overloadLvl = UpgradeSystem.getLevel(UpgradeType.KINETIC_OVERLOAD)
+                                if (overloadLvl > 0) {
+                                    val explosionRadius = scale * (0.1f + overloadLvl * 0.15f)
+                                    val explosionRadiusSq = explosionRadius * explosionRadius
+                                    val splashDamage = 1 + (overloadLvl / 3) // Lvl 1-2 = 1, Lvl 3-5 = 2
+
+                                    effectSystem.spawnParticles(enemySystem.ex[i], enemySystem.ey[i], 4 + overloadLvl, scale * 1.2f)
+                                    
+                                    for (j in 0 until enemySystem.n) {
+                                        if (i == j || enemySystem.ex[j] < -1000f) continue
+                                        val edx = enemySystem.ex[i] - enemySystem.ex[j]
+                                        val edy = enemySystem.ey[i] - enemySystem.ey[j]
+                                        if (edx * edx + edy * edy < explosionRadiusSq) {
+                                            enemySystem.hp[j] -= splashDamage
+                                            if (enemySystem.hp[j] <= 0) {
+                                                val reward = (LevelEngine.getKillRewardKB(gs.currentLevel, false) * UpgradeSystem.getRewardMultiplier()).toLong()
+                                                gs.collectedDataKB += reward
+                                                enemySystem.killEnemy(j, gs, width, height)
+                                            }
+                                        }
+                                    }
                                 }
                             } else {
                                 EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 50)
@@ -243,7 +287,7 @@ class CollisionSystem(
                                 // The old check prevented clearing the arena but caused invincibility bugs.
                                 enemySystem.killEnemy(i, gs, width, height)
                             }
-                            break // Spike todi der ke liye break ho jati hai
+                            break // Spike breaks after impact
                         }
                     }
                 }
@@ -272,7 +316,7 @@ class CollisionSystem(
             if (enemySystem.ex[i] < -1000f) continue // Skip dead enemies
 
             // --- CORE DEFENSE COLLISION LOGIC ---
-            // NAYA: Damage logic now depends on defWaveState instead of just Objective class
+            // NEW: Damage logic now depends on defWaveState instead of just Objective class
             val isCoreDamageable = gs.defWaveState == 1 && gs.coreRadius > 0f
             if (isCoreDamageable) {
                 val cdx = gs.coreX - enemySystem.ex[i]

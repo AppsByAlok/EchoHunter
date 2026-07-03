@@ -76,16 +76,28 @@ object LevelEngine {
         return activeFeatures
     }
 
-    fun getLevelConfig(level: Int): LevelConfig {
+    fun getLevelConfig(level: Int, difficulty: Int = 0): LevelConfig {
         val features = determineLevelFeatures(level)
 
-        // --- NAYA: SMOOTH SATURATED SCALING ---
-        val speedMult = getSaturatedValue(level, 1.0f, 1.5f, 150f)     // Max 2.5x
-        val hpMult = getSaturatedValue(level, 1.0f, 19.0f, 200f)      // Max 20x HP
-        val spawnRateMult = getSaturatedValue(level, 1.0f, 3.0f, 200f) // Max 4.0x
+        // --- DIFFICULTY-BASED SCALING ---
+        val isHard = difficulty == 1
+        
+        // Speed: Normal is slow (max 1.4x), Hard is fast (max 2.0x)
+        val speedBase = if (isHard) 1.1f else 1.0f
+        val speedMax = if (isHard) 0.9f else 0.4f
+        val speedMult = getSaturatedValue(level, speedBase, speedMax, if (isHard) 200f else 400f)
 
-        // AI Intelligence tuning (Level 1 starts dumb, Level 100 is expert)
-        val aiIntel = getSaturatedValue(level, 0.2f, 0.8f, 50f)       // Max 1.0
+        // HP: Normal (max 8x), Hard (max 20x)
+        val hpMax = if (isHard) 19.0f else 7.0f
+        val hpMult = getSaturatedValue(level, 1.0f, hpMax, 300f)
+
+        // Spawn Rate: Hard has much more enemies
+        val spawnMax = if (isHard) 3.0f else 1.2f
+        val spawnRateMult = getSaturatedValue(level, 1.0f, spawnMax, 300f)
+
+        // AI Intelligence: Normal stays "dumb" longer
+        val aiMax = if (isHard) 0.9f else 0.5f
+        val aiIntel = getSaturatedValue(level, 0.15f, aiMax, if (isHard) 80f else 250f)
 
         val targetScore = getSaturatedValue(level, 50f, 1950f, 400f).toLong() // Max 2000 score
 

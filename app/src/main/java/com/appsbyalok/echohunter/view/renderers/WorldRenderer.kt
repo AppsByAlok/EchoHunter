@@ -64,7 +64,7 @@ class WorldRenderer(
 
         if (!showSpawners) return
 
-        // --- NAYA: SPAWNER NODES (CIRCUIT CHIP LOOK) ---
+        // --- NEW: SPAWNER NODES (CIRCUIT CHIP LOOK) ---
         for (node in gs.spawnerNodes) {
             val nx = node.x - gs.cameraX
             val ny = node.y - gs.cameraY
@@ -126,7 +126,7 @@ class WorldRenderer(
             yLine += 8f
         }
 
-        // --- NAYA: BLACKOUT & STORY GLITCH EFFECTS ---
+        // --- NEW: BLACKOUT & STORY GLITCH EFFECTS ---
         if (StoryProtocol.isBlackoutActive || StoryProtocol.isGlitchActive) {
             val intensity = if (StoryProtocol.isGlitchActive) 0.3f else 0.15f
             
@@ -175,17 +175,51 @@ class WorldRenderer(
                 // Culling (Don't draw if outside screen)
                 if (drawX < -ts || drawX > targetW || drawY < -ts || drawY > targetH) continue
 
-                when (grid[x][y]) {
-                    1 -> { // 2D NEON WALL RENDERING
-                        p.color = 0x2200FFFF
-                        c.drawRect(drawX, drawY, drawX + ts, drawY + ts, p)
+                // NEW: Calculate wall visibility based on Pulse and Passive Aura
+                val worldCenterX = x * ts + ts / 2f
+                val worldCenterY = y * ts + ts / 2f
+                val dx = worldCenterX - gs.px
+                val dy = worldCenterY - gs.py
+                val d2 = dx * dx + dy * dy
 
-                        p.style = Paint.Style.STROKE
-                        p.strokeWidth = scale * 0.005f
-                        p.color = GameColors.PULSE
-                        val m = ts * 0.1f
-                        c.drawRect(drawX + m, drawY + m, drawX + ts - m, drawY + ts - m, p)
-                        p.style = Paint.Style.FILL
+                var wallAlpha = 0f
+                if (!gs.isDarknessLevel || gs.modFullVisibility) {
+                    wallAlpha = 0.15f
+                } else {
+                    // 1. Reveal by Passive Aura (Player's close range light)
+                    if (d2 < gs.passiveAuraRadiusSq) {
+                        val dist = kotlin.math.sqrt(d2)
+                        val auraRad = kotlin.math.sqrt(gs.passiveAuraRadiusSq)
+                        // Smooth fade at the edge of aura
+                        wallAlpha = kotlin.math.max(0f, 0.2f * (1f - dist / auraRad))
+                    } 
+                    
+                    // 2. Reveal by Persistent Visibility (Uses getSonarDurationBonus decay from GameState)
+                    val persistentVis = gs.wallVisMap?.getOrNull(x)?.getOrNull(y) ?: 0f
+                    if (persistentVis * 0.4f > wallAlpha) {
+                        wallAlpha = persistentVis * 0.4f
+                    }
+
+                    // 3. Reveal by active Sonar Pulse (Brightest hit)
+                    if (gs.pulse && d2 >= gs.innerRSq && d2 <= gs.outerRSq) {
+                        wallAlpha = kotlin.math.max(wallAlpha, 0.6f)
+                    }
+                }
+
+                if (wallAlpha > 0.01f) {
+                    when (grid[x][y]) {
+                        1 -> { // 2D NEON WALL RENDERING
+                            val alphaInt = (wallAlpha * 255).toInt()
+                            p.color = (alphaInt shl 24) or (GameColors.PULSE and 0xFFFFFF)
+                            c.drawRect(drawX, drawY, drawX + ts, drawY + ts, p)
+
+                            p.style = Paint.Style.STROKE
+                            p.strokeWidth = scale * 0.005f
+                            p.color = (alphaInt shl 24) or (GameColors.PULSE and 0xFFFFFF)
+                            val m = ts * 0.1f
+                            c.drawRect(drawX + m, drawY + m, drawX + ts - m, drawY + ts - m, p)
+                            p.style = Paint.Style.FILL
+                        }
                     }
                 }
             }
@@ -228,14 +262,14 @@ class WorldRenderer(
             c.drawCircle(screenShockX, screenShockY, gs.shockwaveR, p)
         }
 
-        // --- FIX: DEFENSE mode, ESCAPE mode ya Story Core sabke liye call karenge ---
+        // --- FIX: DEFENSE mode, ESCAPE mode or Story Core for all ---
         val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
         val isDefense =
             config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE) && gs.gameMode == 0
         val isEscape =
             config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ESCAPE) && gs.gameMode == 0
 
-        // Ab Escape level par bhi drawCore trigger hoga!
+        // Now Escape level also triggers drawCore!
         if (isDefense || isEscape || gs.state == 8 || gs.state == 9) {
             drawCore(c, scale, gs, targetW, targetH, screenPlayerX, screenPlayerY)
         }
@@ -365,7 +399,7 @@ class WorldRenderer(
             c.drawCircle(screenPlayerX, screenPlayerY, playerRadius * 2f, p)
         }
 
-        // --- BOMB TARGET ---
+            // --- BOMB TARGET ---
         if (gs.bombTargetX > -1000f) {
             val sx = gs.bombTargetX - gs.cameraX
             val sy = gs.bombTargetY - gs.cameraY
@@ -447,11 +481,22 @@ class WorldRenderer(
                 coreDistStr = context.getString(R.string.ui_core_signal, dist)
             }
             c.drawText(coreDistStr, arrowX - scale * 0.05f, screenCoreY + scale * 0.01f, pText)
-            return // Arrow dikh raha hai toh baki base structure draw karne ki zaroorat nahi
+            return // If arrow is visible, skip base structure rendering
         }
 
         // --- 3. PREMIUM CORE BASE RENDERING MATRIX ---
         if (gs.coreRadius > 0f) {
+            // NEW: Core is always at least 30% visible as a beacon
+            val coreAlphaMult = if (gs.isDarknessLevel) {
+                // If core is within sonar/aura, it's 1.0f, otherwise 0.3f beacon
+                val dx = gs.coreX - gs.px
+                val dy = gs.coreY - gs.py
+                val d2 = dx * dx + dy * dy
+                val hitByPulse = (gs.pulse && d2 in gs.innerRSq..gs.outerRSq)
+                if (hitByPulse || d2 < gs.passiveAuraRadiusSq) 1.0f else 0.3f
+            } else 1.0f
+
+            val baseAlphaInt = (coreAlphaMult * 255).toInt()
 
             when {
                 // A. DEFENSE MODE VISUALS (Purple Pulsing Shield & HP Bar)
@@ -459,7 +504,7 @@ class WorldRenderer(
                     // Pulsing Shield Effect around the Core
                     p.style = Paint.Style.STROKE
                     p.strokeWidth = scale * 0.015f
-                    p.color = GameColors.SHIELD
+                    p.color = (baseAlphaInt shl 24) or (GameColors.SHIELD and 0xFFFFFF)
                     c.drawCircle(
                         screenCoreX,
                         screenCoreY,
@@ -470,11 +515,11 @@ class WorldRenderer(
                     // Core Base Body
                     p.style = Paint.Style.STROKE
                     p.strokeWidth = scale * 0.01f
-                    p.color = GameColors.YELLOW
+                    p.color = (baseAlphaInt shl 24) or (GameColors.YELLOW and 0xFFFFFF)
                     c.drawCircle(screenCoreX, screenCoreY, gs.coreRadius, p)
 
                     p.style = Paint.Style.FILL
-                    p.color = GameColors.CLARITY
+                    p.color = (baseAlphaInt shl 24) or (GameColors.CLARITY and 0xFFFFFF)
                     c.drawCircle(screenCoreX, screenCoreY, gs.coreRadius * 0.4f, p)
 
                     // HEALTH BAR LAYER (Purely for Active Defense Levels)
@@ -637,14 +682,14 @@ class WorldRenderer(
             }
         }
 
-        // AGAR KOI TARGET HAI, TOH ARROW DRAW KARO
+        // IF THERE IS A TARGET, DRAW ARROW
         if (shouldDraw) {
             val dx = targetX - gs.px
             val dy = targetY - gs.py
             val distSq = dx * dx + dy * dy
             val hideRadius = min(targetW, targetH) * 0.4f
 
-            // Sirf tab dikhao jab target player ki screen se door ho
+            // Only show when target is away from player's screen
             if (distSq > hideRadius * hideRadius) {
                 val angle = kotlin.math.atan2(dy, dx)
                 val arrowDist = min(targetW, targetH) * 0.35f // Screen ke center se doori
