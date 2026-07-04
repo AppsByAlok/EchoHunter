@@ -28,8 +28,15 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
             fireWeapon(scale)
         }
         
-        if (gs.controls.isSonarPressed && gs.sonarTimer <= 0f) {
-            deploySonar()
+        // Manual Sonar or Auto-Sonar Lock
+        val canPulse = gs.isDarknessLevel || com.appsbyalok.echohunter.data.StoryProtocol.isBlackoutActive
+        if (canPulse && gs.sonarTimer <= 0f) {
+            if (gs.controls.isSonarPressed || gs.controls.isAutoSonarLocked) {
+                deploySonar()
+                gs.controls.isSonarPressed = false
+            }
+        } else if (gs.controls.isSonarPressed) {
+            // If not in darkness or still on CD, just consume the press
             gs.controls.isSonarPressed = false
         }
 
@@ -111,7 +118,9 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
     private fun deploySonar() {
         gs.pulse = true
         gs.pulseR = 0f
-        gs.sonarTimer = 0.25f * UpgradeSystem.getPulseCooldownMultiplier()
+        // Increased base cooldown from 0.25s to 3.0s to make upgrades meaningful
+        val baseCD = 3.0f 
+        gs.sonarTimer = baseCD * UpgradeSystem.getPulseCooldownMultiplier()
         if (gs.isDarknessLevel) {
             gs.visionClarity = max(0.0f, gs.visionClarity - 0.25f)
         }

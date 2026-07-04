@@ -38,11 +38,18 @@ class EffectSystem {
     private val ftLife = FloatArray(ftn); private val ftColor = IntArray(ftn)
     private val ftStr = Array(ftn) { "" }
 
+    // --- SONAR PING EFFECTS ---
+    private val spn = 20
+    private val spX = FloatArray(spn); private val spY = FloatArray(spn)
+    private val spLife = FloatArray(spn)
+    private val spColor = IntArray(spn)
+
     fun reset() {
         trailIdx = 0
         for (i in 0 until trailLength) { trailX[i] = 0f; trailY[i] = 0f }
         for (i in 0 until pn) { pLife[i] = 0f }
         for (i in 0 until ftn) { ftLife[i] = 0f }
+        for (i in 0 until spn) { spLife[i] = 0f }
     }
 
     fun recordTrail(px: Float, py: Float) {
@@ -84,6 +91,15 @@ class EffectSystem {
         }
     }
 
+    fun spawnSonarPing(x: Float, y: Float, color: Int) {
+        for (i in 0 until spn) {
+            if (spLife[i] <= 0f) {
+                spX[i] = x; spY[i] = y; spLife[i] = 1.0f; spColor[i] = color
+                break
+            }
+        }
+    }
+
     fun update(dt: Float, scale: Float) {
         for (i in 0 until pn) {
             if (pLife[i] > 0) {
@@ -96,6 +112,11 @@ class EffectSystem {
             if (ftLife[i] > 0f) {
                 ftY[i] -= scale * 0.1f * dt
                 ftLife[i] -= 1f * dt
+            }
+        }
+        for (i in 0 until spn) {
+            if (spLife[i] > 0f) {
+                spLife[i] -= 1.5f * dt
             }
         }
     }
@@ -162,6 +183,21 @@ class EffectSystem {
                 pText.color = ftColor[i]
                 pText.alpha = currentAlpha
                 c.drawText(ftStr[i], screenX, screenY, pText)
+            }
+        }
+    }
+
+    fun drawSonarPings(c: Canvas, cameraX: Float, cameraY: Float, scale: Float) {
+        pGlow.style = Paint.Style.STROKE
+        for (i in 0 until spn) {
+            if (spLife[i] > 0f) {
+                val life = spLife[i]
+                val alpha = (life * 255).toInt()
+                pGlow.color = (alpha shl 24) or (spColor[i] and 0xFFFFFF)
+                pGlow.strokeWidth = scale * 0.005f * life
+                
+                val r = (1f - life) * scale * 0.12f
+                c.drawCircle(spX[i] - cameraX, spY[i] - cameraY, r, pGlow)
             }
         }
     }

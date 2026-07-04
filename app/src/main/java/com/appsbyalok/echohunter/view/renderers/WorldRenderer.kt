@@ -70,6 +70,36 @@ class WorldRenderer(
             val ny = node.y - gs.cameraY
             val r = scale * 0.035f // Smaller size to reduce clutter
 
+            // Calculate node visibility for darkness levels
+            var nodeAlpha = 1.0f
+            if (gs.isDarknessLevel && !gs.modFullVisibility) {
+                val dx = node.x - gs.px
+                val dy = node.y - gs.py
+                val d2 = dx * dx + dy * dy
+                
+                nodeAlpha = 0f
+                // 1. Passive Aura
+                if (d2 < gs.passiveAuraRadiusSq) {
+                    val dist = kotlin.math.sqrt(d2)
+                    val auraRad = kotlin.math.sqrt(gs.passiveAuraRadiusSq)
+                    nodeAlpha = max(0f, 1f - dist / auraRad)
+                }
+                
+                // 2. Persistent Scan (Grid based)
+                val gx = (node.x / gs.tileSize).toInt()
+                val gy = (node.y / gs.tileSize).toInt()
+                val persistentVis = gs.wallVisMap?.getOrNull(gx)?.getOrNull(gy) ?: 0f
+                nodeAlpha = max(nodeAlpha, persistentVis)
+
+                // 3. Sonar Pulse
+                if (gs.pulse && d2 >= gs.innerRSq && d2 <= gs.outerRSq) {
+                    nodeAlpha = max(nodeAlpha, 0.8f)
+                }
+            }
+
+            if (nodeAlpha < 0.05f) continue
+            val alphaInt = (nodeAlpha * 255).toInt()
+
             val nodeColor = when(node.type) {
                 1 -> GameColors.RED
                 2 -> GameColors.YELLOW
@@ -78,18 +108,18 @@ class WorldRenderer(
 
             // 1. Chip Base (Semi-transparent)
             p.style = Paint.Style.FILL
-            p.color = (0x33 shl 24) or (nodeColor and 0xFFFFFF)
+            p.color = ( (alphaInt * 0.4f).toInt() shl 24) or (nodeColor and 0xFFFFFF)
             c.drawRect(nx - r, ny - r, nx + r, ny + r, p)
 
             // 2. Progress Fill (Chip charging up)
             val progress = 1f - (node.cooldownTimer / node.maxCooldown)
-            p.color = (0x66 shl 24) or (nodeColor and 0xFFFFFF)
+            p.color = ( (alphaInt * 0.7f).toInt() shl 24) or (nodeColor and 0xFFFFFF)
             c.drawRect(nx - r, ny + r - (2 * r * progress), nx + r, ny + r, p)
 
             // 3. Border & Pins
             p.style = Paint.Style.STROKE
             p.strokeWidth = scale * 0.005f
-            p.color = nodeColor
+            p.color = (alphaInt shl 24) or (nodeColor and 0xFFFFFF)
             c.drawRect(nx - r, ny - r, nx + r, ny + r, p)
 
             // Inner technical detailing
@@ -109,7 +139,7 @@ class WorldRenderer(
             // 4. Queue Count
             if (node.queue > 0) {
                 pText.textSize = scale * 0.022f
-                pText.color = 0xFFFFFFFF.toInt()
+                pText.color = (alphaInt shl 24) or 0xFFFFFFFF.toInt()
                 pText.textAlign = Paint.Align.CENTER
                 c.drawText("${node.queue}", nx, ny + scale * 0.008f, pText)
             }
@@ -184,7 +214,7 @@ class WorldRenderer(
 
                 var wallAlpha = 0f
                 if (!gs.isDarknessLevel || gs.modFullVisibility) {
-                    wallAlpha = 0.15f
+                    wallAlpha = 1.0f // Normal levels have full scan visibility
                 } else {
                     // 1. Reveal by Passive Aura (Player's close range light)
                     if (d2 < gs.passiveAuraRadiusSq) {
@@ -209,13 +239,15 @@ class WorldRenderer(
                 if (wallAlpha > 0.01f) {
                     when (grid[x][y]) {
                         1 -> { // 2D NEON WALL RENDERING
-                            val alphaInt = (wallAlpha * 255).toInt()
-                            p.color = (alphaInt shl 24) or (GameColors.PULSE and 0xFFFFFF)
+                            val strokeAlpha = (wallAlpha * 255).toInt()
+                            val fillAlpha = (wallAlpha * 0.15f * 255).toInt() // Faint interior look
+                            
+                            p.color = (fillAlpha shl 24) or (GameColors.PULSE and 0xFFFFFF)
                             c.drawRect(drawX, drawY, drawX + ts, drawY + ts, p)
 
                             p.style = Paint.Style.STROKE
                             p.strokeWidth = scale * 0.005f
-                            p.color = (alphaInt shl 24) or (GameColors.PULSE and 0xFFFFFF)
+                            p.color = (strokeAlpha shl 24) or (GameColors.PULSE and 0xFFFFFF)
                             val m = ts * 0.1f
                             c.drawRect(drawX + m, drawY + m, drawX + ts - m, drawY + ts - m, p)
                             p.style = Paint.Style.FILL
@@ -358,6 +390,7 @@ class WorldRenderer(
         if (gs.state == 1 || gs.state == 8 || gs.state == 9) enemySys.drawEntities(c, gs, targetW, scale)
 
         effectSys.drawTrails(c, gs.cameraX, gs.cameraY, scale, currentPlayerColor)
+        effectSys.drawSonarPings(c, gs.cameraX, gs.cameraY, scale)
 
         if (gs.isOverclocked) {
             effectSys.drawLightning(c, screenPlayerX, screenPlayerY, scale)

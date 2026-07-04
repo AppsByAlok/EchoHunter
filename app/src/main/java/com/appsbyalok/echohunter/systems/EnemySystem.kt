@@ -129,7 +129,7 @@ class EnemySystem {
         hp[i] = maxHp[i]
     }
 
-    fun updateEnemies(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {
+    fun updateEnemies(dt: Float, gs: GameState, effectSys: EffectSystem, width: Float, height: Float, scale: Float) {
         gs.isEnemyNear = false
         gs.isEnemyVeryNear = false
 
@@ -174,7 +174,20 @@ class EnemySystem {
             if (d2 < gs.passiveAuraRadiusSq) {
                 vis[i] = 1f
             } else {
-                if (hitByPulse) vis[i] = 1f
+                if (hitByPulse) {
+                    if (vis[i] <= 0f) {
+                        effectSys.spawnSonarPing(ex[i], ey[i], if (type[i] == 1) GameColors.RED else GameColors.YELLOW)
+                        
+                        // Sonar Noise: Attract enemy to pulse location if they were patrolling
+                        if (eState[i] == 0) {
+                            eState[i] = 2 // INVESTIGATE
+                            investigateTimer[i] = 3f
+                            invX[i] = gs.px
+                            invY[i] = gs.py
+                        }
+                    }
+                    vis[i] = 1f
+                }
                 
                 // Linear decay instead of exponential for predictable duration
                 val duration = com.appsbyalok.echohunter.data.UpgradeSystem.getSonarDurationBonus()
@@ -214,7 +227,7 @@ class EnemySystem {
         // Find an empty slot and spawn a Hunter near the boss
         for (i in 0 until n) {
             if (ex[i] < -1000f) {
-                val angle = kotlin.random.Random.nextFloat() * 6.28f
+                val angle = Random.nextFloat() * 6.28f
                 val dist = width * 0.1f // Spawn close to boss
                 spawnAt(i, gs.bossX + kotlin.math.cos(angle) * dist, gs.bossY + kotlin.math.sin(angle) * dist, gs, width, height, 1)
                 break
@@ -222,7 +235,7 @@ class EnemySystem {
         }
     }
 
-    fun updateBoss(dt: Float, gs: GameState, scale: Float) {
+    fun updateBoss(dt: Float, gs: GameState, effectSys: EffectSystem, scale: Float) {
         if (!gs.bossActive) return
 
         val behavior = when (gs.bossType) {
@@ -308,7 +321,11 @@ class EnemySystem {
 
         // --- NEW: BOSS PERSISTENT VISIBILITY ---
         if (gs.isDarknessLevel) {
-            if ((gs.pulse && bDistSq in gs.innerRSq..gs.outerRSq) || bDistSq < gs.passiveAuraRadiusSq) {
+            val hitByPulse = (gs.pulse && bDistSq in gs.innerRSq..gs.outerRSq)
+            if (hitByPulse || bDistSq < gs.passiveAuraRadiusSq) {
+                if (hitByPulse && gs.bossVis <= 0f) {
+                    effectSys.spawnSonarPing(gs.bossX, gs.bossY, behavior.color)
+                }
                 gs.bossVis = 1.0f
             } else {
                 val duration = com.appsbyalok.echohunter.data.UpgradeSystem.getSonarDurationBonus()
@@ -319,7 +336,7 @@ class EnemySystem {
         }
     }
 
-    fun updatePowerups(dt: Float, gs: GameState, width: Float, height: Float) {
+    fun updatePowerups(dt: Float, gs: GameState, effectSys: EffectSystem, width: Float, height: Float) {
         val puDropRate = if (gs.difficulty == 0) 0.004f else 0.002f
         if (Random.nextFloat() < puDropRate * dt * 60f && gs.score > 15 && !gs.bossActive) {
             for (i in 0 until pwn) {
@@ -333,6 +350,26 @@ class EnemySystem {
                 }
             }
         }
+
+        // NEW: Powerup visibility update (Decay & Scan detection)
+        for (i in 0 until pwn) {
+            if (pwActive[i]) {
+                val dx = pwX[i] - gs.px
+                val dy = pwY[i] - gs.py
+                val d2 = dx * dx + dy * dy
+                val hitByPulse = (gs.pulse && d2 in gs.innerRSq..gs.outerRSq)
+
+                if (d2 < gs.passiveAuraRadiusSq || hitByPulse) {
+                    if (hitByPulse && pwVis[i] <= 0f) {
+                        effectSys.spawnSonarPing(pwX[i], pwY[i], GameColors.PULSE)
+                    }
+                    pwVis[i] = 1f
+                } else {
+                    val duration = com.appsbyalok.echohunter.data.UpgradeSystem.getSonarDurationBonus()
+                    pwVis[i] = max(0f, pwVis[i] - dt / duration)
+                }
+            }
+        }
     }
 
     fun drawEntities(c: Canvas, gs: GameState, width: Float, scale: Float) {
@@ -340,19 +377,14 @@ class EnemySystem {
 
         for (i in 0 until pwn) {
             if (pwActive[i]) {
-                val dx = pwX[i] - gs.px
-                val dy = pwY[i] - gs.py
-                val d2 = dx * dx + dy * dy
-
-                if ((gs.pulse && d2 in gs.innerRSq..gs.outerRSq) || d2 < gs.passiveAuraRadiusSq) pwVis[i] = 1f
-                pwVis[i] *= gs.fadeMultiplier
-
                 val screenPwX = pwX[i] - gs.cameraX
                 val screenPwY = pwY[i] - gs.cameraY
 
                 if (screenPwX < -scale || screenPwX > width + scale) pwActive[i] = false
 
-                val effectivePwVis = max(0.15f, pwVis[i])
+                // Darkness: Must be scanned or in aura (vis > 0)
+                // Normal: 100% visibility
+                val effectivePwVis = if (gs.isDarknessLevel && !gs.modFullVisibility) pwVis[i] else 1.0f
 
                 if (effectivePwVis > 0.02f) {
                     p.style = Paint.Style.STROKE; p.strokeWidth = scale * 0.005f
@@ -373,8 +405,8 @@ class EnemySystem {
             val screenEx = ex[i] - gs.cameraX
             val screenEy = ey[i] - gs.cameraY
             
-            // NEW: Strict Visibility - Darkness mein bina sonar/aura ke 0% 
-            val effectiveVis = if (gs.isDarknessLevel) vis[i] else max(0.1f, vis[i])
+            // NEW: Strict Visibility - Darkness: 0% without sonar/aura | Normal: 100% visible 
+            val effectiveVis = if (gs.isDarknessLevel) vis[i] else 1.0f
 
             if (effectiveVis > 0.02f) {
                 val a = (effectiveVis * 255).toInt()

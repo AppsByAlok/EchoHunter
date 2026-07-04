@@ -50,15 +50,26 @@ class HUDRenderer(private val context: Context) {
         // --- 4. ACTION BUTTONS (Labels & Icons Restored) ---
         drawAttackUI(c, scale, gs)
         
-        val ovrColor = if (gs.overclockMeter >= 100f) GameColors.OVERCLOCK else GameColors.TEXT
-        drawActionButton(c, gs.hudLayout.ovrX, gs.hudLayout.ovrY, gs.hudLayout.btnRadius, "OVR", if (gs.controls.isOverclockPressed) GameColors.CLARITY else ovrColor, false)
+        val isOvrReady = gs.overclockMeter >= 100f
+        val isOvrActive = gs.isOverclocked
+        val ovrColor = if (isOvrReady || isOvrActive) GameColors.OVERCLOCK else 0xFF777777.toInt()
+        val ovrProgress = when {
+            isOvrActive -> gs.overclockMeter / 100f // Show duration remaining
+            !isOvrReady -> 1f - (gs.overclockMeter / 100f) // Show charge remaining
+            else -> 0f
+        }
+        drawActionButton(c, gs.hudLayout.ovrX, gs.hudLayout.ovrY, gs.hudLayout.btnRadius, "OVR", if (gs.controls.isOverclockPressed) GameColors.CLARITY else ovrColor, isOvrReady || isOvrActive, ovrProgress, 0f)
 
-        val trapColor = if (gs.trapCooldownTimer <= 0f) GameColors.YELLOW else 0xFF555555.toInt()
-        drawActionButton(c, gs.hudLayout.trapX, gs.hudLayout.trapY, gs.hudLayout.btnRadius, "TRAP", if (gs.controls.isTrapPressed) GameColors.CLARITY else trapColor, false)
+        val trapColor = if (gs.trapCooldownTimer <= 0f) GameColors.YELLOW else 0xFF777777.toInt()
+        val trapMaxCD = 8.0f * com.appsbyalok.echohunter.data.UpgradeSystem.getTrapCooldownMultiplier()
+        val trapProgress = if (gs.trapCooldownTimer > 0) gs.trapCooldownTimer / trapMaxCD else 0f
+        drawActionButton(c, gs.hudLayout.trapX, gs.hudLayout.trapY, gs.hudLayout.btnRadius, "TRAP", if (gs.controls.isTrapPressed) GameColors.CLARITY else trapColor, false, trapProgress, gs.trapCooldownTimer)
 
         if (gs.isDarknessLevel || StoryProtocol.isBlackoutActive) {
-            val pulseColor = if (gs.sonarTimer <= 0f) GameColors.PULSE else 0xFF555555.toInt()
-            drawActionButton(c, gs.hudLayout.pulseX, gs.hudLayout.pulseY, gs.hudLayout.btnRadius, "SONAR", if (gs.controls.isSonarPressed || gs.controls.isAutoSonarLocked) GameColors.CLARITY else pulseColor, gs.controls.isAutoSonarLocked)
+            val pulseColor = if (gs.sonarTimer <= 0f) GameColors.PULSE else 0xFF777777.toInt()
+            val pulseMaxCD = 3.0f * com.appsbyalok.echohunter.data.UpgradeSystem.getPulseCooldownMultiplier()
+            val pulseProgress = if (gs.sonarTimer > 0) gs.sonarTimer / pulseMaxCD else 0f
+            drawActionButton(c, gs.hudLayout.pulseX, gs.hudLayout.pulseY, gs.hudLayout.btnRadius, "SONAR", if (gs.controls.isSonarPressed || gs.controls.isAutoSonarLocked) GameColors.CLARITY else pulseColor, gs.controls.isAutoSonarLocked, pulseProgress, gs.sonarTimer)
         }
 
         // --- 5. RADIAL MENUS (Upper Arc Distribution) ---
@@ -133,29 +144,17 @@ class HUDRenderer(private val context: Context) {
             pText.color = GameColors.YELLOW; pText.textSize = scale * 0.025f
             c.drawText(gs.objectiveLabel, targetW / 2f, currentY, pText)
             currentY += scale * 0.025f
-        }
 
-        val barW = scale * 0.45f // Slightly wider for better visibility
-        val barH = scale * 0.015f
-        val barX = targetW / 2f - barW / 2f
+            val barW = scale * 0.45f 
+            val barH = scale * 0.015f
+            val barX = targetW / 2f - barW / 2f
 
-        if (gs.objectiveLabel.isNotEmpty()) {
             // Priority 1: Draw Objective Progress Bar
             p.style = Paint.Style.STROKE; p.strokeWidth = scale * 0.003f; p.color = GameColors.YELLOW
             c.drawRect(barX, currentY, barX + barW, currentY + barH, p)
             p.style = Paint.Style.FILL; p.color = GameColors.YELLOW
             c.drawRect(barX, currentY, barX + barW * gs.objectiveProgress, currentY + barH, p)
-            currentY += barH + scale * 0.03f
         }
-
-        // Always draw Overclock Bar (Secondary, more compact)
-        val ocW = scale * 0.3f
-        val ocH = scale * 0.008f
-        val ocX = targetW / 2f - ocW / 2f
-        p.style = Paint.Style.STROKE; p.strokeWidth = scale * 0.002f; p.color = 0x88FFFFFF.toInt()
-        c.drawRect(ocX, currentY, ocX + ocW, currentY + ocH, p)
-        p.style = Paint.Style.FILL; p.color = if (gs.isOverclocked) GameColors.OVERCLOCK else GameColors.PULSE
-        c.drawRect(ocX, currentY, ocX + ocW * (gs.overclockMeter / 100f), currentY + ocH, p)
     }
 
     private fun drawAttackUI(c: Canvas, scale: Float, gs: GameState) {
@@ -251,13 +250,41 @@ class HUDRenderer(private val context: Context) {
         }
     }
 
-    private fun drawActionButton(c: Canvas, x: Float, y: Float, radius: Float, label: String, color: Int, isAutoLocked: Boolean) {
+    private fun drawActionButton(c: Canvas, x: Float, y: Float, radius: Float, label: String, color: Int, isAutoLocked: Boolean, cooldownProgress: Float = 0f, rawTime: Float = 0f) {
         p.style = Paint.Style.STROKE; p.strokeWidth = radius * 0.06f; p.color = color
         c.drawCircle(x, y, radius * 0.85f, p)
+        
+        // Indicator for Ready/Auto-Locked Mode (Glow Ring)
+        if (isAutoLocked) {
+            p.strokeWidth = radius * 0.03f
+            p.alpha = (150 + sin(System.currentTimeMillis() * 0.01).toFloat() * 100).toInt().coerceIn(0, 255)
+            c.drawCircle(x, y, radius * 0.95f, p)
+            p.alpha = 255
+        }
+
         p.style = Paint.Style.FILL; p.color = (0x33 shl 24) or (color and 0xFFFFFF)
         c.drawCircle(x, y, radius * 0.85f, p)
-        pText.color = color; pText.textSize = radius * 0.38f; pText.textAlign = Paint.Align.CENTER
-        c.drawText(label, x, y + pText.textSize * 0.35f, pText)
+        
+        // Cooldown/Progress Radial Sweep
+        if (cooldownProgress > 0f) {
+            p.color = (0x66 shl 24) or (color and 0xFFFFFF)
+            val rect = RectF(x - radius * 0.85f, y - radius * 0.85f, x + radius * 0.85f, y + radius * 0.85f)
+            c.drawArc(rect, -90f, 360f * cooldownProgress, true, p)
+        }
+
+        pText.textAlign = Paint.Align.CENTER
+        if (cooldownProgress > 0f && rawTime > 0f) {
+            // Draw Timer Text
+            pText.color = 0xFFFFFFFF.toInt()
+            pText.textSize = radius * 0.5f
+            val timeStr = "%.1fs".format(rawTime)
+            c.drawText(timeStr, x, y + pText.textSize * 0.35f, pText)
+        } else {
+            // Draw Label
+            pText.color = color
+            pText.textSize = radius * 0.38f
+            c.drawText(label, x, y + pText.textSize * 0.35f, pText)
+        }
     }
 
     private fun drawStoryPopups(c: Canvas, scale: Float, targetW: Float, gs: GameState) {

@@ -140,7 +140,11 @@ object UpgradeSystem {
     fun getStealthDetectionMultiplier(): Float = 1.0f - (getLevel(UpgradeType.STEALTH_CAMO) * 0.15f)
     
     fun getSpikeCooldownMultiplier(): Float = 1.0f / (1.0f + getLevel(UpgradeType.SPIKE_PAYLOAD) * 0.15f)
+    
+    // SONAR COOLDOWN: Base 3s, -10% per level (Level 5 = 1.5s)
     fun getPulseCooldownMultiplier(): Float = 1.0f - (getLevel(UpgradeType.PULSE_FREQUENCY) * 0.10f)
+    
+    // TRAP COOLDOWN: Base 8s, -15% per level (Level 5 = 2s)
     fun getTrapCooldownMultiplier(): Float = 1.0f - (getLevel(UpgradeType.TRAP_COOLDOWN) * 0.15f)
 
     fun getSonarRangeMultiplier(): Float = 1.0f + (getLevel(UpgradeType.SONAR_RANGE) * 0.20f)

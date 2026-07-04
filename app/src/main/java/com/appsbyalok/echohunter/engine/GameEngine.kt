@@ -147,9 +147,9 @@ class GameEngine(
             }
 
             spawnerSys.update(simDt, gs, targetW, targetH, scale)
-            enemySys.updateEnemies(simDt, gs, targetW, targetH, scale)
-            enemySys.updateBoss(simDt, gs, scale)
-            enemySys.updatePowerups(simDt, gs, targetW, targetH)
+            enemySys.updateEnemies(simDt, gs, effectSys, targetW, targetH, scale)
+            enemySys.updateBoss(simDt, gs, effectSys, scale)
+            enemySys.updatePowerups(simDt, gs, effectSys, targetW, targetH)
 
             collisionSys.checkCollisions(targetW, targetH, scale, onDamage!!, onScore!!, onCoreUnlock!!)
             

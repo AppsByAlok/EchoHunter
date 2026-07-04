@@ -569,18 +569,21 @@ class GameState {
             innerRSq = innerR * innerR
             outerRSq = outerR * outerR
 
-            // NAYA: Update persistent wall visibility when pulse hits
+            // NEW: Update persistent wall visibility when pulse hits
             val grid = gridMap
             val vis = wallVisMap
             if (grid != null && vis != null) {
-                for (x in grid.indices) {
-                    for (y in grid[0].indices) {
-                        if (grid[x][y] == 1) {
-                            val dx = x * tileSize + tileSize / 2f - px
-                            val dy = y * tileSize + tileSize / 2f - py
-                            val d2 = dx * dx + dy * dy
-                            if (d2 in innerRSq..outerRSq) vis[x][y] = 1f
-                        }
+                val minX = max(0, ((px - outerR) / tileSize).toInt())
+                val maxX = min(grid.size - 1, ((px + outerR) / tileSize).toInt())
+                val minY = max(0, ((py - outerR) / tileSize).toInt())
+                val maxY = min(grid[0].size - 1, ((py + outerR) / tileSize).toInt())
+
+                for (x in minX..maxX) {
+                    for (y in minY..maxY) {
+                        val dx = x * tileSize + tileSize / 2f - px
+                        val dy = y * tileSize + tileSize / 2f - py
+                        val d2 = dx * dx + dy * dy
+                        if (d2 in innerRSq..outerRSq) vis[x][y] = 1f
                     }
                 }
             }
