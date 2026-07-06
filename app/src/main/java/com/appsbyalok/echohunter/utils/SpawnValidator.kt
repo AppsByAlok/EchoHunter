@@ -15,11 +15,19 @@ object SpawnValidator {
      * @param radius Radius of the entity
      * @param gs Current GameState
      * @param minPlayerDist Minimum distance from the player
+     * @param hitboxScale Scale factor for the collision hitbox (default 0.8)
      * @return true if the position is valid
      */
-    fun isValid(x: Float, y: Float, radius: Float, gs: GameState, minPlayerDist: Float = 0f): Boolean {
+    fun isValid(
+        x: Float, 
+        y: Float, 
+        radius: Float, 
+        gs: GameState, 
+        minPlayerDist: Float = 0f,
+        hitboxScale: Float = 0.8f
+    ): Boolean {
         // 1. Check map boundaries and walls
-        if (isCollidingWithWall(x, y, radius, gs)) {
+        if (isCollidingWithWall(x, y, radius, gs, hitboxScale)) {
             return false
         }
 
@@ -36,6 +44,19 @@ object SpawnValidator {
     }
 
     /**
+     * Checks if a position is far enough from all existing spawner nodes.
+     */
+    fun isFarFromNodes(x: Float, y: Float, gs: GameState, minDist: Float): Boolean {
+        val minDistSq = minDist * minDist
+        for (node in gs.spawnerNodes) {
+            val dx = x - node.x
+            val dy = y - node.y
+            if (dx * dx + dy * dy < minDistSq) return false
+        }
+        return true
+    }
+
+    /**
      * Finds a valid spawn position near a target point.
      * 
      * @param targetX Preferred X coordinate
@@ -44,6 +65,7 @@ object SpawnValidator {
      * @param gs Current GameState
      * @param maxAttempts Maximum number of attempts to find a valid spot
      * @param searchRadius How far to search for a valid spot
+     * @param hitboxScale Scale factor for the collision hitbox
      * @return A Pair of coordinates (x, y) if found, or null if no valid spot found
      */
     fun findValidNear(
@@ -52,9 +74,10 @@ object SpawnValidator {
         radius: Float, 
         gs: GameState, 
         maxAttempts: Int = 10,
-        searchRadius: Float = 100f
+        searchRadius: Float = 100f,
+        hitboxScale: Float = 0.8f
     ): Pair<Float, Float>? {
-        if (isValid(targetX, targetY, radius, gs)) {
+        if (isValid(targetX, targetY, radius, gs, hitboxScale = hitboxScale)) {
             return Pair(targetX, targetY)
         }
 
@@ -65,7 +88,7 @@ object SpawnValidator {
             val nx = targetX + kotlin.math.cos(angle) * dist
             val ny = targetY + kotlin.math.sin(angle) * dist
 
-            if (isValid(nx, ny, radius, gs)) {
+            if (isValid(nx, ny, radius, gs, hitboxScale = hitboxScale)) {
                 return Pair(nx, ny)
             }
         }
@@ -73,10 +96,10 @@ object SpawnValidator {
         return null
     }
 
-    private fun isCollidingWithWall(cx: Float, cy: Float, radius: Float, gs: GameState): Boolean {
+    fun isCollidingWithWall(cx: Float, cy: Float, radius: Float, gs: GameState, hitboxScale: Float = 0.8f): Boolean {
         val grid = gs.gridMap ?: return false
         val ts = gs.tileSize
-        val hitbox = radius * 0.8f
+        val hitbox = radius * hitboxScale
 
         val left = ((cx - hitbox) / ts).toInt()
         val right = ((cx + hitbox) / ts).toInt()
@@ -86,6 +109,7 @@ object SpawnValidator {
         for (x in left..right) {
             for (y in top..bottom) {
                 if (x in grid.indices && y in grid[0].indices) {
+                    // 1 is WALL in MazeGenerator
                     if (grid[x][y] == 1) return true
                 } else {
                     // Out of bounds is considered a wall collision

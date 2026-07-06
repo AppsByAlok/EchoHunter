@@ -261,8 +261,17 @@ object UltimaBossBehavior : IBossBehavior {
             else -> { // Phase 4: Recovery/Teleport
                 if (cycle > 14.5f) {
                     val angle = (Math.random() * 6.28).toFloat()
-                    gs.bossX = gs.px + kotlin.math.cos(angle) * scale * 1.5f
-                    gs.bossY = gs.py + kotlin.math.sin(angle) * scale * 1.5f
+                    val targetX = gs.px + kotlin.math.cos(angle) * scale * 1.5f
+                    val targetY = gs.py + kotlin.math.sin(angle) * scale * 1.5f
+
+                    val bossRadius = scale * 0.08f * sizeMult
+                    val validPos = com.appsbyalok.echohunter.utils.SpawnValidator.findValidNear(
+                        targetX, targetY, bossRadius, gs, maxAttempts = 30, searchRadius = scale * 0.8f, hitboxScale = 1.0f
+                    )
+                    if (validPos != null) {
+                        gs.bossX = validPos.first
+                        gs.bossY = validPos.second
+                    }
                 }
             }
         }
@@ -383,7 +392,7 @@ object StalkerBossBehavior : IBossBehavior {
             // EXECUTE DASH
             val dx = gs.px - gs.bossX
             val dy = gs.py - gs.bossY
-            val dist = kotlin.math.sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
+            val dist = sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
             val dashSpeed = scale * 5f
             gs.bossVx = (dx / dist) * dashSpeed
             gs.bossVy = (dy / dist) * dashSpeed
@@ -437,12 +446,22 @@ object GlitchBossBehavior : IBossBehavior {
         gs.bossAttackTimer += dt
         if (gs.bossAttackTimer > 6f) {
             gs.bossAttackTimer = 0f
-            // Teleport near player
+            // Teleport near player - VALIDATED
             val angle = kotlin.random.Random.nextFloat() * 6.28f
-            gs.bossX = gs.px + kotlin.math.cos(angle) * scale * 1.0f
-            gs.bossY = gs.py + kotlin.math.sin(angle) * scale * 1.0f
-            com.appsbyalok.echohunter.utils.EchoAudioManager.playSound(android.media.ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
-            gs.chromaticIntensity = 0.8f
+            val targetX = gs.px + kotlin.math.cos(angle) * scale * 1.0f
+            val targetY = gs.py + kotlin.math.sin(angle) * scale * 1.0f
+
+            val bossRadius = scale * 0.08f * sizeMult
+            val validPos = com.appsbyalok.echohunter.utils.SpawnValidator.findValidNear(
+                targetX, targetY, bossRadius, gs, maxAttempts = 30, searchRadius = scale * 0.5f, hitboxScale = 1.0f
+            )
+
+            if (validPos != null) {
+                gs.bossX = validPos.first
+                gs.bossY = validPos.second
+                com.appsbyalok.echohunter.utils.EchoAudioManager.playSound(android.media.ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
+                gs.chromaticIntensity = 0.8f
+            }
         }
     }
 }

@@ -20,69 +20,95 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
     
     fun generateNodes(gs: GameState, mapW: Float, mapH: Float, scale: Float) {
         gs.spawnerNodes.clear()
+
+        val ts = gs.tileSize
+        val grid = gs.gridMap
         
-        val baseNodes = if (gs.difficulty == 1) 5f else 4f
-        val bonus = if (gs.gameMode == 1) 4f else 0f
-        val nodeCount = LevelEngine.getSaturatedValue(gs.currentLevel, baseNodes + bonus, 11f, 150f).toInt()
-        
-        for (i in 0 until nodeCount) {
-            var nx = Random.nextFloat() * mapW
-            var ny = Random.nextFloat() * mapH
-            
-            if (gs.gridMap != null) {
-                val ts = gs.tileSize
-                val gridW = gs.gridMap!!.size
-                val gridH = gs.gridMap!![0].size
-                var attempts = 0
-
-                while (attempts < 50) {
-                    val col = Random.nextInt(1, gridW - 1)
-                    val row = Random.nextInt(1, gridH - 1)
-                    val tx = col * ts + (ts / 2f)
-                    val ty = row * ts + (ts / 2f)
-
-                    if (SpawnValidator.isValid(tx, ty, ts / 2f, gs, minPlayerDist = 300f * scale)) {
-
-                        // FIX: Ensure this node is not too close to existing nodes
-                        var isOverlapping = false
-                        for (existingNode in gs.spawnerNodes) {
-                            val dx = tx - existingNode.x
-                            val dy = ty - existingNode.y
-                            // Keep nodes at least 3 tiles apart (ts * 3f)
-                            if (dx * dx + dy * dy < (ts * 3f) * (ts * 3f)) {
-                                isOverlapping = true
-                                break
+        // 1. First priority: Use GUARD_SPAWN markers from the map if they exist
+        if (grid != null) {
+            val gridW = grid.size
+            val gridH = grid[0].size
+            for (x in 0 until gridW) {
+                for (y in 0 until gridH) {
+                    if (grid[x][y] == 3) { // 3 = GUARD_SPAWN
+                        val tx = x * ts + (ts / 2f)
+                        val ty = y * ts + (ts / 2f)
+                        
+                        // Still validate just in case, but usually markers are safe
+                        if (SpawnValidator.isFarFromNodes(tx, ty, gs, ts * 2f)) {
+                            val type = Random.nextInt(0, 3)
+                            val maxC = when(type) {
+                                0 -> 1.5f 
+                                1 -> 4.0f 
+                                else -> 6.0f 
                             }
-                        }
-
-                        if (!isOverlapping) {
-                            nx = tx
-                            ny = ty
-                            break
+                            gs.spawnerNodes.add(SpawnNode(tx, ty, type, maxCooldown = maxC))
                         }
                     }
-                    attempts++
                 }
             }
+        }
 
-            val config = LevelEngine.getLevelConfig(gs.currentLevel)
-            val type = when {
-                config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ELIMINATION) -> {
-                    if (i < 3) 2 else Random.nextInt(0, 2)
+        // 2. Second priority: If we don't have enough nodes, procedurally generate the rest
+        val baseNodes = if (gs.difficulty == 1) 5f else 4f
+        val bonus = if (gs.gameMode == 1) 4f else 0f
+        val targetCount = LevelEngine.getSaturatedValue(gs.currentLevel, baseNodes + bonus, 11f, 150f).toInt()
+        
+        if (gs.spawnerNodes.size < targetCount) {
+            val remaining = targetCount - gs.spawnerNodes.size
+            for (i in 0 until remaining) {
+                var nx = Random.nextFloat() * mapW
+                var ny = Random.nextFloat() * mapH
+                
+                if (grid != null) {
+                    val gridW = grid.size
+                    val gridH = grid[0].size
+                    var attempts = 0
+                    var found = false
+
+                    while (attempts < 100) {
+                        val col = Random.nextInt(1, gridW - 1)
+                        val row = Random.nextInt(1, gridH - 1)
+                        val tx = col * ts + (ts / 2f)
+                        val ty = row * ts + (ts / 2f)
+
+                        // VALIDATION: Must be a valid spot, far from player, AND far from other nodes
+                        val isValidSpot = SpawnValidator.isValid(tx, ty, ts / 2f, gs, minPlayerDist = 400f * scale)
+                        val isFarEnough = SpawnValidator.isFarFromNodes(tx, ty, gs, ts * 4f)
+
+                        if (isValidSpot && isFarEnough) {
+                            nx = tx
+                            ny = ty
+                            found = true
+                            break
+                        }
+                        attempts++
+                    }
+                    if (!found) continue 
+                } else {
+                    // Fallback for null grid: just check distance from other nodes
+                    if (!SpawnValidator.isFarFromNodes(nx, ny, gs, scale * 0.5f)) continue
                 }
-                i == 0 -> 0 
-                i == 1 -> 1 
-                Random.nextFloat() < 0.2f -> 2 
-                else -> Random.nextInt(0, 2)
-            }
 
-            val maxC = when(type) {
-                0 -> 1.5f 
-                1 -> 4.0f 
-                else -> 6.0f 
-            }
+                val config = LevelEngine.getLevelConfig(gs.currentLevel)
+                val type = when {
+                    config.features.contains(LevelFeature.ELIMINATION) -> {
+                        if (i < 3) 2 else Random.nextInt(0, 2)
+                    }
+                    i == 0 -> 0 
+                    i == 1 -> 1 
+                    Random.nextFloat() < 0.2f -> 2 
+                    else -> Random.nextInt(0, 2)
+                }
 
-            gs.spawnerNodes.add(SpawnNode(nx, ny, type, maxCooldown = maxC))
+                val maxC = when(type) {
+                    0 -> 1.5f 
+                    1 -> 4.0f 
+                    else -> 6.0f 
+                }
+
+                gs.spawnerNodes.add(SpawnNode(nx, ny, type, maxCooldown = maxC))
+            }
         }
     }
 
@@ -112,7 +138,9 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
                     val tx = gs.px + kotlin.math.cos(angle) * dist
                     val ty = gs.py + kotlin.math.sin(angle) * dist
 
-                    if (SpawnValidator.isValid(tx, ty, gs.tileSize / 2f, gs)) {
+                    // Ensure new position is valid AND not on top of another node
+                    if (SpawnValidator.isValid(tx, ty, gs.tileSize / 2f, gs) && 
+                        SpawnValidator.isFarFromNodes(tx, ty, gs, gs.tileSize * 2f)) {
                         node.x = tx
                         node.y = ty
                         break

@@ -78,21 +78,49 @@ class EnemySystem {
     fun spawnAt(i: Int, nx: Float, ny: Float, gs: GameState, scale: Float, nodeType: Int = -1) {
         val radius = scale * 0.03f
         val validPos = SpawnValidator.findValidNear(nx, ny, radius, gs, maxAttempts = 30, searchRadius = radius * 6f)
-//        val validPos = SpawnValidator.findValidNear(nx, ny, radius, gs, maxAttempts = 15, searchRadius = radius * 4f)
 
         if (validPos != null) {
             ex[i] = validPos.first
             ey[i] = validPos.second
         } else {
-            // RARE BUG FALLBACK: If strictly no valid pos found, snap strictly to the center of the target tile.
-            // This prevents float-precision clipping into walls.
+            // IMPROVED FALLBACK: Search for the nearest valid empty tile instead of just snapping.
             val ts = gs.tileSize
-            ex[i] = ((nx / ts).toInt() * ts) + (ts / 2f)
-            ey[i] = ((ny / ts).toInt() * ts) + (ts / 2f)
-        }
+            val grid = gs.gridMap
+            if (grid != null) {
+                val centerCol = (nx / ts).toInt()
+                val centerRow = (ny / ts).toInt()
+                
+                var found = false
+                // Spiral search for nearest empty tile
+                for (searchRadius in 0..5) {
+                    for (dx in -searchRadius..searchRadius) {
+                        for (dy in -searchRadius..searchRadius) {
+                            if (kotlin.math.abs(dx) != searchRadius && kotlin.math.abs(dy) != searchRadius) continue
 
-//        ex[i] = validPos?.first ?: nx
-//        ey[i] = validPos?.second ?: ny
+                            val c = centerCol + dx
+                            val r = centerRow + dy
+                            if (c in grid.indices && r in grid[0].indices && grid[c][r] == 0) {
+                                ex[i] = c * ts + ts / 2f
+                                ey[i] = r * ts + ts / 2f
+                                found = true
+                                break
+                            }
+                        }
+                        if (found) break
+                    }
+                    if (found) break
+                }
+                if (!found) {
+                    // Total failure: cancel spawn to avoid wall glitch
+                    ex[i] = -9999f
+                    ey[i] = -9999f
+                    return
+                }
+            } else {
+                ex[i] = nx
+                ey[i] = ny
+            }
+        }
 
         val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
         val isElimination = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ELIMINATION)
@@ -162,6 +190,18 @@ class EnemySystem {
         for (i in 0 until n) {
             if (ex[i] < -1000f) continue
             
+            // --- ANTI-STUCK LOGIC ---
+            // If already in a wall, try to push out to the center of the current tile or a neighbor
+            if (isCollidingWithWall(ex[i], ey[i], enemyRadius, gs)) {
+                val ts = gs.tileSize
+                val cx = ((ex[i] / ts).toInt() * ts) + (ts / 2f)
+                val cy = ((ey[i] / ts).toInt() * ts) + (ts / 2f)
+                if (!isCollidingWithWall(cx, cy, enemyRadius, gs)) {
+                    ex[i] = cx
+                    ey[i] = cy
+                }
+            }
+
             // Apply a small damping to velocity
             evx[i] *= (1.0f - dt * 2.0f).coerceAtLeast(0f)
             evy[i] *= (1.0f - dt * 2.0f).coerceAtLeast(0f)
@@ -325,6 +365,16 @@ class EnemySystem {
             }
 
             val bossRadius = scale * 0.08f
+            // --- ANTI-STUCK LOGIC ---
+            if (isCollidingWithWall(gs.bossX, gs.bossY, bossRadius * 0.8f, gs)) {
+                val ts = gs.tileSize
+                val bcx = ((gs.bossX / ts).toInt() * ts) + (ts / 2f)
+                val bcy = ((gs.bossY / ts).toInt() * ts) + (ts / 2f)
+                if (!isCollidingWithWall(bcx, bcy, bossRadius * 0.8f, gs)) {
+                    gs.bossX = bcx; gs.bossY = bcy
+                }
+            }
+
             val nextBx = gs.bossX + finalVx * dt
             if (!isCollidingWithWall(nextBx, gs.bossY, bossRadius * 0.8f, gs)) gs.bossX = nextBx
             val nextBy = gs.bossY + finalVy * dt

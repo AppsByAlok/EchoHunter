@@ -102,18 +102,41 @@ class DefenseObjective : IGameObjective {
         // Locate DEST_NODE for Core position
         val grid = gs.gridMap
         if (grid != null) {
+            val ts = gs.tileSize
             for (x in 0 until grid.size) {
                 for (y in 0 until grid[0].size) {
                     if (grid[x][y] == 2) { // 2 is DEST_NODE
-                        gs.coreX = x * gs.tileSize + (gs.tileSize / 2f)
-                        gs.coreY = y * gs.tileSize + (gs.tileSize / 2f)
+                        val tx = x * ts + (ts / 2f)
+                        val ty = y * ts + (ts / 2f)
+                        
+                        // Verify core isn't inside a wall (DEST_NODE shouldn't be, but just in case)
+                        if (!com.appsbyalok.echohunter.utils.SpawnValidator.isValid(tx, ty, ts * 0.4f, gs)) {
+                            continue
+                        }
+
+                        gs.coreX = tx
+                        gs.coreY = ty
                         gs.coreRadius = scale * 0.15f
                         return
                     }
                 }
             }
         }
-        // Fallback
+        
+        // Fallback: Find any safe path tile near center
+        if (grid != null) {
+            val cx = grid.size / 2
+            val cy = grid[0].size / 2
+            val ts = gs.tileSize
+            val found = com.appsbyalok.echohunter.utils.SpawnValidator.findValidNear(cx * ts, cy * ts, ts * 0.5f, gs, 50, ts * 5f)
+            if (found != null) {
+                gs.coreX = found.first
+                gs.coreY = found.second
+                gs.coreRadius = scale * 0.15f
+                return
+            }
+        }
+
         gs.coreX = gs.px
         gs.coreY = gs.py
         gs.coreRadius = scale * 0.15f
@@ -333,38 +356,35 @@ class EscapeObjective : IGameObjective {
                     // Force all spawners to relocate near the core area (7x7 room)
                     val grid = gs.gridMap
                     if (grid != null) {
-                        val centerX = (gs.coreX / gs.tileSize).toInt()
-                        val centerY = (gs.coreY / gs.tileSize).toInt()
+                        val ts = gs.tileSize
                         
                         for (i in gs.spawnerNodes.indices) {
                             val node = gs.spawnerNodes[i]
-                            node.queue = 0 // Purana trickle clear karo
-                            node.cooldownTimer = 0.5f + (i * 0.2f) // Staggered entry
+                            node.queue = 0 
+                            node.cooldownTimer = 0.5f + (i * 0.2f)
                             
                             // Core ke charo taraf circle mein spawners set karo (5.5 tiles door)
                             val angle = (i.toFloat() / gs.spawnerNodes.size) * 6.283f
-                            val radius = 5.5f 
-                            var nx = (centerX + kotlin.math.cos(angle) * radius).toInt().coerceIn(1, grid.size - 2)
-                            var ny = (centerY + kotlin.math.sin(angle) * radius).toInt().coerceIn(1, grid[0].size - 2)
+                            val dist = 5.5f * ts
+                            val targetX = gs.coreX + kotlin.math.cos(angle) * dist
+                            val targetY = gs.coreY + kotlin.math.sin(angle) * dist
                             
-                            // Ensure spawner lands on a PATH, search nearby if blocked
-                            if (grid[nx][ny] != 0) {
-                                var found = false
-                                for (dx in -1..1) {
-                                    for (dy in -1..1) {
-                                        if (grid[nx + dx][ny + dy] == 0) {
-                                            nx += dx
-                                            ny += dy
-                                            found = true
-                                            break
-                                        }
-                                    }
-                                    if (found) break
+                            // Use SpawnValidator to find a safe spot near the ideal circular placement
+                            val safeSpot = com.appsbyalok.echohunter.utils.SpawnValidator.findValidNear(
+                                targetX, targetY, ts * 0.4f, gs, 20, ts * 2f
+                            )
+
+                            if (safeSpot != null) {
+                                node.x = safeSpot.first
+                                node.y = safeSpot.second
+                            } else {
+                                // Last resort: just keep old position if it's not terrible
+                                if (com.appsbyalok.echohunter.utils.SpawnValidator.isCollidingWithWall(node.x, node.y, ts * 0.4f, gs)) {
+                                     // Hard fallback to player's current safe ground (dangerous but better than stuck)
+                                     node.x = gs.px
+                                     node.y = gs.py
                                 }
                             }
-                            
-                            node.x = nx * gs.tileSize + gs.tileSize/2f
-                            node.y = ny * gs.tileSize + gs.tileSize/2f
                         }
                     }
                 }
@@ -427,6 +447,27 @@ class StoryObjective : IGameObjective {
     private var trickleTimer = 2f
     override fun setupObjective(gs: GameState, targetW: Float, targetH: Float, scale: Float) {
         gs.coreRadius = 0f 
+        
+        // STORY MODE CORE: Set central core position for the "Merge" sequence
+        val grid = gs.gridMap
+        if (grid != null) {
+            val ts = gs.tileSize
+            val cx = grid.size / 2
+            val cy = grid[0].size / 2
+            
+            // Look for a safe spot near center
+            val safeCenter = com.appsbyalok.echohunter.utils.SpawnValidator.findValidNear(
+                cx * ts, cy * ts, ts * 0.5f, gs, 100, ts * 10f
+            )
+            
+            if (safeCenter != null) {
+                gs.coreX = safeCenter.first
+                gs.coreY = safeCenter.second
+            } else {
+                gs.coreX = cx * ts + (ts / 2f)
+                gs.coreY = cy * ts + (ts / 2f)
+            }
+        }
     }
     override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
         trickleTimer -= dt
