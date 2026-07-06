@@ -226,10 +226,9 @@ class HUDRenderer(private val context: Context) {
     private fun drawRadialMenu(c: Canvas, scale: Float, cx: Float, cy: Float, labels: Array<String>, colors: IntArray, selectedIdx: Int) {
         val radius = scale * 0.25f
         val count = labels.size
-        // Shifted Arc distribution: Centered more towards the left (180 to 300 degrees)
-        // This prevents the right-most item from going off-screen
-        val startAngle = 180f
-        val arcRange = 120f 
+        // Radial Menu Angle
+        val startAngle = 165f
+        val arcRange = 115f
         val step = if (count > 1) arcRange / (count - 1) else 0f
 
         p.style = Paint.Style.FILL; p.color = 0x88000000.toInt()
