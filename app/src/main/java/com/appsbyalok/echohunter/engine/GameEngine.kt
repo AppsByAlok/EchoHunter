@@ -111,7 +111,9 @@ class GameEngine(
             }
         }
 
-        val maxSonarRad = targetW * 0.75f * UpgradeSystem.getSonarRangeMultiplier()
+        val viewportW = gs.getViewportW(targetW, targetH)
+        val viewportH = gs.getViewportH(targetW, targetH)
+        val maxSonarRad = viewportW * 0.75f * UpgradeSystem.getSonarRangeMultiplier()
         gs.updateVisibilityMath(scale, maxSonarRad, simDt)
         gs.updatePulseRadius(simDt, maxSonarRad)
 
@@ -138,7 +140,7 @@ class GameEngine(
         if (gs.state == 1 || gs.state == 8) {
             // --- NAYA: MODULAR OBJECTIVE CALL ---
             // Updates timers and dynamic logic (like Core activation in Story Mode)
-            gs.activeObjective.updateObjective(simDt, gs, enemySys, spawnerSys, targetW, targetH, scale)
+            gs.activeObjective.updateObjective(simDt, gs, enemySys, spawnerSys, viewportW, viewportH, scale)
 
             // --- CRITICAL: WIN CONDITION CHECK ---
             // Modular objectives determine if the level is cleared (Campaign Mode)
@@ -146,12 +148,12 @@ class GameEngine(
                 gs.isLevelCleared = true
             }
 
-            spawnerSys.update(simDt, gs, targetW, targetH, scale)
-            enemySys.updateEnemies(simDt, gs, effectSys, targetW, targetH, scale)
+            spawnerSys.update(simDt, gs, viewportW, viewportH, scale)
+            enemySys.updateEnemies(simDt, gs, effectSys, viewportW, viewportH, scale)
             enemySys.updateBoss(simDt, gs, effectSys, scale)
-            enemySys.updatePowerups(simDt, gs, effectSys, targetW, targetH)
+            enemySys.updatePowerups(simDt, gs, effectSys, viewportW, viewportH)
 
-            collisionSys.checkCollisions(targetW, targetH, scale, onDamage!!, onScore!!, onCoreUnlock!!)
+            collisionSys.checkCollisions(viewportW, viewportH, scale, onDamage!!, onScore!!, onCoreUnlock!!)
             
             // Boss Spawns & Sector Story triggers only in main gameplay
             if (gs.state == 1) gs.modeStrategy.checkProgression(context, gs, scale, onBossTrigger!!, onStoryState!!)
@@ -221,7 +223,7 @@ class GameEngine(
             val node = gs.spawnerNodes.random()
             for (j in 0 until enemySys.n) {
                 if (enemySys.ex[j] < -1000f) {
-                    enemySys.spawnAt(j, node.x, node.y, gs, targetW, targetH, node.type)
+                    enemySys.spawnAt(j, node.x, node.y, gs, scale, node.type)
                     break
                 }
             }

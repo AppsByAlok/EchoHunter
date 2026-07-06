@@ -116,7 +116,7 @@ class MenuRenderer(private val context: Context) {
             headerCenterX = targetW / 2f
             btnStartX = targetW / 2f - btnW / 2f
 
-            // NAYA: Subtle horizontal divider
+            // NEW: Subtle horizontal divider
             val lineY = btnStartY - midGap / 2f
             c.drawLine(targetW * 0.15f, lineY, targetW * 0.85f, lineY, hudLinePaint)
         } else {
@@ -127,7 +127,7 @@ class MenuRenderer(private val context: Context) {
             headerCenterX = targetW * 0.28f // Left block centered at 28%
             btnStartX = targetW * 0.72f - btnW / 2f // Right block centered at 72%
 
-            // NAYA: Subtle vertical divider separating Intel and Actions
+            // NEW: Subtle vertical divider separating Intel and Actions
             c.drawLine(targetW / 2f, targetH * 0.2f, targetW / 2f, targetH * 0.8f, hudLinePaint)
         }
 
@@ -157,7 +157,7 @@ class MenuRenderer(private val context: Context) {
         for (f in config.features) {
             val iconRect = RectF(currentIconX, iconY, currentIconX + iconSize, iconY + iconSize)
 
-            // NAYA: Icon ka apna background (glass/hud effect)
+            // NEW: Icon's own background (glass/hud effect)
             c.drawRoundRect(iconRect, scale * 0.02f, scale * 0.02f, iconBgPaint)
 
             pIcon.color = when (f) {
@@ -183,11 +183,7 @@ class MenuRenderer(private val context: Context) {
 
         // 1. RESUME BUTTON
         pauseResumeRect.set(btnStartX, btnStartY, btnStartX + btnW, btnStartY + btnH)
-        if (gs.isRotationWarning) {
-            drawButton(c, pauseResumeRect, ">> ROTATE DEVICE BACK <<", GameColors.RED, scale)
-        } else {
-            drawButton(c, pauseResumeRect, "> ${getCachedString(R.string.pause_resume)} <", GameColors.CLARITY, scale)
-        }
+        drawButton(c, pauseResumeRect, "> ${getCachedString(R.string.pause_resume)} <", GameColors.CLARITY, scale)
         btnStartY += btnH + btnGap
 
         // 2. RESTART BUTTON
@@ -211,8 +207,8 @@ class MenuRenderer(private val context: Context) {
         pauseDiscRect.set(btnStartX, btnStartY, btnStartX + btnW, btnStartY + btnH)
         drawButton(c, pauseDiscRect, "> ${getCachedString(R.string.pause_menu)} <", GameColors.RED, scale)
 
-        // Return 0f explicitly kyuki ab hume scrolling limits nahi chahiye.
-        // GameView ka drag physics safely isko ignore kar dega.
+        // Return 0f explicitly as we no longer need scrolling limits.
+        // GameView's drag physics will safely ignore this.
         return 0f
     }
 

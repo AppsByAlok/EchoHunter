@@ -3,16 +3,17 @@ package com.appsbyalok.echohunter.systems
 import com.appsbyalok.echohunter.data.LevelEngine
 import com.appsbyalok.echohunter.data.LevelFeature
 import com.appsbyalok.echohunter.engine.GameState
+import com.appsbyalok.echohunter.utils.SpawnValidator
 import kotlin.random.Random
 
-// Data Class for Spawn Nodes (Kahan se enemy aayega)
+// Data Class for Spawn Nodes (Where enemies originate from)
 class SpawnNode(
     var x: Float,
     var y: Float,
     var type: Int, // 0 = Compiler (Normal), 1 = Glitch Tear (Swarm), 2 = Admin Gateway (HVT/Boss)
     var cooldownTimer: Float = 0f,
     var maxCooldown: Float = 5f,
-    var queue: Int = 0 // Kitne dushman line me hain nikalne ke liye
+    var queue: Int = 0 // Number of enemies queued to be spawned
 )
 
 class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: EffectSystem) {
@@ -33,16 +34,35 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
                 val gridW = gs.gridMap!!.size
                 val gridH = gs.gridMap!![0].size
                 var attempts = 0
-                var col = Random.nextInt(1, gridW - 1)
-                var row = Random.nextInt(1, gridH - 1)
-                
-                while (gs.gridMap!![col][row] == 1 && attempts < 50) {
-                    col = Random.nextInt(1, gridW - 1)
-                    row = Random.nextInt(1, gridH - 1)
+
+                while (attempts < 50) {
+                    val col = Random.nextInt(1, gridW - 1)
+                    val row = Random.nextInt(1, gridH - 1)
+                    val tx = col * ts + (ts / 2f)
+                    val ty = row * ts + (ts / 2f)
+
+                    if (SpawnValidator.isValid(tx, ty, ts / 2f, gs, minPlayerDist = 300f * scale)) {
+
+                        // FIX: Ensure this node is not too close to existing nodes
+                        var isOverlapping = false
+                        for (existingNode in gs.spawnerNodes) {
+                            val dx = tx - existingNode.x
+                            val dy = ty - existingNode.y
+                            // Keep nodes at least 3 tiles apart (ts * 3f)
+                            if (dx * dx + dy * dy < (ts * 3f) * (ts * 3f)) {
+                                isOverlapping = true
+                                break
+                            }
+                        }
+
+                        if (!isOverlapping) {
+                            nx = tx
+                            ny = ty
+                            break
+                        }
+                    }
                     attempts++
                 }
-                nx = col * ts + (ts / 2f)
-                ny = row * ts + (ts / 2f)
             }
 
             val config = LevelEngine.getLevelConfig(gs.currentLevel)
@@ -92,17 +112,7 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
                     val tx = gs.px + kotlin.math.cos(angle) * dist
                     val ty = gs.py + kotlin.math.sin(angle) * dist
 
-                    if (gs.gridMap != null) {
-                        val ts = gs.tileSize
-                        val col = (tx / ts).toInt().coerceIn(1, gs.gridMap!!.size - 2)
-                        val row = (ty / ts).toInt().coerceIn(1, gs.gridMap!![0].size - 2)
-
-                        if (gs.gridMap!![col][row] == 0) { // Found a PATH (0 = PATH, 1 = WALL)
-                            node.x = col * ts + (ts / 2f)
-                            node.y = row * ts + (ts / 2f)
-                            break
-                        }
-                    } else {
+                    if (SpawnValidator.isValid(tx, ty, gs.tileSize / 2f, gs)) {
                         node.x = tx
                         node.y = ty
                         break
@@ -125,7 +135,7 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
 
                 for (i in 0 until enemySys.n) {
                     if (enemySys.ex[i] < -1000f) {
-                        enemySys.spawnAt(i, node.x, node.y, gs, targetW, targetH, node.type)
+                        enemySys.spawnAt(i, node.x, node.y, gs, scale, node.type)
                         node.queue--
 
                         if (isDefenseWave) {

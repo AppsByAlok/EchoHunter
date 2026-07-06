@@ -6,6 +6,7 @@ import android.graphics.Path
 import android.graphics.Typeface
 import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.utils.GameColors
+import com.appsbyalok.echohunter.utils.SpawnValidator
 import kotlin.math.max
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -49,7 +50,7 @@ class EnemySystem {
     val pwActive = BooleanArray(pwn)
     private val puIcons = arrayOf("+", "V", "S")
 
-    fun respawnAll(gs: GameState, width: Float, height: Float) {
+    fun respawnAll(gs: GameState) {
         for (i in 0 until pwn) pwActive[i] = false
         // Clear map on level start. SpawnerSystem handles enemy spawns.
         for (i in 0 until n) {
@@ -57,9 +58,11 @@ class EnemySystem {
             ey[i] = -9999f
             vis[i] = 0f
         }
+        gs.bossActive = false
+        gs.bossHp = 0
     }
 
-    fun killEnemy(i: Int, gs: GameState, width: Float, height: Float) {
+    fun killEnemy(i: Int, gs: GameState) {
         if (ex[i] < -1000f) return
         ex[i] = -9999f
         ey[i] = -9999f
@@ -69,20 +72,31 @@ class EnemySystem {
             gs.defEnemiesAlive--
             if (gs.defEnemiesAlive < 0) gs.defEnemiesAlive = 0
         }
-        // NEW: Campaign aur Story mode mein turant respawn band.
-        // SpawnerSystem handles respawning now via queue.
     }
 
     // NEW: Enemy now spawns at a specified Node (nx, ny)
-    fun spawnAt(i: Int, nx: Float, ny: Float, gs: GameState, width: Float, height: Float, nodeType: Int = -1) {
-        val config = com.appsbyalok.echohunter.data.LevelEngine.getSaturatedValue(gs.currentLevel, 1f, 18f, 200f).let {
-            com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
+    fun spawnAt(i: Int, nx: Float, ny: Float, gs: GameState, scale: Float, nodeType: Int = -1) {
+        val radius = scale * 0.03f
+        val validPos = SpawnValidator.findValidNear(nx, ny, radius, gs, maxAttempts = 30, searchRadius = radius * 6f)
+//        val validPos = SpawnValidator.findValidNear(nx, ny, radius, gs, maxAttempts = 15, searchRadius = radius * 4f)
+
+        if (validPos != null) {
+            ex[i] = validPos.first
+            ey[i] = validPos.second
+        } else {
+            // RARE BUG FALLBACK: If strictly no valid pos found, snap strictly to the center of the target tile.
+            // This prevents float-precision clipping into walls.
+            val ts = gs.tileSize
+            ex[i] = ((nx / ts).toInt() * ts) + (ts / 2f)
+            ey[i] = ((ny / ts).toInt() * ts) + (ts / 2f)
         }
+
+//        ex[i] = validPos?.first ?: nx
+//        ey[i] = validPos?.second ?: ny
+
+        val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
         val isElimination = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ELIMINATION)
         val hasDefense = config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE)
-
-        ex[i] = nx
-        ey[i] = ny
 
         val hunterProb = 0.2f + (gs.difficulty * 0.15f)
 
@@ -103,7 +117,7 @@ class EnemySystem {
                     }
                 }
                 else -> { // Compiler (Normal)
-                    type[i] = if (kotlin.random.Random.nextFloat() < hunterProb) 1 else 0
+                    type[i] = if (Random.nextFloat() < hunterProb) 1 else 0
                     enemyBrains[i] = if (type[i] == 1) HunterBehavior else PatrolBehavior
                 }
             }
@@ -122,8 +136,8 @@ class EnemySystem {
         val baseHp = com.appsbyalok.echohunter.data.LevelEngine.getSaturatedValue(gs.currentLevel, 1f, 18f, 200f).toInt()
 
         maxHp[i] = when (nodeType) {
-            1 -> 1 // Swarmers bahut kamzor hote hain, 1 hit kill
-            2 -> baseHp * 2 // HVT ya Guards ki HP zyada hogi
+            1 -> 1 // Swarmers are very weak, 1 hit kill
+            2 -> baseHp * 2 // HVTs or Guards have higher HP
             else -> baseHp
         }
         hp[i] = maxHp[i]
@@ -147,13 +161,18 @@ class EnemySystem {
 
         for (i in 0 until n) {
             if (ex[i] < -1000f) continue
+            
+            // Apply a small damping to velocity
+            evx[i] *= (1.0f - dt * 2.0f).coerceAtLeast(0f)
+            evy[i] *= (1.0f - dt * 2.0f).coerceAtLeast(0f)
+
             val nextEx = ex[i] + evx[i] * dt
             if (!isCollidingWithWall(nextEx, ey[i], enemyRadius, gs)) ex[i] = nextEx
-            else evx[i] = -evx[i]
+            else evx[i] = -evx[i] * 0.5f
 
             val nextEy = ey[i] + evy[i] * dt
             if (!isCollidingWithWall(ex[i], nextEy, enemyRadius, gs)) ey[i] = nextEy
-            else evy[i] = -evy[i]
+            else evy[i] = -evy[i] * 0.5f
 
             // DELEGATE TO MODULAR AI BRAIN
             enemyBrains[i].updateBehavior(i, dt, gs, this, ai, width, height, scale)
@@ -172,10 +191,10 @@ class EnemySystem {
 
             // --- NEW: PERSISTENT VISIBILITY LOGIC ---
             if (d2 < gs.passiveAuraRadiusSq) {
-                vis[i] = 1f
+                vis[i] = 1.0f
             } else {
                 if (hitByPulse) {
-                    if (vis[i] <= 0f) {
+                    if (vis[i] <= 0.05f) { // Trigger ping if nearly invisible
                         effectSys.spawnSonarPing(ex[i], ey[i], if (type[i] == 1) GameColors.RED else GameColors.YELLOW)
                         
                         // Sonar Noise: Attract enemy to pulse location if they were patrolling
@@ -186,7 +205,7 @@ class EnemySystem {
                             invY[i] = gs.py
                         }
                     }
-                    vis[i] = 1f
+                    vis[i] = 1.0f
                 }
                 
                 // Linear decay instead of exponential for predictable duration
@@ -197,7 +216,7 @@ class EnemySystem {
             val maxAllowedDistSq = if (gs.bossActive || gs.coreRadius > 0f) (width * 1.5f) * (width * 1.5f) else (width * 4.0f) * (width * 4.0f)
             if (d2 > maxAllowedDistSq) {
                 // Using killEnemy ensures defEnemiesAlive is decremented if in Defense mode.
-                killEnemy(i, gs, width, height)
+                killEnemy(i, gs)
                 vis[i] = 0f
             }
         }
@@ -223,13 +242,13 @@ class EnemySystem {
         return false
     }
 
-    fun spawnSwarmIfNeeded(gs: GameState, width: Float, height: Float) {
+    fun spawnSwarmIfNeeded(gs: GameState, scale: Float) {
         // Find an empty slot and spawn a Hunter near the boss
         for (i in 0 until n) {
             if (ex[i] < -1000f) {
                 val angle = Random.nextFloat() * 6.28f
-                val dist = width * 0.1f // Spawn close to boss
-                spawnAt(i, gs.bossX + kotlin.math.cos(angle) * dist, gs.bossY + kotlin.math.sin(angle) * dist, gs, width, height, 1)
+                val dist = scale * 0.5f // Spawn close to boss
+                spawnAt(i, gs.bossX + kotlin.math.cos(angle) * dist, gs.bossY + sin(angle) * dist, gs, scale, 1)
                 break
             }
         }
@@ -245,11 +264,6 @@ class EnemySystem {
             4 -> OmegaBossBehavior
             5 -> UltimaBossBehavior
             else -> GuardianBossBehavior
-        }
-
-        // Initialize Boss Data on first frame or if needed
-        if (gs.bossHp <= 0 && gs.bossMaxHp == 0) { // Safety check or first spawn logic
-             // Assuming hp is already set by GameView or LevelEngine, but we can set metadata
         }
 
         val bdx = gs.px - gs.bossX; val bdy = gs.py - gs.bossY
@@ -341,12 +355,17 @@ class EnemySystem {
         if (Random.nextFloat() < puDropRate * dt * 60f && gs.score > 15 && !gs.bossActive) {
             for (i in 0 until pwn) {
                 if (!pwActive[i]) {
-                    pwX[i] = gs.cameraX + width * 0.2f + Random.nextFloat() * width * 0.8f
-                    pwY[i] = gs.cameraY + Random.nextFloat() * height
-                    pwType[i] = Random.nextInt(3)
-                    pwActive[i] = true
-                    pwVis[i] = 0f
-                    break
+                    val nx = gs.cameraX + width * 0.2f + Random.nextFloat() * width * 0.8f
+                    val ny = gs.cameraY + Random.nextFloat() * height
+                    
+                    if (SpawnValidator.isValid(nx, ny, 30f, gs)) {
+                        pwX[i] = nx
+                        pwY[i] = ny
+                        pwType[i] = Random.nextInt(3)
+                        pwActive[i] = true
+                        pwVis[i] = 0f
+                        break
+                    }
                 }
             }
         }
@@ -380,7 +399,8 @@ class EnemySystem {
                 val screenPwX = pwX[i] - gs.cameraX
                 val screenPwY = pwY[i] - gs.cameraY
 
-                if (screenPwX < -scale || screenPwX > width + scale) pwActive[i] = false
+                // NEW: Deactivate only if far off-screen to allow backtracking
+                if (screenPwX < -width || screenPwX > width * 2f) pwActive[i] = false
 
                 // Darkness: Must be scanned or in aura (vis > 0)
                 // Normal: 100% visibility
@@ -389,14 +409,22 @@ class EnemySystem {
                 if (effectivePwVis > 0.02f) {
                     p.style = Paint.Style.STROKE; p.strokeWidth = scale * 0.005f
                     p.color = ((effectivePwVis * 255).toInt() shl 24) or (when (pwType[i]) {
-                        0 -> GameColors.HP; 1 -> GameColors.CLARITY; else -> GameColors.SHIELD
+                        0 -> GameColors.HP; 1 -> GameColors.CLARITY; 4 -> GameColors.RED; else -> GameColors.SHIELD
                     } and 0xFFFFFF)
 
-                    c.drawCircle(screenPwX, screenPwY, entityRadius * 0.8f, p)
+                    if (pwType[i] == 4) {
+                        // DRAW EMP TRAP (Boss)
+                        p.style = Paint.Style.FILL
+                        c.drawCircle(screenPwX, screenPwY, entityRadius * 0.5f, p)
+                        p.style = Paint.Style.STROKE
+                        c.drawCircle(screenPwX, screenPwY, entityRadius * (0.8f + 0.2f * sin(gs.timeSinceStart * 10f)), p)
+                    } else {
+                        c.drawCircle(screenPwX, screenPwY, entityRadius * 0.8f, p)
 
-                    pText.color = GameColors.BG
-                    pText.textSize = scale * 0.04f
-                    c.drawText(puIcons[pwType[i]], screenPwX, screenPwY + scale * 0.012f, pText)
+                        pText.color = GameColors.BG
+                        pText.textSize = scale * 0.04f
+                        c.drawText(puIcons.getOrElse(pwType[i]) { "?" }, screenPwX, screenPwY + scale * 0.012f, pText)
+                    }
                 }
             }
         }
@@ -406,7 +434,7 @@ class EnemySystem {
             val screenEy = ey[i] - gs.cameraY
             
             // NEW: Strict Visibility - Darkness: 0% without sonar/aura | Normal: 100% visible 
-            val effectiveVis = if (gs.isDarknessLevel) vis[i] else 1.0f
+            val effectiveVis = if (gs.isDarknessLevel && !gs.modFullVisibility) vis[i] else 1.0f
 
             if (effectiveVis > 0.02f) {
                 val a = (effectiveVis * 255).toInt()
@@ -475,7 +503,7 @@ class EnemySystem {
 
                 // --- NEW: DRAW HEALTH BAR (When HP > 1 and visible) ---
                 if (maxHp[i] > 1 && effectiveVis > 0.5f) {
-                    val hpRatio = kotlin.math.max(0f, hp[i].toFloat() / maxHp[i].toFloat())
+                    val hpRatio = max(0f, hp[i].toFloat() / maxHp[i].toFloat())
                     val barW = scale * 0.06f
                     val barH = scale * 0.008f
                     val bx = screenEx - barW / 2f
@@ -506,7 +534,7 @@ class EnemySystem {
             val screenBy = gs.bossY - gs.cameraY - gs.bossZ // Apply Jump Offset
             
             // NEW: Boss is always slightly visible (15%) in darkness as a shadow/ghost
-            val effectiveBossVis = if (gs.isDarknessLevel) max(0.15f, gs.bossVis) else gs.bossVis
+            val effectiveBossVis = if (gs.isDarknessLevel && !gs.modFullVisibility) max(0.15f, gs.bossVis) else 1.0f
             val bossAlpha = (effectiveBossVis * 255).toInt()
 
             p.style = Paint.Style.FILL

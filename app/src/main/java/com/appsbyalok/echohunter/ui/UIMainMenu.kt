@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.media.ToneGenerator
 import android.util.SparseArray
@@ -47,8 +48,14 @@ class UIMainMenu(private val context: Context) {
     // NAYA: Array size 4 kar diya
     private val portX = FloatArray(3)
     private val portY = FloatArray(3)
+    private val helpBtnRect = RectF()
+    private val hardModeBtnRect = RectF()
+    private val modMenuBtnRect = RectF()
     private var touchDownX = 0f; private var touchDownY = 0f
     private var wasSwitchHitOnDown = false
+    private var hitPortOnDown = -1
+    private var hitCardOnDown = -1
+    private var hitButtonOnDown = -1 // 1: Help, 2: HardMode, 3: ModMenu
 
     private fun getCachedString(resId: Int): String {
         var str = stringCache.get(resId)
@@ -141,14 +148,24 @@ class UIMainMenu(private val context: Context) {
             pText.color = if (gs.difficulty == 0) GameColors.TEXT else GameColors.RED
             pText.textAlign = Paint.Align.LEFT; pText.textSize = scale * 0.045f
             pText.setShadowLayer(15f, 0f, 0f, (if (gs.difficulty == 0) GameColors.PULSE else GameColors.RED))
-            c.drawText(getCachedString(if (gs.difficulty == 0) R.string.ui_mode_easy else R.string.ui_mode_hard), scale * 0.05f, targetH - scale * 0.05f, pText)
+            val modeText = getCachedString(if (gs.difficulty == 0) R.string.ui_mode_easy else R.string.ui_mode_hard)
+            c.drawText(modeText, scale * 0.05f, targetH - scale * 0.05f, pText)
             pText.clearShadowLayer()
+
+            val modeW = pText.measureText(modeText)
+            hardModeBtnRect.set(scale * 0.05f, targetH - scale * 0.12f, scale * 0.05f + modeW, targetH)
         }
 
         pText.color = GameColors.TEXT; pText.textAlign = Paint.Align.RIGHT
+        pText.textSize = scale * 0.045f
         pText.setShadowLayer(15f, 0f, 0f, GameColors.PULSE)
-        c.drawText(getCachedString(R.string.ui_help_btn), targetW - scale * 0.05f, scale * 0.08f, pText)
+        val helpText = getCachedString(R.string.ui_help_btn)
+        c.drawText(helpText, targetW - scale * 0.05f, scale * 0.08f, pText)
         pText.clearShadowLayer()
+
+        val helpW = pText.measureText(helpText)
+        helpBtnRect.set(targetW - scale * 0.05f - helpW, 0f, targetW - scale * 0.05f, scale * 0.12f)
+        modMenuBtnRect.set(targetW - scale * 0.15f, 0f, targetW, scale * 0.15f)
 
         pText.textAlign = Paint.Align.CENTER; pText.letterSpacing = 0.05f
         if (StoryProtocol.isGlitchActive) {
@@ -402,7 +419,8 @@ class UIMainMenu(private val context: Context) {
 
     fun onTouch(
         vx: Float, vy: Float, action: Int, scale: Float, targetW: Float, targetH: Float,
-        view: View, gs: GameState, onDifficultyToggle: () -> Unit, onHelpOpen: () -> Unit, onRouteConnection: (Int) -> Unit
+        view: View, gs: GameState, onDifficultyToggle: () -> Unit, onHelpOpen: () -> Unit,
+        onModMenuOpen: () -> Unit, onRouteConnection: (Int) -> Unit
     ): Boolean {
         val pw = scale * 0.08f
         val ph = scale * 0.045f
@@ -423,11 +441,51 @@ class UIMainMenu(private val context: Context) {
 
         when (action) {
             MotionEvent.ACTION_DOWN -> {
+                touchDownX = vx
+                touchDownY = vy
+                hitPortOnDown = -1
+                hitCardOnDown = -1
+                hitButtonOnDown = -1
+                wasSwitchHitOnDown = false
+
                 if (hitSwitch || hitPlug) {
                     isDraggingPlug = true
-                    touchDownX = vx
-                    touchDownY = vy
                     wasSwitchHitOnDown = hitSwitch
+                } else if (modMenuBtnRect.contains(vx, vy)) {
+                    hitButtonOnDown = 3
+                } else if (helpBtnRect.contains(vx, vy)) {
+                    hitButtonOnDown = 1
+                } else if (hardModeBtnRect.contains(vx, vy)) {
+                    hitButtonOnDown = 2
+                } else {
+                    // Check for port taps or card taps
+                    for (i in 0..2) {
+                        val dx = vx - portX[i]
+                        val dy = vy - portY[i]
+                        if (dx * dx + dy * dy < (scale * 0.15f) * (scale * 0.15f)) {
+                            hitPortOnDown = i
+                            break
+                        }
+                    }
+
+                    if (connectedMode == 1 && isSwitchOn && SaveManager.isStoryModeUnlocked) {
+                        val cardW = scale * 0.15f
+                        val cardH = scale * 0.22f
+                        val gap = scale * 0.05f
+                        val totalW = (cardW * 3) + (gap * 2)
+                        var startX = (targetW - totalW) / 2f
+                        val isPortrait = targetW < targetH
+                        val hintY = if (isPortrait) targetH * 0.46f else targetH * 0.48f
+                        val startY = hintY - scale * 0.05f
+
+                        for (i in 0..2) {
+                            if (vx in startX..(startX + cardW) && vy in startY..(startY + cardH)) {
+                                hitCardOnDown = i
+                                break
+                            }
+                            startX += cardW + gap
+                        }
+                    }
                 }
             }
             MotionEvent.ACTION_MOVE -> {
@@ -435,7 +493,7 @@ class UIMainMenu(private val context: Context) {
                     val dx = vx - touchDownX
                     val dy = vy - touchDownY
 
-                    if (connectedMode != -1 && (dx * dx + dy * dy > (scale * 0.05f) * (scale * 0.05f))) {
+                    if (connectedMode != -1 && (dx * dx + dy * dy > scale * scale * 0.05f)) {
                         connectedMode = -1
                         view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                         EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 50)
@@ -446,15 +504,24 @@ class UIMainMenu(private val context: Context) {
                         plugX = vx
                         plugY = vy
                     }
+                } else {
+                    val dx = vx - touchDownX
+                    val dy = vy - touchDownY
+                    if (dx * dx + dy * dy > scale * scale * 0.05f) {
+                        hitPortOnDown = -1
+                        hitCardOnDown = -1
+                        hitButtonOnDown = -1
+                    }
                 }
             }
             MotionEvent.ACTION_UP -> {
-                if (vx < targetW * 0.2f && vy > targetH * 0.8f) {
-                    onDifficultyToggle()
-                    return true
-                }
-                if (vx > targetW * 0.8f && vy < targetH * 0.2f) {
-                    onHelpOpen()
+                if (hitButtonOnDown != -1) {
+                    when (hitButtonOnDown) {
+                        1 -> if (helpBtnRect.contains(vx, vy)) onHelpOpen()
+                        2 -> if (hardModeBtnRect.contains(vx, vy)) onDifficultyToggle()
+                        3 -> if (modMenuBtnRect.contains(vx, vy)) onModMenuOpen()
+                    }
+                    hitButtonOnDown = -1
                     return true
                 }
 
@@ -471,13 +538,15 @@ class UIMainMenu(private val context: Context) {
 
                     for (i in 0..2) {
                         if (vx in startX..(startX + cardW) && vy in startY..(startY + cardH)) {
-                            val unlocked = if (gs.difficulty == 1) SaveManager.unlockedHardStreak else SaveManager.unlockedStoryStreak
-                            if (i <= unlocked) {
-                                gs.selectedStoryAct = i
-                                EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 50)
-                                onRouteConnection(1)
-                            } else {
-                                EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 50)
+                            if (i == hitCardOnDown) {
+                                val unlocked = if (gs.difficulty == 1) SaveManager.unlockedHardStreak else SaveManager.unlockedStoryStreak
+                                if (i <= unlocked) {
+                                    gs.selectedStoryAct = i
+                                    EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 50)
+                                    onRouteConnection(1)
+                                } else {
+                                    EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 50)
+                                }
                             }
                             return true
                         }
@@ -490,7 +559,7 @@ class UIMainMenu(private val context: Context) {
 
                     val dx = vx - touchDownX
                     val dy = vy - touchDownY
-                    val isTap = (dx * dx + dy * dy) < (scale * 0.05f) * (scale * 0.05f)
+                    val isTap = (dx * dx + dy * dy) < scale * scale * 0.05f
 
                     if (isTap && wasSwitchHitOnDown) {
                         isSwitchOn = !isSwitchOn
@@ -536,17 +605,26 @@ class UIMainMenu(private val context: Context) {
                             val dx = vx - portX[i]
                             val dy = vy - portY[i]
                             if (dx * dx + dy * dy < (scale * 0.15f) * (scale * 0.15f)) {
-                                if (connectedMode == i) return true
-                                connectedMode = -1
-                                animatingToPort = i
-                                targetPlugX = portX[i]
-                                targetPlugY = portY[i]
-                                EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 50)
+                                if (i == hitPortOnDown) {
+                                    if (connectedMode == i) return true
+                                    connectedMode = -1
+                                    animatingToPort = i
+                                    targetPlugX = portX[i]
+                                    targetPlugY = portY[i]
+                                    EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 50)
+                                }
                                 break
                             }
                         }
                     }
                 }
+                hitPortOnDown = -1
+                hitCardOnDown = -1
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                isDraggingPlug = false
+                hitPortOnDown = -1
+                hitCardOnDown = -1
             }
         }
         val returnValue = true

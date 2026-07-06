@@ -81,6 +81,10 @@ class GameView(context: Context) : View(context) {
     internal val onAppClose: () -> Unit = { changeState(menuReturnState) }
     internal val onArchiveSelect: (Int) -> Unit = { lvl -> startGame(0, lvl) }
     internal val onHelpOpen: () -> Unit = { changeState(3) }
+    internal val onModMenuOpen: () -> Unit = {
+        modMenu.isOpen = true
+        EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 100)
+    }
     internal val onHelpClose: () -> Unit = { changeState(0) }
     internal val onDifficultyToggle: () -> Unit = {
         if (SaveManager.isHardModeUnlocked) {
@@ -163,7 +167,7 @@ class GameView(context: Context) : View(context) {
         gs.currentLevel = level
         gs.resetGame()
         effectSys.reset()
-        enemySys.respawnAll(gs, width.toFloat(), height.toFloat())
+        enemySys.respawnAll(gs)
         engine.generateLevelMaze(width.toFloat(), height.toFloat(), gameScale)
         uiMainMenu.disconnect()
         lastFrameTime = System.nanoTime()
@@ -375,7 +379,7 @@ class GameView(context: Context) : View(context) {
         StoryProtocol.startBossIntro(bType)
         gs.showGlobalMessage(behavior.spawnMessage, 4f)
         EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 400)
-        enemySys.spawnSwarmIfNeeded(gs, width.toFloat(), height.toFloat())
+        enemySys.spawnSwarmIfNeeded(gs, scale)
     }
 
     private fun triggerPulseAction() {

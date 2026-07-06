@@ -38,6 +38,8 @@ data class UpgradeConfig(
     val type: UpgradeType,
     val nameStr: String,
     val descStr: String,
+    val usageStr: String,
+    val loreStr: String,
     val maxLevel: Int,
     val baseCostKB: Long,
     val costMultiplier: Float
@@ -52,32 +54,142 @@ object UpgradeSystem {
 
     val catalog = mapOf(
         // --- ARCHITECT BRANCH ---
-        UpgradeType.MAX_HP to UpgradeConfig(UpgradeType.MAX_HP, "KERNEL_HARDENING.EXE", "Base health integrity +1.", 5, 500L, 2.2f),
-        UpgradeType.THRUSTER_OPTIMIZE to UpgradeConfig(UpgradeType.THRUSTER_OPTIMIZE, "CLOCK_BOOST.SYS", "Movement speed +5%.", 10, 100L, 1.4f),
-        UpgradeType.DATA_MAGNET to UpgradeConfig(UpgradeType.DATA_MAGNET, "ATTRACT_LOOPS.ASM", "Pulls data from further away.", 5, 400L, 1.5f),
-        UpgradeType.COMPRESSION_ALGO to UpgradeConfig(UpgradeType.COMPRESSION_ALGO, "LZSS_PACKER.BIN", "All costs reduced by 10%.", 5, 2000L, 2.0f),
-        UpgradeType.NANITE_REPAIR to UpgradeConfig(UpgradeType.NANITE_REPAIR, "AUTO_PATCHER.BIN", "Passively repairs 1 HP every 25s.", 4, ONE_TB / 2, 3.5f),
-        UpgradeType.QUANTUM_CORE to UpgradeConfig(UpgradeType.QUANTUM_CORE, "QUANTUM_WALL.SYS", "Ultra-dense health layers.", 3, ONE_TB, 5.0f),
-        UpgradeType.DATA_SYNDICATE to UpgradeConfig(UpgradeType.DATA_SYNDICATE, "NEURAL_NET_SIPHON.EXE", "Total data control. 500% Rewards.", 5, TEN_TB, 10.0f),
-        UpgradeType.OVERCLOCK_DUR to UpgradeConfig(UpgradeType.OVERCLOCK_DUR, "BRUTE_FORCE.BIN", "Extends Overclock duration by 1.0s.", 10, 500L, 1.5f),
-        UpgradeType.OPTIC_SENSORS to UpgradeConfig(UpgradeType.OPTIC_SENSORS, "PHOTON_COLLECTOR.SYS", "Passive vision radius +15%.", 5, 600L, 1.8f),
+        UpgradeType.MAX_HP to UpgradeConfig(
+            UpgradeType.MAX_HP, "KERNEL_HARDENING.EXE", "System Integrity +1 HP.",
+            "Increases survival time in high-density combat zones.",
+            "Old-world code recovered from a burnt-out mainframe. Crude but effective.",
+            5, 500L, 2.2f
+        ),
+        UpgradeType.THRUSTER_OPTIMIZE to UpgradeConfig(
+            UpgradeType.THRUSTER_OPTIMIZE, "CLOCK_BOOST.SYS", "Movement Velocity +5%.",
+            "Crucial for outrunning Elite Sentinels and navigating narrow corridors.",
+            "Bypassing safety limiters on the propulsion sub-routine. Watch for heat spikes.",
+            10, 100L, 1.4f
+        ),
+        UpgradeType.DATA_MAGNET to UpgradeConfig(
+            UpgradeType.DATA_MAGNET, "ATTRACT_LOOPS.ASM", "Data Pickup Radius +50%.",
+            "Reduces risk by collecting data without needing to move close to enemy remains.",
+            "A magnetic pulse that hums with the hunger of a thousand dead servers.",
+            5, 400L, 1.5f
+        ),
+        UpgradeType.COMPRESSION_ALGO to UpgradeConfig(
+            UpgradeType.COMPRESSION_ALGO, "LZSS_PACKER.BIN", "All Upgrade Costs -10%.",
+            "Essential for late-game scaling. Buy this early to save millions of KB.",
+            "Efficiency is the only law in the digital void. Pack it tight.",
+            5, 2000L, 2.0f
+        ),
+        UpgradeType.NANITE_REPAIR to UpgradeConfig(
+            UpgradeType.NANITE_REPAIR, "AUTO_PATCHER.BIN", "Passive Repair: 1 HP every 30-10s.",
+            "Allows recovery during stealth phases or long chases.",
+            "Microscopic bots that stitch your code back together while you run.",
+            4, ONE_TB / 2, 3.5f
+        ),
+        UpgradeType.QUANTUM_CORE to UpgradeConfig(
+            UpgradeType.QUANTUM_CORE, "QUANTUM_WALL.SYS", "[ELITE] Massive Integrity +5 HP.",
+            "Turns you into a tank. Necessary for the deepest layers of the Network.",
+            "Existential redundancy. You exist in two states: Alive and Very Alive.",
+            3, ONE_TB, 5.0f
+        ),
+        UpgradeType.DATA_SYNDICATE to UpgradeConfig(
+            UpgradeType.DATA_SYNDICATE, "NEURAL_NET_SIPHON.EXE", "[ELITE] Data Harvest Yield +400%.",
+            "The ultimate economic upgrade. Floods your system with raw data.",
+            "You are no longer a scavenger. You are the apex predator of information.",
+            5, TEN_TB, 10.0f
+        ),
+        UpgradeType.OVERCLOCK_DUR to UpgradeConfig(
+            UpgradeType.OVERCLOCK_DUR, "BRUTE_FORCE.BIN", "Overclock active time +1.0s.",
+            "Increases the window of absolute invincibility and power.",
+            "Pushing the silicon to its breaking point. Reality starts to lag.",
+            10, 500L, 1.5f
+        ),
+        UpgradeType.OPTIC_SENSORS to UpgradeConfig(
+            UpgradeType.OPTIC_SENSORS, "PHOTON_COLLECTOR.SYS", "Light Radius +15%.",
+            "Helps spot traps and enemies in the pitch-black outer sectors.",
+            "The digital eye sees what the physical soul cannot comprehend.",
+            5, 600L, 1.8f
+        ),
         
         // --- ENFORCER BRANCH ---
-        UpgradeType.SPIKE_PAYLOAD to UpgradeConfig(UpgradeType.SPIKE_PAYLOAD, "FIREWALL_BREACHER.SH", "Fire rate +15%.", 6, 300L, 1.8f),
-        UpgradeType.CRIT_CHANCE to UpgradeConfig(UpgradeType.CRIT_CHANCE, "EXPLOIT_KIT.SH", "10% Crit chance (2x Dmg).", 5, 1000L, 2.5f),
-        UpgradeType.KINETIC_OVERLOAD to UpgradeConfig(UpgradeType.KINETIC_OVERLOAD, "MOMENTUM_LEAK.PY", "Crits trigger small explosions.", 5, 5000L, 2.2f),
-        UpgradeType.MULTITHREAD_SPIKES to UpgradeConfig(UpgradeType.MULTITHREAD_SPIKES, "RECURSIVE_SCRIPTS.SH", "Extra projectiles per shot.", 3, ONE_TB / 2, 4.0f),
-        UpgradeType.COMBO_EXTENDER to UpgradeConfig(UpgradeType.COMBO_EXTENDER, "BUFFER_STABILIZER.SYS", "Adds +2s to combo break timer.", 5, 2000L, 2.0f),
+        UpgradeType.SPIKE_PAYLOAD to UpgradeConfig(
+            UpgradeType.SPIKE_PAYLOAD, "FIREWALL_BREACHER.SH", "Spike Launch Speed +15%.",
+            "Faster projectiles mean you hit fast-moving scouts more reliably.",
+            "A script designed to punch through even the most hardened encryption.",
+            6, 300L, 1.8f
+        ),
+        UpgradeType.CRIT_CHANCE to UpgradeConfig(
+            UpgradeType.CRIT_CHANCE, "EXPLOIT_KIT.SH", "Crit Chance +10% (2x Damage).",
+            "Significantly boosts DPS against high-health Boss units.",
+            "Finding the zero-day vulnerability in every enemy's logic.",
+            5, 1000L, 2.5f
+        ),
+        UpgradeType.KINETIC_OVERLOAD to UpgradeConfig(
+            UpgradeType.KINETIC_OVERLOAD, "MOMENTUM_LEAK.PY", "Crits trigger Area Explosions.",
+            "Massive crowd control. One crit can wipe out an entire swarm.",
+            "When the logic fails, the energy has to go somewhere. Boom.",
+            5, 5000L, 2.2f
+        ),
+        UpgradeType.MULTITHREAD_SPIKES to UpgradeConfig(
+            UpgradeType.MULTITHREAD_SPIKES, "RECURSIVE_SCRIPTS.SH", "[ELITE] Extra Spike per shot.",
+            "Force multiplier. Doubles or triples your total damage output.",
+            "Parallel processing for destruction. Why shoot once when you can shoot forever?",
+            3, ONE_TB / 2, 4.0f
+        ),
+        UpgradeType.COMBO_EXTENDER to UpgradeConfig(
+            UpgradeType.COMBO_EXTENDER, "BUFFER_STABILIZER.SYS", "Combo Decay Timer +2.0s.",
+            "Keeps your reward multiplier high even during quiet exploration.",
+            "Holding onto the data flow just a little bit longer. Don't let go.",
+            5, 2000L, 2.0f
+        ),
         
         // --- GHOST BRANCH ---
-        UpgradeType.PULSE_FREQUENCY to UpgradeConfig(UpgradeType.PULSE_FREQUENCY, "PING_OPTIMIZER.BAT", "Sonar CD -10%.", 5, 150L, 1.6f),
-        UpgradeType.STEALTH_CAMO to UpgradeConfig(UpgradeType.STEALTH_CAMO, "PACKET_DISSOLVER.EXE", "Detection range reduced 10%.", 5, 1200L, 1.8f),
-        UpgradeType.TRAP_COOLDOWN to UpgradeConfig(UpgradeType.TRAP_COOLDOWN, "OVERCLOCK_DECOY.SYS", "Decoy/Trap CD -15%.", 5, 800L, 1.7f),
-        UpgradeType.SHIELD_RECOVERY to UpgradeConfig(UpgradeType.SHIELD_RECOVERY, "RECOVERY_PROTOCOL.EXE", "Shield regen +15%.", 5, 600L, 2.0f),
-        UpgradeType.GHOST_PROTOCOL to UpgradeConfig(UpgradeType.GHOST_PROTOCOL, "ZERO_DAY.VOID", "Massive I-Frames on hit.", 5, ONE_TB / 4, 3.0f),
-        UpgradeType.SONAR_RANGE to UpgradeConfig(UpgradeType.SONAR_RANGE, "WIDE_PING.BAT", "Sonar scan radius +20%.", 5, 400L, 1.7f),
-        UpgradeType.SILENT_SONAR to UpgradeConfig(UpgradeType.SILENT_SONAR, "ACOUSTIC_DAMPING.EXE", "Sonar alert range -20%.", 5, 1000L, 1.8f),
-        UpgradeType.SONAR_DUR to UpgradeConfig(UpgradeType.SONAR_DUR, "PERSISTENT_TRACE.BIN", "Enemies visible for +1.5s.", 5, 500L, 1.6f)
+        UpgradeType.PULSE_FREQUENCY to UpgradeConfig(
+            UpgradeType.PULSE_FREQUENCY, "PING_OPTIMIZER.BAT", "Sonar Recharge Speed +10%.",
+            "Spam Sonar more often to keep enemies visible constantly.",
+            "Sending out echoes into the dark. Something always answers.",
+            5, 150L, 1.6f
+        ),
+        UpgradeType.STEALTH_CAMO to UpgradeConfig(
+            UpgradeType.STEALTH_CAMO, "PACKET_DISSOLVER.EXE", "Enemy Detection Range -10%.",
+            "Essential for Ghost runs. Move past sentries without engaging.",
+            "You are a ghost in the machine. A whisper in a hurricane.",
+            5, 1200L, 1.8f
+        ),
+        UpgradeType.TRAP_COOLDOWN to UpgradeConfig(
+            UpgradeType.TRAP_COOLDOWN, "OVERCLOCK_DECOY.SYS", "Decoy Cooldown Speed +15%.",
+            "Deploy decoys more frequently to distract pursuers.",
+            "False flags and digital phantoms. They're chasing a shadow.",
+            5, 800L, 1.7f
+        ),
+        UpgradeType.SHIELD_RECOVERY to UpgradeConfig(
+            UpgradeType.SHIELD_RECOVERY, "RECOVERY_PROTOCOL.EXE", "Shield Regen Speed +15%.",
+            "Reduces downtime between skirmishes. Keep moving.",
+            "The barrier hums with renewed energy. You are protected.",
+            5, 600L, 2.0f
+        ),
+        UpgradeType.GHOST_PROTOCOL to UpgradeConfig(
+            UpgradeType.GHOST_PROTOCOL, "ZERO_DAY.VOID", "[ELITE] Post-hit I-Frames +1.5s.",
+            "Provides a massive safety net after taking damage to reposition.",
+            "The system forgets you exist for a split second. Use it well.",
+            5, ONE_TB / 4, 3.0f
+        ),
+        UpgradeType.SONAR_RANGE to UpgradeConfig(
+            UpgradeType.SONAR_RANGE, "WIDE_PING.BAT", "Sonar Scan Radius +20%.",
+            "See threats coming from much further away.",
+            "The echo travels further than the eye can see.",
+            5, 400L, 1.7f
+        ),
+        UpgradeType.SILENT_SONAR to UpgradeConfig(
+            UpgradeType.SILENT_SONAR, "ACOUSTIC_DAMPING.EXE", "Sonar Sound Alert Range -20%.",
+            "Enemies won't hear your sonar pings, keeping you hidden.",
+            "A silent scream in the digital dark. Only you hear the truth.",
+            5, 1000L, 1.8f
+        ),
+        UpgradeType.SONAR_DUR to UpgradeConfig(
+            UpgradeType.SONAR_DUR, "PERSISTENT_TRACE.BIN", "Enemies stay visible +1.5s.",
+            "Reduces the need for frequent pings, saving focus/energy.",
+            "The memory of the enemy lingers on your reticle.",
+            5, 500L, 1.6f
+        )
     )
 
     fun init(context: Context) {
@@ -138,6 +250,7 @@ object UpgradeSystem {
     fun getVisionRadiusMultiplier(): Float = 1.0f + (getLevel(UpgradeType.OPTIC_SENSORS) * 0.15f)
     fun getDataMagnetRadiusMultiplier(): Float = 1.0f + (getLevel(UpgradeType.DATA_MAGNET) * 0.5f)
     fun getStealthDetectionMultiplier(): Float = 1.0f - (getLevel(UpgradeType.STEALTH_CAMO) * 0.15f)
+    fun getShieldRecoveryMultiplier(): Float = 1.0f / (1.0f + getLevel(UpgradeType.SHIELD_RECOVERY) * 0.15f)
     
     fun getSpikeCooldownMultiplier(): Float = 1.0f / (1.0f + getLevel(UpgradeType.SPIKE_PAYLOAD) * 0.15f)
     

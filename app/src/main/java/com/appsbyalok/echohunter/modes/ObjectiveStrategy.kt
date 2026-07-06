@@ -17,7 +17,7 @@ interface IGameObjective {
     fun checkWinCondition(gs: GameState): Boolean
     fun isBossTriggerReady(gs: GameState): Boolean
 
-    // NAYA: Shared verification to ensure all level features are satisfied
+    // NEW: Shared verification to ensure all level features are satisfied
     fun areSecondaryFeaturesMet(gs: GameState): Boolean {
         val config = LevelEngine.getLevelConfig(gs.currentLevel)
         // 1. Elimination Check
@@ -308,7 +308,7 @@ class EscapeObjective : IGameObjective {
         if (areSecondaryFeaturesMet(gs) && !gs.escapeGateActive) {
             gs.escapeGateActive = true
             
-            // NAYA: Relocate core marker to the actual Exit Portal
+            // NEW: Relocate core marker to the actual Exit Portal
             if (exitX > 0) {
                 gs.coreX = exitX
                 gs.coreY = exitY

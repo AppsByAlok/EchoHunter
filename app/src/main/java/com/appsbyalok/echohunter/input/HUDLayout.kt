@@ -1,5 +1,7 @@
 package com.appsbyalok.echohunter.input
 
+import android.graphics.RectF
+
 class HUDLayout {
     var btnRadius = 0f
     var atkX = 0f
@@ -14,5 +16,8 @@ class HUDLayout {
     var pauseY = 0f
 
     // Manual Aim Touchpad
-    val manualAimRect = android.graphics.RectF()
+    val manualAimRect = RectF()
+
+    // Boss UI
+    val bossHpRect = RectF()
 }

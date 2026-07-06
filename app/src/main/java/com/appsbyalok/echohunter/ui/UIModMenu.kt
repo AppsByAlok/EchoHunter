@@ -21,6 +21,7 @@ class UIModMenu {
     private var lastTouchY = 0f
     private var isDragging = false
     private var isCloseTapValid = false
+    private var hitIndexOnDown = -1
 
     // Hold Matrix Tracking variables
     private var holdingLevelDir = 0 // -1 for DOWN, 1 for UP, 0 for None, 2 for DATA hold
@@ -70,7 +71,7 @@ class UIModMenu {
                         EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 20)
                     }
                     2 -> { // Data Add Fast Engine (Hold System)
-                        // Hold duration ke base par dynamic data multiplier (100MB up to 1GB per tick)
+                        // Dynamic data multiplier based on hold duration (100MB up to 1GB per tick)
                         val dataMultiplier = when {
                             holdDuration > 3000L -> 10 // 1 GB per tick!
                             holdDuration > 1500L -> 5  // 500 MB per tick
@@ -175,6 +176,7 @@ class UIModMenu {
             MotionEvent.ACTION_DOWN -> {
                 lastTouchY = vy
                 isDragging = false
+                hitIndexOnDown = -1
 
                 isCloseTapValid = (vx > targetW - scale * 0.15f && vy < scale * 0.15f)
 
@@ -182,9 +184,10 @@ class UIModMenu {
                 val itemYStart = startY + clickedIndex * (itemHeight + gap)
 
                 if (vy >= itemYStart && vy <= itemYStart + itemHeight && vx >= targetW / 2f - btnW / 2f && vx <= targetW / 2f + btnW / 2f) {
+                    hitIndexOnDown = clickedIndex
                     // Instant single-click execution on touch down + activate loop holding state
-                    when (clickedIndex) {
-                        4 -> {
+                        when (clickedIndex) {
+                        4 -> { // Add Data (Holdable)
                             holdingLevelDir = 2
                             holdStartTime = System.currentTimeMillis()
                             lastLevelChangeTime = holdStartTime
@@ -193,7 +196,7 @@ class UIModMenu {
                             SaveManager.addData(dataToAdd)
                             EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 100)
                         }
-                        5 -> {
+                        5 -> { // Level Up (Holdable)
                             holdingLevelDir = 1
                             holdStartTime = System.currentTimeMillis()
                             lastLevelChangeTime = holdStartTime
@@ -201,7 +204,7 @@ class UIModMenu {
                             SaveManager.debugSetLevel(gs.currentLevel)
                             EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 60)
                         }
-                        6 -> {
+                        6 -> { // Level Down (Holdable)
                             if (gs.currentLevel > 1) {
                                 holdingLevelDir = -1
                                 holdStartTime = System.currentTimeMillis()
@@ -219,6 +222,7 @@ class UIModMenu {
                 if (abs(dy) > scale * 0.02f) {
                     isDragging = true
                     holdingLevelDir = 0 // Break holds safely if user is dragging up/down list
+                    hitIndexOnDown = -1
                 }
                 if (isDragging) {
                     scrollY += dy
@@ -226,24 +230,25 @@ class UIModMenu {
                     lastTouchY = vy
                 }
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+            MotionEvent.ACTION_UP -> {
                 val wasHolding = holdingLevelDir != 0
                 holdingLevelDir = 0 // Release hold latch
 
                 // Trigger click blocks only if user wasn't holding or scrolling layout
-                if (!isDragging && !wasHolding && action != MotionEvent.ACTION_CANCEL) {
+                if (!isDragging && !wasHolding) {
                     if (isCloseTapValid && vx > targetW - scale * 0.15f && vy < scale * 0.15f) {
                         EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 100)
                         isOpen = false
                         isDragging = false
                         isCloseTapValid = false
+                        hitIndexOnDown = -1
                         return true
                     }
 
                     val clickedIndex = ((vy - startY) / (itemHeight + gap)).toInt()
                     val itemYStart = startY + clickedIndex * (itemHeight + gap)
 
-                    if (clickedIndex in 0..11 && vy >= itemYStart && vy <= itemYStart + itemHeight && vx >= targetW / 2f - btnW / 2f && vx <= targetW / 2f + btnW / 2f) {
+                    if (clickedIndex in 0..11 && clickedIndex == hitIndexOnDown && vy >= itemYStart && vy <= itemYStart + itemHeight && vx >= targetW / 2f - btnW / 2f && vx <= targetW / 2f + btnW / 2f) {
                         when (clickedIndex) {
                             0 -> { EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100); gs.modGodMode = !gs.modGodMode }
                             1 -> { EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100); gs.modInfiniteOvr = !gs.modInfiniteOvr }
@@ -267,6 +272,12 @@ class UIModMenu {
                     }
                 }
                 isDragging = false
+                hitIndexOnDown = -1
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                holdingLevelDir = 0
+                isDragging = false
+                hitIndexOnDown = -1
             }
         }
         return true

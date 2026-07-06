@@ -50,7 +50,7 @@ class TouchController(private val gs: GameState) {
                     }
                 } else {
                     // COMBAT SIDE (Raw State)
-                    
+
                     val atkX = gs.hudLayout.atkX; val atkY = gs.hudLayout.atkY
                     val ovrX = gs.hudLayout.ovrX; val ovrY = gs.hudLayout.ovrY
                     val trapX = gs.hudLayout.trapX; val trapY = gs.hudLayout.trapY
@@ -100,11 +100,11 @@ class TouchController(private val gs: GameState) {
                         }
                         return true
                     }
-                    
+
                     // 2. Fallback to Manual Aim Joystick (if in manual mode AND NOT hitting another button)
                     if (gs.controls.activeAttackMode == AttackMode.MANUAL_AIM &&
                         gs.hudLayout.manualAimRect.contains(vx, vy)) {
-                        
+
                         // Extra safety: Don't steal if we are already touching something else here
                         if (gs.touch.attackTouchId == -1 && gs.touch.trapTouchId == -1 && gs.touch.sonarTouchId == -1) {
                             gs.touch.manualAimTouchId = pointerId
@@ -134,7 +134,7 @@ class TouchController(private val gs: GameState) {
                         gs.touch.moveCurrentX = mx
                         gs.touch.moveCurrentY = my
                     }
-                    
+
                     if (id == gs.touch.attackTouchId) {
                         gs.controls.attackTouchX = mx
                         gs.controls.attackTouchY = my

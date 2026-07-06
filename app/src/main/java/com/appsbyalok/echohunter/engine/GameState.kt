@@ -39,7 +39,6 @@ class GameState {
     var nextStateAfterStory = 0 // Target state to transition to after a story sequence
     var timeSinceStart = 0f // Total elapsed time since the game session began
 
-    var isRotationWarning = false // Flag to show rotation-related UI warnings
     var selectedStoryAct = 0 // Index of the currently selected story chapter
 
     val hudLayout = HUDLayout()
@@ -140,6 +139,7 @@ class GameState {
     val targetClarity: Float get() = if (isDarknessLevel || StoryProtocol.isBlackoutActive) 0.15f else 1.0f
 
     var shieldTimer = 0f // Remaining duration of active invulnerability shield
+    private var shieldRechargeTimer = 0f // Progress toward the next passive shield refresh
     var playerIframe = 0f // Temporary invincibility period after being hit
 
     var overclockMeter = 0f // Current charge percentage of the overclock ability
@@ -191,6 +191,23 @@ class GameState {
     var cameraFocusX = -1f // Optional focus point (e.g. Boss)
     var cameraFocusY = -1f 
     var cameraFocusWeight = 0f // 0.0 = Player, 1.0 = Focus Point
+
+    // Camera + viewport single source of truth. The effective zoom never lets the
+    // visible world grow larger than the current map.
+    fun getCameraZoom(screenWidth: Float, screenHeight: Float): Float {
+        val safeZoom = cameraZoom.coerceAtLeast(0.01f)
+        val mapW = if (mapWidth > 0f) mapWidth else (gridMap?.size ?: 0) * tileSize
+        val mapH = if (mapHeight > 0f) mapHeight else (gridMap?.getOrNull(0)?.size ?: 0) * tileSize
+        val minZoomX = if (mapW > 0f) screenWidth / mapW else 0f
+        val minZoomY = if (mapH > 0f) screenHeight / mapH else 0f
+        return max(safeZoom, max(minZoomX, minZoomY))
+    }
+
+    fun getViewportW(screenWidth: Float, screenHeight: Float): Float =
+        screenWidth / getCameraZoom(screenWidth, screenHeight)
+
+    fun getViewportH(screenWidth: Float, screenHeight: Float): Float =
+        screenHeight / getCameraZoom(screenWidth, screenHeight)
 
     var pvx = 0f // Player velocity X
     var pvy = 0f // Player velocity Y
@@ -324,7 +341,7 @@ class GameState {
         collectedDataKB = 0L
         isLevelCleared = false
 
-        visionClarity = 1.0f; shieldTimer = 0f; playerIframe = 0f
+        visionClarity = 1.0f; shieldTimer = 0f; shieldRechargeTimer = 0f; playerIframe = 0f
         overclockMeter = 0f; overclockTimer = 0f
         cameraX = 0f
         cameraY = 0f
@@ -350,7 +367,6 @@ class GameState {
         StoryProtocol.popupTimer = 0f
         StoryProtocol.isGlitchActive = false
         StoryProtocol.areControlsInverted = false
-        isRotationWarning = false
 
         val config = LevelEngine.getLevelConfig(currentLevel)
         activeObjective = when {
@@ -429,9 +445,20 @@ class GameState {
         } else {
             regenTimer = 0f
         }
+
         if (showOverclockTextTimer > 0f) showOverclockTextTimer -= dt
         if (comboBreakTimer > 0f) comboBreakTimer -= dt
         if (shieldTimer > 0f) shieldTimer -= dt
+        if (shieldTimer <= 0f && playerIframe <= 0f && state == 1) {
+            shieldRechargeTimer += dt
+            val targetTime = 5f * UpgradeSystem.getShieldRecoveryMultiplier()
+            if (shieldRechargeTimer >= targetTime) {
+                shieldTimer = 5f
+                shieldRechargeTimer = 0f
+            }
+        } else {
+            shieldRechargeTimer = 0f
+        }
         if (bossIframe > 0f) bossIframe -= dt
         if (cooldownTimer > 0f) cooldownTimer -= dt
         if (empFlashTimer > 0f) empFlashTimer -= dt
@@ -513,12 +540,14 @@ class GameState {
             px = max(playerRadius, min(px, mapWidth - playerRadius))
             py = max(playerRadius, min(py, mapHeight - playerRadius))
         } else {
+            val viewportW = getViewportW(width, height)
+            val viewportH = getViewportH(width, height)
             px += vx
             py += vy
             if (px < cameraX + playerRadius) px = cameraX + playerRadius
-            if (px > cameraX + width - playerRadius) px = cameraX + width - playerRadius
+            if (px > cameraX + viewportW - playerRadius) px = cameraX + viewportW - playerRadius
             if (py < cameraY + playerRadius) py = cameraY + playerRadius
-            if (py > cameraY + height - playerRadius) py = cameraY + height - playerRadius
+            if (py > cameraY + viewportH - playerRadius) py = cameraY + viewportH - playerRadius
         }
     }
 
@@ -597,7 +626,7 @@ class GameState {
         wallVisMap?.let { vis ->
             for (x in vis.indices) {
                 for (y in vis[0].indices) {
-                    if (vis[x][y] > 0f) vis[x][y] = kotlin.math.max(0f, vis[x][y] - dt / decayDuration)
+                    if (vis[x][y] > 0f) vis[x][y] = max(0f, vis[x][y] - dt / decayDuration)
                 }
             }
         }

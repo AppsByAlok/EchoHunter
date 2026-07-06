@@ -98,6 +98,7 @@ class UITerminal {
     private var autocompleteIndex = -1
     private var autocompleteBase = ""
     private var lastGeneratedInput = ""
+    private var hitKeyOnDown: String? = null
 
     // Alphabetic Keyboard Layout
     private val kbAlpha = listOf(
@@ -422,20 +423,24 @@ class UITerminal {
         }
     }
 
-    fun onTouch(x: Float, y: Float, action: Int, gs: GameState, context: Context, onExit: () -> Unit): Boolean {
+    private var touchDownX = 0f
+    private var touchDownY = 0f
+
+    fun onTouch(x: Float, y: Float, action: Int, scale: Float, gs: GameState, context: Context, onExit: () -> Unit): Boolean {
         when (action) {
             MotionEvent.ACTION_DOWN -> {
+                touchDownX = x
+                touchDownY = y
+                hitKeyOnDown = null
                 if (scrollToBottomRect.contains(x, y)) {
-                    scrollOffset = 0
-                    EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 50)
+                    hitKeyOnDown = "SCROLL_TO_BOTTOM"
                     return true
                 }
 
                 if (!isKeyboardVisible) {
                     val showRect = keyRects["SHOW_KEY"]
                     if (showRect != null && showRect.contains(x, y)) {
-                        isKeyboardVisible = true
-                        EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 50)
+                        hitKeyOnDown = "SHOW_KEY"
                         return true
                     }
                 }
@@ -450,13 +455,15 @@ class UITerminal {
                 if (y < kbStartY || !isKeyboardVisible) {
                     isDragging = true
                     lastTouchY = y
+                    hitKeyOnDown = "DRAG_AREA"
                     return true
                 }
 
                 for ((key, rect) in keyRects) {
                     if (rect.contains(x, y)) {
-                        EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 50)
+                        hitKeyOnDown = key
                         if (key == "DEL") {
+                            EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 50)
                             // Initial deletion
                             if (currentInput.isNotEmpty()) {
                                 currentInput = currentInput.substring(0, currentInput.length - 1)
@@ -464,27 +471,81 @@ class UITerminal {
                             // Schedule repeating deletion
                             handler.removeCallbacks(delRunnable)
                             handler.postDelayed(delRunnable, 500)
-                        } else {
-                            handleKeyPress(key, gs, context, onExit)
                         }
                         return true
                     }
                 }
             }
             MotionEvent.ACTION_MOVE -> {
+                val dx = x - touchDownX
+                val dy = y - touchDownY
+                val distSq = dx * dx + dy * dy
+                val threshold = scale * scale * 0.05f
+
                 if (isDragging) {
                     val deltaY = y - lastTouchY
-                    val lineHeight = (lastScale * 0.03f) * 1.5f
+                    val lineHeight = (scale * 0.03f) * 1.5f
                     if (Math.abs(deltaY) >= lineHeight) {
                         val linesToScroll = (deltaY / lineHeight).toInt()
                         scrollOffset += linesToScroll
                         lastTouchY = y
                     }
                     return true
+                } else {
+                    // Standardized "drag-to-cancel" protocol
+                    if (hitKeyOnDown != null && hitKeyOnDown != "DRAG_AREA") {
+                        if (distSq > threshold) {
+                            hitKeyOnDown = null
+                            handler.removeCallbacks(delRunnable)
+                        }
+                    }
                 }
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+            MotionEvent.ACTION_UP -> {
+                if (!isDragging && hitKeyOnDown != null) {
+                    val hitOnUp = when {
+                        scrollToBottomRect.contains(x, y) -> "SCROLL_TO_BOTTOM"
+                        !isKeyboardVisible && (keyRects["SHOW_KEY"]?.contains(x, y) == true) -> "SHOW_KEY"
+                        else -> {
+                            var upKey: String? = null
+                            for ((key, rect) in keyRects) {
+                                if (rect.contains(x, y)) {
+                                    upKey = key
+                                    break
+                                }
+                            }
+                            upKey
+                        }
+                    }
+
+                    if (hitOnUp != null && hitOnUp == hitKeyOnDown) {
+                        when (hitOnUp) {
+                            "SCROLL_TO_BOTTOM" -> {
+                                scrollOffset = 0
+                                EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 50)
+                            }
+                            "SHOW_KEY" -> {
+                                isKeyboardVisible = true
+                                EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 50)
+                            }
+                            "DRAG_AREA" -> { /* Already handled by isDragging */ }
+                            else -> {
+                                if (hitOnUp != "DEL") {
+                                    EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 50)
+                                    handleKeyPress(hitOnUp, gs, context, onExit)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 isDragging = false
+                hitKeyOnDown = null
+                handler.removeCallbacks(delRunnable)
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                isDragging = false
+                hitKeyOnDown = null
                 handler.removeCallbacks(delRunnable)
             }
         }

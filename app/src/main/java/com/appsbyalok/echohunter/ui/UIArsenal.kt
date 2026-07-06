@@ -27,6 +27,7 @@ class UIArsenal {
     // 0 = Main OS, 1 = Weapons Folder, 2 = Traps Folder, 3 = Attack Mode Folder
     private var currentTab = 0
     private val itemReacts = mutableMapOf<Int, RectF>()
+    private var hitOnDown = -1
 
     fun draw(c: Canvas, targetW: Float, targetH: Float, scale: Float, gs: GameState) {
         c.drawColor(0xEE051015.toInt()) // Dark Cyan-ish Terminal BG
@@ -202,58 +203,99 @@ class UIArsenal {
         }
     }
 
-    fun onTouch(x: Float, y: Float, action: Int, gs: GameState, onBack: () -> Unit): Boolean {
-        if (action == MotionEvent.ACTION_UP) {
-            // Disconnect or Back Button
-            if (closeBtnRect.contains(x, y)) {
-                EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
-                if (currentTab == 0) onBack() else currentTab = 0
-                return true
-            }
+    private var touchDownX = 0f
+    private var touchDownY = 0f
 
-            // Folder interactions
-            if (currentTab == 0) {
-                if (weaponDirRect.contains(x, y)) {
-                    EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
-                    currentTab = 1
-                    return true
-                }
-                if (trapDirRect.contains(x, y)) {
-                    EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
-                    currentTab = 2
-                    return true
-                }
-                if (attackModeRect.contains(x, y)) {
-                    EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
-                    currentTab = 3
-                    return true
-                }
-            } else {
-                for ((index, rect) in itemReacts) {
-                    if (rect.contains(x, y)) {
-                        EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 150)
-                        when (currentTab) {
-                            1 -> {
-                                gs.controls.currentWeapon = index
-                                gs.showGlobalMessage("WEAPON PROTOCOL UPDATED.", 1.5f)
-                            }
-                            2 -> {
-                                gs.controls.currentTrap = index
-                                gs.showGlobalMessage("TRAP MODULE LOADED.", 1.5f)
-                            }
-                            3 -> {
-                                gs.controls.activeAttackMode = com.appsbyalok.echohunter.input.AttackMode.values()[index]
-                                gs.showGlobalMessage("AIMING LOGIC RECONFIGURED.", 1.5f)
+    fun onTouch(x: Float, y: Float, action: Int, scale: Float, gs: GameState, onBack: () -> Unit): Boolean {
+        when (action) {
+            MotionEvent.ACTION_DOWN -> {
+                touchDownX = x
+                touchDownY = y
+                hitOnDown = when {
+                    closeBtnRect.contains(x, y) -> 100 // Arbitrary ID for close button
+                    currentTab == 0 -> {
+                        when {
+                            weaponDirRect.contains(x, y) -> 1
+                            trapDirRect.contains(x, y) -> 2
+                            attackModeRect.contains(x, y) -> 3
+                            else -> -1
+                        }
+                    }
+                    else -> {
+                        var hit = -1
+                        for ((index, rect) in itemReacts) {
+                            if (rect.contains(x, y)) {
+                                hit = index
+                                break
                             }
                         }
-                        currentTab = 0 // Go back to main OS screen
-                        return true
+                        hit
                     }
                 }
             }
+            MotionEvent.ACTION_MOVE -> {
+                val dx = x - touchDownX
+                val dy = y - touchDownY
+                if (dx * dx + dy * dy > scale * scale * 0.05f) {
+                    hitOnDown = -1
+                }
+            }
+            MotionEvent.ACTION_UP -> {
+                val hitOnUp = when {
+                    closeBtnRect.contains(x, y) -> 100
+                    currentTab == 0 -> {
+                        when {
+                            weaponDirRect.contains(x, y) -> 1
+                            trapDirRect.contains(x, y) -> 2
+                            attackModeRect.contains(x, y) -> 3
+                            else -> -1
+                        }
+                    }
+                    else -> {
+                        var hit = -1
+                        for ((index, rect) in itemReacts) {
+                            if (rect.contains(x, y)) {
+                                hit = index
+                                break
+                            }
+                        }
+                        hit
+                    }
+                }
+
+                if (hitOnUp != -1 && hitOnUp == hitOnDown) {
+                    if (hitOnUp == 100) {
+                        EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
+                        if (currentTab == 0) onBack() else currentTab = 0
+                    } else if (currentTab == 0) {
+                        EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
+                        currentTab = hitOnUp
+                    } else {
+                        EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 150)
+                        when (currentTab) {
+                            1 -> {
+                                gs.controls.currentWeapon = hitOnUp
+                                gs.showGlobalMessage("WEAPON PROTOCOL UPDATED.", 1.5f)
+                            }
+                            2 -> {
+                                gs.controls.currentTrap = hitOnUp
+                                gs.showGlobalMessage("TRAP MODULE LOADED.", 1.5f)
+                            }
+                            3 -> {
+                                gs.controls.activeAttackMode = com.appsbyalok.echohunter.input.AttackMode.values()[hitOnUp]
+                                gs.showGlobalMessage("AIMING LOGIC RECONFIGURED.", 1.5f)
+                            }
+                        }
+                        currentTab = 0
+                    }
+                }
+                hitOnDown = -1
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                hitOnDown = -1
+            }
         }
-        val returnValue = true
-        return returnValue
+        return true
     }
 
     private fun getWeaponName(id: Int) = when(id) { 1 -> "Shotgun"; 2 -> "Sniper"; else -> "Blaster" }

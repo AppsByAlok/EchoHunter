@@ -43,6 +43,9 @@ class WorldRenderer(
     }
 
     fun drawGrid(c: Canvas, scale: Float, gs: GameState, targetW: Float, targetH: Float, showSpawners: Boolean = true) {
+        val viewportW = gs.getViewportW(targetW, targetH)
+        val viewportH = gs.getViewportH(targetW, targetH)
+
         p.style = Paint.Style.STROKE
         p.color = if (gs.difficulty == 1) 0xFF441010.toInt() else 0xFF1A1C2E.toInt()
         p.strokeWidth = max(1f, scale * 0.002f)
@@ -54,12 +57,12 @@ class WorldRenderer(
         val gridOffsetY = -(parallaxY % gap)
 
         var i = -gap + gridOffsetX
-        while (i < targetW + gap) {
-            c.drawLine(i, 0f, i, targetH, p); i += gap
+        while (i < viewportW + gap) {
+            c.drawLine(i, 0f, i, viewportH, p); i += gap
         }
         var j = -gap + gridOffsetY
-        while (j < targetH + gap) {
-            c.drawLine(0f, j, targetW, j, p); j += gap
+        while (j < viewportH + gap) {
+            c.drawLine(0f, j, viewportW, j, p); j += gap
         }
 
         if (!showSpawners) return
@@ -80,8 +83,8 @@ class WorldRenderer(
                 nodeAlpha = 0f
                 // 1. Passive Aura
                 if (d2 < gs.passiveAuraRadiusSq) {
-                    val dist = kotlin.math.sqrt(d2)
-                    val auraRad = kotlin.math.sqrt(gs.passiveAuraRadiusSq)
+                    val dist = sqrt(d2)
+                    val auraRad = sqrt(gs.passiveAuraRadiusSq)
                     nodeAlpha = max(0f, 1f - dist / auraRad)
                 }
                 
@@ -197,15 +200,21 @@ class WorldRenderer(
 
         p.style = Paint.Style.FILL
 
+        // --- Calculate actual visible viewport accounting for Zoom ---
+        val viewportW = gs.getViewportW(targetW, targetH)
+        val viewportH = gs.getViewportH(targetW, targetH)
+        val buffer = ts * 2f // 2-tile extra padding to prevent edge popping
+
         for (x in grid.indices) {
             for (y in grid[x].indices) {
                 val drawX = x * ts - gs.cameraX
                 val drawY = y * ts - gs.cameraY
 
-                // Culling (Don't draw if outside screen)
-                if (drawX < -ts || drawX > targetW || drawY < -ts || drawY > targetH) continue
 
-                // NEW: Calculate wall visibility based on Pulse and Passive Aura
+                // Culling (Don't draw if outside screen)
+                if (drawX < -buffer || drawX > viewportW + buffer || drawY < -buffer || drawY > viewportH + buffer) continue
+
+                // Calculate wall visibility based on Pulse and Passive Aura
                 val worldCenterX = x * ts + ts / 2f
                 val worldCenterY = y * ts + ts / 2f
                 val dx = worldCenterX - gs.px
@@ -218,10 +227,10 @@ class WorldRenderer(
                 } else {
                     // 1. Reveal by Passive Aura (Player's close range light)
                     if (d2 < gs.passiveAuraRadiusSq) {
-                        val dist = kotlin.math.sqrt(d2)
-                        val auraRad = kotlin.math.sqrt(gs.passiveAuraRadiusSq)
+                        val dist = sqrt(d2)
+                        val auraRad = sqrt(gs.passiveAuraRadiusSq)
                         // Smooth fade at the edge of aura
-                        wallAlpha = kotlin.math.max(0f, 0.2f * (1f - dist / auraRad))
+                        wallAlpha = max(0f, 0.2f * (1f - dist / auraRad))
                     } 
                     
                     // 2. Reveal by Persistent Visibility (Uses getSonarDurationBonus decay from GameState)
@@ -232,7 +241,7 @@ class WorldRenderer(
 
                     // 3. Reveal by active Sonar Pulse (Brightest hit)
                     if (gs.pulse && d2 >= gs.innerRSq && d2 <= gs.outerRSq) {
-                        wallAlpha = kotlin.math.max(wallAlpha, 0.6f)
+                        wallAlpha = max(wallAlpha, 0.6f)
                     }
                 }
 
@@ -259,6 +268,8 @@ class WorldRenderer(
     }
 
     fun drawGamePlay(c: Canvas, scale: Float, gs: GameState, targetW: Float, targetH: Float) {
+        val viewportW = gs.getViewportW(targetW, targetH)
+        val viewportH = gs.getViewportH(targetW, targetH)
         val currentPlayerColor = if (gs.isOverclocked) GameColors.OVERCLOCK else GameColors.PULSE
         val screenPlayerX = gs.px - gs.cameraX
         val screenPlayerY = gs.py - gs.cameraY
@@ -271,10 +282,10 @@ class WorldRenderer(
             p
         )
 
-        gs.modeStrategy.drawModeSpecificWorld(c, gs, targetW, targetH, scale, p)
+        gs.modeStrategy.drawModeSpecificWorld(c, gs, viewportW, viewportH, scale, p)
 
         if (gs.pulse) {
-            val alpha = (255 * (1f - (gs.pulseR / (targetW * 0.75f)))).toInt()
+            val alpha = (255 * (1f - (gs.pulseR / (viewportW * 0.75f)))).toInt()
             val colorGlow =
                 if (StoryProtocol.isGlitchActive) GameColors.RED else if (gs.isOverclocked) GameColors.OVERCLOCK else if (gs.visionClarity > 0.3f) GameColors.PULSE else 0xFF006666.toInt()
             pGlow.color = (max(0, alpha) shl 24) or (colorGlow and 0xFFFFFF)
@@ -303,7 +314,7 @@ class WorldRenderer(
 
         // Now Escape level also triggers drawCore!
         if (isDefense || isEscape || gs.state == 8 || gs.state == 9) {
-            drawCore(c, scale, gs, targetW, targetH, screenPlayerX, screenPlayerY)
+            drawCore(c, scale, gs, viewportW, viewportH, screenPlayerX, screenPlayerY)
         }
 
         if (gs.empMineActive) {
@@ -387,7 +398,7 @@ class WorldRenderer(
         }
 
         // --- FIX: Enemies draw in Gameplay AND Core Merge states ---
-        if (gs.state == 1 || gs.state == 8 || gs.state == 9) enemySys.drawEntities(c, gs, targetW, scale)
+        if (gs.state == 1 || gs.state == 8 || gs.state == 9) enemySys.drawEntities(c, gs, viewportW, scale)
 
         effectSys.drawTrails(c, gs.cameraX, gs.cameraY, scale, currentPlayerColor)
         effectSys.drawSonarPings(c, gs.cameraX, gs.cameraY, scale)
@@ -466,8 +477,8 @@ class WorldRenderer(
         effectSys.drawParticles(c, gs.cameraX, gs.cameraY, scale)
         effectSys.drawFloatingTexts(c, gs.cameraX, gs.cameraY, scale)
 
-        // Arrow draw karne ke liye
-        drawArrow(c, scale, gs, targetW, targetH)
+        // To draw Arrow
+        drawArrow(c, scale, gs, viewportW, viewportH)
     }
 
     private fun drawCore(
@@ -681,19 +692,19 @@ class WorldRenderer(
             arrowColor = GameColors.YELLOW
             shouldDraw = true
         }
-        // 2. ESCAPE MODE (Portal Active hone par)
+        // 2. ESCAPE MODE (When Portal is Active)
         else if (config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ESCAPE) && gs.escapeGateActive) {
             targetX = gs.coreX; targetY = gs.coreY
             arrowColor = GameColors.HP
             shouldDraw = true
         }
-        // 3. DEFENSE MODE (Core ko track karega)
+        // 3. DEFENSE MODE (Tracks the core)
         else if (config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE) && gs.gameMode == 0) {
             targetX = gs.coreX; targetY = gs.coreY
             arrowColor = GameColors.SHIELD // Neon Purple
             shouldDraw = true
         }
-        // 4. ELIMINATION MODE (Sabse kareeb wale Red HVT ko track karega)
+        // 4. ELIMINATION MODE (Tracks the closest Red HVT)
         else if (config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ELIMINATION) && gs.gameMode == 0) {
             var minDist = Float.MAX_VALUE
             // Find the closest Type 3 enemy
@@ -725,7 +736,7 @@ class WorldRenderer(
             // Only show when target is away from player's screen
             if (distSq > hideRadius * hideRadius) {
                 val angle = kotlin.math.atan2(dy, dx)
-                val arrowDist = min(targetW, targetH) * 0.35f // Screen ke center se doori
+                val arrowDist = min(targetW, targetH) * 0.35f // Distance from screen center
 
                 val arrowScreenX = targetW / 2f + cos(angle) * arrowDist
                 val arrowScreenY = targetH / 2f + sin(angle) * arrowDist

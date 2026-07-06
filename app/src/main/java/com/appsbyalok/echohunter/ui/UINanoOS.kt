@@ -21,6 +21,9 @@ class UINanoOS {
 
     private val closeBtnRect = RectF()
     private val cardRects = Array(4) { RectF() }
+    private var hitOnDown = -1
+    private var downX = 0f
+    private var downY = 0f
 
     // Card Titles & Subtitles
     private val titles = arrayOf(
@@ -145,20 +148,64 @@ class UINanoOS {
         c.drawText(subs[index], rect.left + scale * 0.05f, rect.bottom - scale * 0.04f, pText)
     }
 
-    fun onTouch(x: Float, y: Float, action: Int, onAppSelect: (Int) -> Unit, onDisconnect: () -> Unit): Boolean {
-        if (action == MotionEvent.ACTION_UP) {
-            if (closeBtnRect.contains(x, y)) {
-                EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
-                onDisconnect()
-                return true
-            }
-
-            for (i in 0..3) {
-                if (cardRects[i].contains(x, y)) {
-                    EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
-                    onAppSelect(i) // i: 0=Decompiler, 1=Arsenal, 2=Archives, 3=Terminal
-                    return true
+    fun onTouch(x: Float, y: Float, action: Int, scale: Float, onAppSelect: (Int) -> Unit, onDisconnect: () -> Unit): Boolean {
+        when (action) {
+            MotionEvent.ACTION_DOWN -> {
+                downX = x
+                downY = y
+                hitOnDown = when {
+                    closeBtnRect.contains(x, y) -> 4
+                    else -> {
+                        var hit = -1
+                        for (i in 0..3) {
+                            if (cardRects[i].contains(x, y)) {
+                                hit = i
+                                break
+                            }
+                        }
+                        hit
+                    }
                 }
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (hitOnDown != -1) {
+                    val dx = x - downX
+                    val dy = y - downY
+                    if (dx * dx + dy * dy > scale * scale * 0.05f) {
+                        hitOnDown = -1
+                    }
+                }
+            }
+            MotionEvent.ACTION_UP -> {
+                if (hitOnDown != -1) {
+                    val hitOnUp = when {
+                        closeBtnRect.contains(x, y) -> 4
+                        else -> {
+                            var hit = -1
+                            for (i in 0..3) {
+                                if (cardRects[i].contains(x, y)) {
+                                    hit = i
+                                    break
+                                }
+                            }
+                            hit
+                        }
+                    }
+
+                    if (hitOnUp == hitOnDown) {
+                        if (hitOnUp == 4) {
+                            EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
+                            onDisconnect()
+                        } else {
+                            EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
+                            onAppSelect(hitOnUp) // i: 0=Decompiler, 1=Arsenal, 2=Archives, 3=Terminal
+                        }
+                    }
+                }
+                hitOnDown = -1
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                hitOnDown = -1
             }
         }
         return true

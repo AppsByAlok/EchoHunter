@@ -81,17 +81,21 @@ fun GameState.updateCameraLogic(dt: Float, width: Float, height: Float, baseZoom
     }
 
     // 4. CAMERA TRACKING & BOUNDARIES
-    val centerX = targetX - (width / 2f) / cameraZoom
-    val centerY = targetY - (height / 2f) / cameraZoom
+    val viewportW = getViewportW(width, height)
+    val viewportH = getViewportH(width, height)
 
-    // FIX: Sub-pixel camera jitter by using a higher lerp factor for standard tracking 
-    // and syncing it exactly with player movement.
+    val centerX = targetX - viewportW / 2f
+    val centerY = targetY - viewportH / 2f
+
     val lerpFactor = (if (cameraFocusWeight > 0.1f) 20f else 12f) * dt
     cameraX += (centerX - cameraX) * lerpFactor.coerceAtMost(1.0f)
     cameraY += (centerY - cameraY) * lerpFactor.coerceAtMost(1.0f)
 
-    val maxCamX = 0f.coerceAtLeast(mapWidth - width / cameraZoom)
-    val maxCamY = 0f.coerceAtLeast(mapHeight - height / cameraZoom)
+    val resolvedMapW = if (mapWidth > 0f) mapWidth else (gridMap?.size ?: 0) * tileSize
+    val resolvedMapH = if (mapHeight > 0f) mapHeight else (gridMap?.getOrNull(0)?.size ?: 0) * tileSize
+
+    val maxCamX = max(0f, resolvedMapW - viewportW)
+    val maxCamY = max(0f, resolvedMapH - viewportH)
     cameraX = cameraX.coerceIn(0f, maxCamX)
     cameraY = cameraY.coerceIn(0f, maxCamY)
 }

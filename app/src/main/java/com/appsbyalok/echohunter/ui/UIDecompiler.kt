@@ -30,8 +30,18 @@ class UIDecompiler {
     private var scrollVelocity = 0f
     private var lastTouchTime = 0L
 
+    private var expandedType: UpgradeType? = null
     private val buyButtons = mutableMapOf<UpgradeType, RectF>()
+    private val cardRects = mutableMapOf<UpgradeType, RectF>()
     private val closeBtnRect = RectF()
+    private var hitOnDown = -1
+    private var hitTypeOnDown: UpgradeType? = null
+
+    private val branches = listOf(
+        Triple("--- [ ARCHITECT ] ---", "CORE SYSTEMS & SURVIVAL", listOf(UpgradeType.MAX_HP, UpgradeType.THRUSTER_OPTIMIZE, UpgradeType.DATA_MAGNET, UpgradeType.COMPRESSION_ALGO, UpgradeType.NANITE_REPAIR, UpgradeType.QUANTUM_CORE, UpgradeType.DATA_SYNDICATE, UpgradeType.OVERCLOCK_DUR, UpgradeType.OPTIC_SENSORS)),
+        Triple("--- [ ENFORCER ] ---", "TACTICAL COMBAT & OFFENSE", listOf(UpgradeType.SPIKE_PAYLOAD, UpgradeType.CRIT_CHANCE, UpgradeType.KINETIC_OVERLOAD, UpgradeType.MULTITHREAD_SPIKES, UpgradeType.COMBO_EXTENDER)),
+        Triple("--- [ GHOST ] ---", "STEALTH & SONAR RECON", listOf(UpgradeType.PULSE_FREQUENCY, UpgradeType.STEALTH_CAMO, UpgradeType.TRAP_COOLDOWN, UpgradeType.SHIELD_RECOVERY, UpgradeType.GHOST_PROTOCOL, UpgradeType.SONAR_RANGE, UpgradeType.SILENT_SONAR, UpgradeType.SONAR_DUR))
+    )
 
     fun draw(c: Canvas, targetW: Float, targetH: Float, scale: Float) {
         c.drawColor(0xEE020502.toInt()) // Even darker terminal BG
@@ -62,18 +72,18 @@ class UIDecompiler {
         c.drawText("AVAILABLE DATA: ${SaveManager.formatDataString(SaveManager.dataCoinsKB)}", targetW / 2f, scale * 0.18f, pText)
 
         // --- Tier Labels & List ---
+        val listTop = scale * 0.22f
+        val listBottom = targetH - scale * 0.16f
+        
+        c.save()
+        c.clipRect(0f, listTop, targetW, listBottom)
+
         val startY = scale * 0.25f + scrollY
         var currentY = startY
-        val itemHeight = scale * 0.18f
-        val marginX = scale * 0.1f
+        val marginX = scale * 0.05f
 
         buyButtons.clear()
-
-        val branches = listOf(
-            Triple("--- [ ARCHITECT ] ---", "CORE SYSTEMS & SURVIVAL", listOf(UpgradeType.MAX_HP, UpgradeType.THRUSTER_OPTIMIZE, UpgradeType.DATA_MAGNET, UpgradeType.COMPRESSION_ALGO, UpgradeType.NANITE_REPAIR, UpgradeType.QUANTUM_CORE, UpgradeType.DATA_SYNDICATE, UpgradeType.OVERCLOCK_DUR, UpgradeType.OPTIC_SENSORS)),
-            Triple("--- [ ENFORCER ] ---", "TACTICAL COMBAT & OFFENSE", listOf(UpgradeType.SPIKE_PAYLOAD, UpgradeType.CRIT_CHANCE, UpgradeType.KINETIC_OVERLOAD, UpgradeType.MULTITHREAD_SPIKES, UpgradeType.COMBO_EXTENDER)),
-            Triple("--- [ GHOST ] ---", "STEALTH & SONAR RECON", listOf(UpgradeType.PULSE_FREQUENCY, UpgradeType.STEALTH_CAMO, UpgradeType.TRAP_COOLDOWN, UpgradeType.SHIELD_RECOVERY, UpgradeType.GHOST_PROTOCOL, UpgradeType.SONAR_RANGE, UpgradeType.SILENT_SONAR, UpgradeType.SONAR_DUR))
-        )
+        cardRects.clear()
 
         for ((branchName, branchDesc, types) in branches) {
             // Branch Header
@@ -90,7 +100,28 @@ class UIDecompiler {
 
             for (type in types) {
                 val config = UpgradeSystem.catalog[type] ?: continue
-                val itemRect = RectF(marginX, currentY, targetW - marginX, currentY + itemHeight - scale * 0.02f)
+                val isExpanded = expandedType == type
+                
+                // Dimensions & Widths
+                val cardWidth = targetW - 2 * marginX
+                val internalPadding = scale * 0.04f
+                val textWidth = cardWidth - internalPadding * 2f
+                
+                val btnW = scale * 0.26f
+                val btnH = scale * 0.14f
+                val maxHeaderW = cardWidth - btnW - scale * 0.12f // Gap for button
+
+                pText.textSize = scale * 0.028f
+                val funcH = measureWrappedTextHeight("FUNCTION: ${config.descStr}", textWidth, pText)
+                val tactH = measureWrappedTextHeight("TACTICAL: ${config.usageStr}", textWidth, pText)
+                val loreH = measureWrappedTextHeight("LOG: \"${config.loreStr}\"", textWidth, pText)
+                
+                val currentItemH = if (isExpanded) {
+                    scale * 0.28f + funcH + tactH + loreH + scale * 0.12f 
+                } else scale * 0.22f
+                
+                val itemRect = RectF(marginX, currentY, targetW - marginX, currentY + currentItemH - scale * 0.02f)
+                cardRects[type] = itemRect
 
                 val currentLvl = UpgradeSystem.getLevel(type)
                 val isMaxed = currentLvl >= config.maxLevel
@@ -99,60 +130,116 @@ class UIDecompiler {
 
                 // Draw Background Box
                 p.style = Paint.Style.FILL
-                p.color = if (isMaxed) 0xFF051105.toInt() else 0xFF0A0A0A.toInt()
+                p.color = if (isExpanded) 0xFF0D180D.toInt() else if (isMaxed) 0xFF051105.toInt() else 0xFF0A0A0A.toInt()
                 c.drawRoundRect(itemRect, scale * 0.01f, scale * 0.01f, p)
 
                 // Draw Border
                 p.style = Paint.Style.STROKE
-                p.color = if (isMaxed) GameColors.HP else if (canAfford) GameColors.PULSE else 0xFF444444.toInt()
-                p.strokeWidth = scale * 0.004f
+                p.color = if (isExpanded) GameColors.HP else if (isMaxed) 0xFF004400.toInt() else if (canAfford) GameColors.PULSE else 0xFF444444.toInt()
+                p.strokeWidth = if (isExpanded) scale * 0.006f else scale * 0.004f
                 c.drawRoundRect(itemRect, scale * 0.01f, scale * 0.01f, p)
 
-                // Draw Texts
+                // Inject Button (Top Right)
+                val btnRect = RectF(itemRect.right - btnW - scale*0.02f, itemRect.top + scale*0.02f, itemRect.right - scale*0.02f, itemRect.top + btnH + scale*0.02f)
+                
+                // Only register click for button if not maxed
+                if (!isMaxed) buyButtons[type] = btnRect
+
+                // Draw Title (Dynamic resizing & Truncation)
                 pText.textAlign = Paint.Align.LEFT
                 pText.color = if (isMaxed) GameColors.HP else GameColors.CLARITY
-                pText.textSize = scale * 0.042f
-                c.drawText("> ${config.nameStr}", marginX + scale * 0.04f, currentY + scale * 0.055f, pText)
+                var titleSize = scale * 0.042f
+                pText.textSize = titleSize
+                
+                var titleText = "> ${config.nameStr}"
+                while (pText.measureText(titleText) > maxHeaderW && titleSize > scale * 0.03f) {
+                    titleSize -= 1f
+                    pText.textSize = titleSize
+                }
+                // Final truncation check if still too long
+                if (pText.measureText(titleText) > maxHeaderW) {
+                    while (titleText.length > 5 && pText.measureText("$titleText...") > maxHeaderW) {
+                        titleText = titleText.dropLast(1)
+                    }
+                    titleText += "..."
+                }
+                c.drawText(titleText, marginX + internalPadding, currentY + scale * 0.055f, pText)
                 
                 pText.textSize = scale * 0.025f
                 pText.color = 0xFF888888.toInt()
-                c.drawText("Ver: $currentLvl/${config.maxLevel}", marginX + scale * 0.04f, currentY + scale * 0.09f, pText)
+                c.drawText("Ver: $currentLvl/${config.maxLevel}", marginX + internalPadding, currentY + scale * 0.09f, pText)
 
-                pText.textSize = scale * 0.028f
-                pText.color = 0xFFAAAAAA.toInt()
-                c.drawText(config.descStr, marginX + scale * 0.04f, currentY + scale * 0.13f, pText)
+                if (isExpanded) {
+                    // Expanded Details (Starts below button)
+                    var nextY = currentY + scale * 0.20f
 
-                // Inject Button
-                val btnW = scale * 0.28f
-                val btnRect = RectF(itemRect.right - btnW - scale*0.02f, itemRect.top + scale*0.02f, itemRect.right - scale*0.02f, itemRect.bottom - scale*0.02f)
+                    pText.textSize = scale * 0.028f
+                    pText.color = GameColors.CLARITY
+                    nextY = drawWrappedText(c, "FUNCTION: ${config.descStr}", marginX + internalPadding, nextY, textWidth, pText)
 
-                if (!isMaxed) buyButtons[type] = btnRect
+                    pText.color = GameColors.YELLOW
+                    nextY += scale * 0.015f
+                    nextY = drawWrappedText(c, "TACTICAL: ${config.usageStr}", marginX + scale * 0.04f, nextY, textWidth, pText)
 
-                p.style = Paint.Style.FILL
-                p.color = if (isMaxed) 0xFF002200.toInt() else if (canAfford) 0xFF002222.toInt() else 0xFF220000.toInt()
-                c.drawRoundRect(btnRect, scale*0.005f, scale*0.005f, p)
+                    pText.color = 0xFF666666.toInt()
+                    nextY += scale * 0.015f
+                    drawWrappedText(c, "LOG: \"${config.loreStr}\"", marginX + scale * 0.04f, nextY, textWidth, pText)
 
-                p.style = Paint.Style.STROKE
-                p.color = if (isMaxed) GameColors.HP else if (canAfford) GameColors.PULSE else GameColors.RED
-                c.drawRoundRect(btnRect, scale*0.005f, scale*0.005f, p)
-
-                pText.textAlign = Paint.Align.CENTER
-                pText.color = p.color
-                pText.textSize = scale * 0.032f
-
-                val btnText = if (isMaxed) "OPTIMIZED" else "COMPILE\n${SaveManager.formatDataString(cost)}"
-                val lines = btnText.split("\n")
-                if (lines.size == 1) {
-                    c.drawText(lines[0], btnRect.centerX(), btnRect.centerY() + scale * 0.012f, pText)
+                    // Bottom Status
+                    pText.color = GameColors.HP
+                    pText.textSize = scale * 0.024f
+                    pText.textAlign = Paint.Align.LEFT
+                    val statsText = if (isMaxed) "SYSTEM FULLY OPTIMIZED." else "UPGRADE TO INJECT NEXT FIRMWARE LAYER."
+                    c.drawText(statsText, marginX + scale * 0.04f, itemRect.bottom - scale * 0.035f, pText)
                 } else {
-                    c.drawText(lines[0], btnRect.centerX(), btnRect.centerY() - scale * 0.005f, pText)
-                    c.drawText(lines[1], btnRect.centerX(), btnRect.centerY() + scale * 0.035f, pText)
+                    // Collapsed Description
+                    pText.textSize = scale * 0.026f
+                    pText.color = 0xFFAAAAAA.toInt()
+                    var shortDesc = config.descStr
+                    if (pText.measureText(shortDesc) > maxHeaderW) {
+                        while (shortDesc.length > 5 && pText.measureText("$shortDesc...") > maxHeaderW) {
+                            shortDesc = shortDesc.dropLast(1)
+                        }
+                        shortDesc += "..."
+                    }
+                    c.drawText(shortDesc, marginX + scale * 0.04f, currentY + scale * 0.13f, pText)
+                    
+                    pText.textSize = scale * 0.022f
+                    pText.color = 0xFF555555.toInt()
+                    c.drawText(if (isMaxed) "MAX LEVEL REACHED" else "TAP FOR DETAILS", marginX + scale * 0.04f, currentY + scale * 0.17f, pText)
                 }
 
-                currentY += itemHeight
+                // Draw Button (ONLY IF NOT MAXED OR NOT EXPANDED to avoid overlap and redundancy)
+                if (!isMaxed || !isExpanded) {
+                    p.style = Paint.Style.FILL
+                    p.color = if (isMaxed) 0xFF002200.toInt() else if (canAfford) 0xFF002222.toInt() else 0xFF220000.toInt()
+                    c.drawRoundRect(btnRect, scale*0.005f, scale*0.005f, p)
+
+                    p.style = Paint.Style.STROKE
+                    p.color = if (isMaxed) GameColors.HP else if (canAfford) GameColors.PULSE else GameColors.RED
+                    c.drawRoundRect(btnRect, scale*0.005f, scale*0.005f, p)
+
+                    pText.textAlign = Paint.Align.CENTER
+                    pText.color = p.color
+                    pText.textSize = scale * 0.028f
+
+                    val btnLabel = if (isMaxed) "OPTIMIZED" else "COMPILE\n${SaveManager.formatDataString(cost)}"
+                    val lines = btnLabel.split("\n")
+                    if (lines.size == 1) {
+                        c.drawText(lines[0], btnRect.centerX(), btnRect.centerY() + scale * 0.01f, pText)
+                    } else {
+                        c.drawText(lines[0], btnRect.centerX(), btnRect.centerY() - scale * 0.01f, pText)
+                        pText.textSize = scale * 0.024f
+                        c.drawText(lines[1], btnRect.centerX(), btnRect.centerY() + scale * 0.025f, pText)
+                    }
+                }
+
+                currentY += currentItemH
             }
-            currentY += scale * 0.05f // Space between branches
+            currentY += scale * 0.05f // Branch spacing
         }
+        
+        c.restore()
 
         val totalListHeight = currentY - scrollY
         maxScroll = max(0f, totalListHeight - targetH + scale * 0.2f)
@@ -168,20 +255,60 @@ class UIDecompiler {
         c.drawText("DISCONNECT", closeBtnRect.centerX(), closeBtnRect.centerY() + scale * 0.015f, pText)
     }
 
+    private var touchDownX = 0f
+    private var touchDownY = 0f
+
     fun onTouch(x: Float, y: Float, action: Int, scale: Float, gs: GameState, onBack: () -> Unit): Boolean {
         when (action) {
             MotionEvent.ACTION_DOWN -> {
+                touchDownX = x
+                touchDownY = y
                 lastTouchY = y
                 lastTouchTime = System.currentTimeMillis()
                 scrollVelocity = 0f
                 isDragging = false
+
+                hitOnDown = when {
+                    closeBtnRect.contains(x, y) -> 1
+                    else -> 0
+                }
+
+                hitTypeOnDown = null
+                for ((type, rect) in buyButtons) {
+                    if (rect.contains(x, y)) {
+                        hitTypeOnDown = type
+                        hitOnDown = 2
+                        break
+                    }
+                }
+                if (hitTypeOnDown == null) {
+                    for ((type, rect) in cardRects) {
+                        if (rect.contains(x, y)) {
+                            hitTypeOnDown = type
+                            hitOnDown = 3
+                            break
+                        }
+                    }
+                }
             }
             MotionEvent.ACTION_MOVE -> {
                 val currentTime = System.currentTimeMillis()
                 val dt = currentTime - lastTouchTime
                 val dy = y - lastTouchY
+                val dx = x - touchDownX
 
-                if (abs(dy) > scale * 0.02f) isDragging = true
+                val distSq = dx * dx + (y - touchDownY) * (y - touchDownY)
+                val threshold = scale * scale * 0.05f
+
+                if (abs(dy) > scale * 0.02f) {
+                    isDragging = true
+                    hitOnDown = -1
+                    hitTypeOnDown = null
+                } else if (distSq > threshold) {
+                    hitOnDown = -1
+                    hitTypeOnDown = null
+                }
+
                 if (dt > 0) {
                     val rawVelocity = (dy / dt.toFloat()) * 20f
                     scrollVelocity = (scrollVelocity * 0.4f) + (rawVelocity * 0.6f)
@@ -201,33 +328,101 @@ class UIDecompiler {
                 lastTouchTime = currentTime
             }
             MotionEvent.ACTION_UP -> {
-                if (!isDragging) {
-                    if (closeBtnRect.contains(x, y)) {
-                        EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
-                        onBack()
-                        return true
+                if (!isDragging && hitOnDown != -1) {
+                    val hitOnUp = when {
+                        closeBtnRect.contains(x, y) -> 1
+                        else -> 0
                     }
 
+                    var hitTypeOnUp: UpgradeType? = null
+                    var upType = 0
                     for ((type, rect) in buyButtons) {
                         if (rect.contains(x, y)) {
-                            if (UpgradeSystem.purchaseUpgrade(type)) {
+                            hitTypeOnUp = type
+                            upType = 2
+                            break
+                        }
+                    }
+                    if (hitTypeOnUp == null) {
+                        for ((type, rect) in cardRects) {
+                            if (rect.contains(x, y)) {
+                                hitTypeOnUp = type
+                                upType = 3
+                                break
+                            }
+                        }
+                    }
+
+                    if (hitOnUp == 1 && hitOnDown == 1) {
+                        EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
+                        onBack()
+                    } else if (upType != 0 && upType == hitOnDown && hitTypeOnUp == hitTypeOnDown) {
+                        if (upType == 2) {
+                            if (UpgradeSystem.purchaseUpgrade(hitTypeOnUp!!)) {
                                 EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 150)
                                 gs.showGlobalMessage("SCRIPT INJECTED.\nFIRMWARE OVERRIDDEN.", 2f)
                             } else {
                                 EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
                                 gs.showGlobalMessage("ERROR: INSUFFICIENT DATA.\nREQUIRE MORE KILOBYTES.", 2f)
                             }
-                            return true
+                        } else if (upType == 3) {
+                            expandedType = if (expandedType == hitTypeOnUp) null else hitTypeOnUp
+                            EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 50)
                         }
                     }
                 }
                 isDragging = false
+                hitOnDown = -1
+                hitTypeOnDown = null
             }
             MotionEvent.ACTION_CANCEL -> {
                 isDragging = false
+                hitOnDown = -1
+                hitTypeOnDown = null
             }
         }
-        val returnValue = true
-        return returnValue
+        return true
+    }
+
+    private fun measureWrappedTextHeight(text: String, maxWidth: Float, paint: Paint): Float {
+        val words = text.split(" ")
+        var line = ""
+        var lines = 0
+        val lineHeight = paint.textSize * 1.3f
+        for (word in words) {
+            val testLine = if (line.isEmpty()) word else "$line $word"
+            if (paint.measureText(testLine) > maxWidth) {
+                if (line.isNotEmpty()) lines++
+                line = word
+            } else {
+                line = testLine
+            }
+        }
+        if (line.isNotEmpty()) lines++
+        return lines * lineHeight
+    }
+
+    private fun drawWrappedText(c: Canvas, text: String, x: Float, y: Float, maxWidth: Float, paint: Paint): Float {
+        val words = text.split(" ")
+        var line = ""
+        var curY = y
+        val lineHeight = paint.textSize * 1.3f
+        for (word in words) {
+            val testLine = if (line.isEmpty()) word else "$line $word"
+            if (paint.measureText(testLine) > maxWidth) {
+                if (line.isNotEmpty()) {
+                    c.drawText(line, x, curY, paint)
+                    curY += lineHeight
+                }
+                line = word
+            } else {
+                line = testLine
+            }
+        }
+        if (line.isNotEmpty()) {
+            c.drawText(line, x, curY, paint)
+            curY += lineHeight
+        }
+        return curY
     }
 }

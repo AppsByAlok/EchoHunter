@@ -237,7 +237,7 @@ object UltimaBossBehavior : IBossBehavior {
         when {
             cycle < 4f -> { // Phase 1: Drone Rain
                 if (gs.bossAttackTimer % 1.5f < dt) {
-                    enemySys.spawnSwarmIfNeeded(gs, scale * 10f, scale * 10f)
+                    enemySys.spawnSwarmIfNeeded(gs, scale)
                 }
             }
             cycle < 8f -> { // Phase 2: Glitch Storm
@@ -349,7 +349,7 @@ object GuardianBossBehavior : IBossBehavior {
     }
 }
 
-// 2. STALKER (Type 2 - Debris Throw & Quick Dashes)
+// 2. STALKER (Type 2 - EMP Traps & Quick Dashes)
 object StalkerBossBehavior : IBossBehavior {
     override val name = "STALKER_PROTOTYPE"
     override val color = 0xFF44FF44.toInt() // Toxic Green
@@ -371,32 +371,46 @@ object StalkerBossBehavior : IBossBehavior {
 
     override fun updateSpecial(dt: Float, gs: GameState, enemySys: EnemySystem, scale: Float) {
         gs.bossAttackTimer += dt
-        val throwCooldown = if (gs.isBossRage) 2f else 4f
+        val dashCooldown = if (gs.isBossRage) 1.5f else 3f
 
-        if (gs.bossAttackTimer > throwCooldown) {
+        // BOSS ABILITY: Sudden Dash
+        if (gs.bossAttackTimer > dashCooldown && gs.bossAttackState == 0) {
+            gs.bossAttackState = 1 // Charging
             gs.bossAttackTimer = 0f
-            // DEBRIS THROW: Spawns a custom projectile (spike type 3)
-            for (i in 0 until gs.maxSpikes) {
-                if (!gs.spikeActive[i]) {
-                    gs.spikeActive[i] = true
-                    gs.spikeX[i] = gs.bossX
-                    gs.spikeY[i] = gs.bossY
-                    gs.spikeLife[i] = 2.0f
-                    gs.spikeType[i] = 3 // NEW TYPE: Enemy Projectile
-                    val dx = gs.px - gs.bossX
-                    val dy = gs.py - gs.bossY
-                    val dist = kotlin.math.sqrt(dx * dx + dy * dy)
-                    val speed = scale * 1.5f
-                    gs.spikeVx[i] = (dx / dist) * speed
-                    gs.spikeVy[i] = (dy / dist) * speed
-                    com.appsbyalok.echohunter.utils.EchoAudioManager.playSound(android.media.ToneGenerator.TONE_SUP_DIAL, 50)
+        }
+
+        if (gs.bossAttackState == 1 && gs.bossAttackTimer > 0.5f) {
+            // EXECUTE DASH
+            val dx = gs.px - gs.bossX
+            val dy = gs.py - gs.bossY
+            val dist = kotlin.math.sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
+            val dashSpeed = scale * 5f
+            gs.bossVx = (dx / dist) * dashSpeed
+            gs.bossVy = (dy / dist) * dashSpeed
+            gs.bossAttackState = 2 // Dashing
+            gs.bossAttackTimer = 0f
+            com.appsbyalok.echohunter.utils.EchoAudioManager.playSound(android.media.ToneGenerator.TONE_CDMA_PIP, 50)
+        }
+
+        if (gs.bossAttackState == 2 && gs.bossAttackTimer > 0.3f) {
+            gs.bossAttackState = 0 // Back to Idle
+            gs.bossAttackTimer = 0f
+            gs.bossVx *= 0.2f
+            gs.bossVy *= 0.2f
+        }
+
+        if (kotlin.random.Random.nextFloat() < 0.1f * dt) {
+            // EMP TRAP DEPLOYMENT
+            for (i in 0 until enemySys.pwn) {
+                if (!enemySys.pwActive[i]) {
+                    enemySys.pwX[i] = gs.bossX
+                    enemySys.pwY[i] = gs.bossY
+                    enemySys.pwType[i] = 4 // Custom Trap Type for Boss
+                    enemySys.pwActive[i] = true
+                    enemySys.pwVis[i] = 1.0f
                     break
                 }
             }
-        }
-
-        if (kotlin.random.Random.nextFloat() < 0.3f * dt) {
-            gs.empFlashTimer = 0.5f
         }
     }
 }
@@ -456,7 +470,7 @@ object OmegaBossBehavior : IBossBehavior {
             gs.bossAttackTimer = 0f
             // Spawn Hunter Swarm
             for (i in 0 until 3) {
-                enemySys.spawnSwarmIfNeeded(gs, scale * 10f, scale * 10f) // Simplified call
+                enemySys.spawnSwarmIfNeeded(gs, scale) // Simplified call
             }
             com.appsbyalok.echohunter.data.StoryProtocol.showIngameMessage("OMEGA: DEPLOYING SWARM UNITS", 2f)
         }

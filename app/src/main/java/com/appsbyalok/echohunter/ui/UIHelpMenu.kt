@@ -42,6 +42,9 @@ class UIHelpMenu(private val context: Context) {
 
     private val backBtnRect = RectF()
     private val repairBtnRect = RectF()
+    private var hitOnDown = -1
+    private var downX = 0f
+    private var downY = 0f
 
     var repairFadeTimer = 0f
 
@@ -429,18 +432,34 @@ class UIHelpMenu(private val context: Context) {
     ): Boolean {
         when (action) {
             MotionEvent.ACTION_DOWN -> {
+                downX = x
+                downY = y
                 lastTouchY = y
                 lastTouchTime = System.currentTimeMillis()
                 scrollVelocity = 0f
                 isDragging = false
+                hitOnDown = when {
+                    StoryProtocol.isGlitchActive && repairFadeTimer <= 0f && !isBooting && repairBtnRect.contains(x, y) -> 1
+                    backBtnRect.contains(x, y) || repairFadeTimer > 0f -> 2
+                    else -> -1
+                }
             }
 
             MotionEvent.ACTION_MOVE -> {
                 val dy = y - lastTouchY
+                val dx = x - downX
                 val currentTime = System.currentTimeMillis()
                 val dt = currentTime - lastTouchTime
 
-                if (abs(dy) > scale * 0.02f) isDragging = true
+                val distSq = dx * dx + (y - downY) * (y - downY)
+                val threshold = scale * scale * 0.05f
+
+                if (abs(dy) > scale * 0.02f) {
+                    isDragging = true
+                    hitOnDown = -1
+                } else if (distSq > threshold) {
+                    hitOnDown = -1
+                }
 
                 // Calculate momentum
                 if (dt > 0) {
@@ -456,10 +475,16 @@ class UIHelpMenu(private val context: Context) {
                 lastTouchTime = currentTime
             }
 
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                if (!isDragging && gs.stateTimer > 0.2f) {
-                    if (StoryProtocol.isGlitchActive && repairFadeTimer <= 0f && !isBooting) {
-                        if (repairBtnRect.contains(x, y)) {
+            MotionEvent.ACTION_UP -> {
+                if (!isDragging && gs.stateTimer > 0.2f && hitOnDown != -1) {
+                    val hitOnUp = when {
+                        StoryProtocol.isGlitchActive && repairFadeTimer <= 0f && !isBooting && repairBtnRect.contains(x, y) -> 1
+                        backBtnRect.contains(x, y) || repairFadeTimer > 0f -> 2
+                        else -> -1
+                    }
+
+                    if (hitOnUp != -1 && hitOnUp == hitOnDown) {
+                        if (hitOnUp == 1) {
                             isBooting = true
                             bootTimer = 0f
                             gs.chromaticIntensity = 0f
@@ -471,12 +496,17 @@ class UIHelpMenu(private val context: Context) {
                             effectSys.spawnParticles(
                                 repairBtnRect.centerX(), repairBtnRect.centerY(), 15, scale
                             )
+                        } else {
+                            onClose()
                         }
-                    } else if (backBtnRect.contains(x, y) || repairFadeTimer > 0f) {
-                        onClose()
                     }
                 }
                 isDragging = false
+                hitOnDown = -1
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                isDragging = false
+                hitOnDown = -1
             }
         }
         return true

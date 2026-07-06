@@ -86,6 +86,11 @@ class HUDRenderer(private val context: Context) {
         // --- 6. PAUSE & STORY POPUPS ---
         drawStoryPopups(c, scale, targetW, gs)
 
+        // --- 7. CAMERA FOCUS INDICATOR ---
+        if (gs.cameraFocusWeight > 0.5f) {
+            drawFocusIndicator(c, scale, targetW, targetH)
+        }
+
         p.style = Paint.Style.STROKE; p.color = GameColors.YELLOW; p.strokeWidth = scale * 0.005f
         c.drawCircle(gs.hudLayout.pauseX, gs.hudLayout.pauseY, gs.hudLayout.btnRadius * 0.8f, p)
         p.style = Paint.Style.FILL
@@ -140,7 +145,10 @@ class HUDRenderer(private val context: Context) {
             currentY += scale * 0.03f
         }
 
-        if (gs.objectiveLabel.isNotEmpty()) {
+        // BOSS UI replaces Objective Bar when active
+        if (gs.bossActive && gs.bossHp > 0) {
+            drawBossUI(c, scale, gs, targetW, currentY)
+        } else if (gs.objectiveLabel.isNotEmpty()) {
             pText.color = GameColors.YELLOW; pText.textSize = scale * 0.025f
             c.drawText(gs.objectiveLabel, targetW / 2f, currentY, pText)
             currentY += scale * 0.025f
@@ -310,7 +318,7 @@ class HUDRenderer(private val context: Context) {
         val padding = scale * 0.05f
         
         var maxWidth = 0f
-        wrappedLines.forEach { maxWidth = Math.max(maxWidth, pText.measureText(it)) }
+        wrappedLines.forEach { maxWidth = maxWidth.coerceAtLeast(pText.measureText(it)) }
         
         rectPopup.set(targetW/2f - maxWidth/2f - padding, startY + pText.ascent() - padding, 
                      targetW/2f + maxWidth/2f + padding, startY + (wrappedLines.size - 1) * lh + pText.descent() + padding)
@@ -323,8 +331,63 @@ class HUDRenderer(private val context: Context) {
         wrappedLines.forEachIndexed { i, l -> c.drawText(l, targetW/2f, startY + i * lh, pText) }
     }
 
+    private fun drawBossUI(c: Canvas, scale: Float, gs: GameState, targetW: Float, topY: Float) {
+        val barW = scale * 0.55f
+        val barH = scale * 0.02f
+        val barX = (targetW - barW) / 2f
+        val barY = topY + scale * 0.01f
+
+        gs.hudLayout.bossHpRect.set(barX, barY, barX + barW, barY + barH)
+
+        // Label (Smaller for Top Placement)
+        pText.textAlign = Paint.Align.CENTER; pText.textSize = scale * 0.022f; pText.color = GameColors.RED
+        c.drawText("HOSTILE CORE DETECTED", targetW / 2f, topY, pText)
+
+        // Main Bar
+        p.style = Paint.Style.STROKE; p.strokeWidth = scale * 0.004f; p.color = GameColors.RED
+        c.drawRect(gs.hudLayout.bossHpRect, p)
+        
+        val hpPercent = if (gs.bossMaxHp > 0) gs.bossHp.toFloat() / gs.bossMaxHp else 0f
+        p.style = Paint.Style.FILL
+        c.drawRect(barX, barY, barX + barW * hpPercent, barY + barH, p)
+
+        // Low HP Glitch Effect
+        if (hpPercent < 0.25f && System.currentTimeMillis() % 300 < 150) {
+            p.color = 0xAAFFFFFF.toInt()
+            c.drawRect(barX, barY, barX + barW * hpPercent, barY + barH, p)
+        }
+    }
+
+    private fun drawFocusIndicator(c: Canvas, scale: Float, targetW: Float, targetH: Float) {
+        val size = scale * 0.1f
+        val pad = scale * 0.05f
+        p.style = Paint.Style.STROKE; p.strokeWidth = scale * 0.008f; p.color = GameColors.YELLOW
+        
+        // Corner brackets indicating focus
+        // Top Left
+        c.drawLine(pad, pad, pad + size, pad, p)
+        c.drawLine(pad, pad, pad, pad + size, p)
+        // Top Right
+        c.drawLine(targetW - pad, pad, targetW - pad - size, pad, p)
+        c.drawLine(targetW - pad, pad, targetW - pad, pad + size, p)
+        // Bottom Left
+        c.drawLine(pad, targetH - pad, pad + size, targetH - pad, p)
+        c.drawLine(pad, targetH - pad, pad, targetH - pad - size, p)
+        // Bottom Right
+        c.drawLine(targetW - pad, targetH - pad, targetW - pad - size, targetH - pad, p)
+        c.drawLine(targetW - pad, targetH - pad, targetW - pad, targetH - pad - size, p)
+
+        pText.textAlign = Paint.Align.CENTER; pText.textSize = scale * 0.02f; pText.color = GameColors.YELLOW
+        if (System.currentTimeMillis() % 1000 < 500) {
+            c.drawText("TARGET LOCKED", targetW / 2f, pad + scale * 0.03f, pText)
+        }
+    }
+
     fun renderOverclockText(c: Canvas, scale: Float, targetW: Float, targetH: Float) {
-        pText.textSize = scale * 0.08f; pText.textAlign = Paint.Align.CENTER; pText.color = GameColors.OVERCLOCK
+        val alpha = (128 + 127 * sin(System.currentTimeMillis() * 0.01)).toInt().coerceIn(0, 255)
+        pText.textSize = scale * 0.08f; pText.textAlign = Paint.Align.CENTER; pText.color = (alpha shl 24) or (GameColors.OVERCLOCK and 0xFFFFFF)
         c.drawText("OVERRIDE ACCEPTED", targetW / 2f, targetH / 2f - scale * 0.2f, pText)
+        pText.textSize = scale * 0.03f
+        c.drawText("SYSTEM PERFORMANCE AT 200%", targetW / 2f, targetH / 2f - scale * 0.12f, pText)
     }
 }

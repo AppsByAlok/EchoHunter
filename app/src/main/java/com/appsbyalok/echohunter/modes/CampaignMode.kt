@@ -31,7 +31,7 @@ class CampaignMode : GameModeStrategy {
 
     override fun updateCameraAndMovement(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {
         // Use the centralized camera engine with mode-specific settings
-        gs.updateCameraLogic(dt, width, height, baseZoom = 1.0f, leadMult = 0.15f)
+        gs.updateCameraLogic(dt, width, height, leadMult = 0.15f)
     }
 
     override fun checkProgression(

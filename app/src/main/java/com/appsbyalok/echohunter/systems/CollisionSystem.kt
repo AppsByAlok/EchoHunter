@@ -41,18 +41,21 @@ class CollisionSystem(
                 val dy = enemySystem.pwY[i] - gs.py
                 val d2 = dx * dx + dy * dy
 
-                val magnetMult = UpgradeSystem.getDataMagnetRadiusMultiplier()
+                val isTrap = enemySystem.pwType[i] == 4
+                val magnetMult = if (isTrap) 1f else UpgradeSystem.getDataMagnetRadiusMultiplier()
                 val pickupDistSq = hitDistSq * 1.5f * magnetMult * magnetMult
 
                 if (d2 < pickupDistSq) {
                     enemySystem.pwActive[i] = false
-                    EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 100)
-
-                    if (!gs.isOverclocked) {
-                        gs.overclockMeter = min(100f, gs.overclockMeter + 25f)
-                        if (gs.overclockMeter >= 100f && gs.showOverclockTextTimer <= 0f) {
-                            gs.showOverclockTextTimer = 2.0f
-                            EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100)
+                    
+                    if (!isTrap) {
+                        EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 100)
+                        if (!gs.isOverclocked) {
+                            gs.overclockMeter = min(100f, gs.overclockMeter + 25f)
+                            if (gs.overclockMeter >= 100f && gs.showOverclockTextTimer <= 0f) {
+                                gs.showOverclockTextTimer = 2.0f
+                                EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100)
+                            }
                         }
                     }
 
@@ -60,6 +63,20 @@ class CollisionSystem(
                         0 -> gs.hp = min(gs.maxHp, gs.hp + 1)
                         1 -> gs.visionClarity = 1.5f
                         2 -> gs.shieldTimer = 5f
+                        4 -> {
+                            // BOSS EMP TRAP: Damaging/Slow
+                            if (gs.playerIframe <= 0f) {
+                                if (gs.shieldTimer > 0f) {
+                                    gs.shieldTimer = 0f
+                                } else {
+                                    onDamage(scale)
+                                }
+                                gs.playerIframe = 1.0f
+                                gs.empFlashTimer = 0.5f
+                                gs.shakeAmount = max(gs.shakeAmount, scale * 0.1f)
+                                EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 150)
+                            }
+                        }
                     }
                 }
             }
@@ -105,7 +122,7 @@ class CollisionSystem(
                                 gs.elimTargetsKilled++
                                 StoryProtocol.showIngameMessage("TARGET ELIMINATED!", 1.5f)
                             }
-                            enemySystem.killEnemy(j, gs, width, height)
+                            enemySystem.killEnemy(j, gs)
                         } else {
                             // If not dead, apply push back
                             enemySystem.eState[j] = 2 
@@ -165,7 +182,7 @@ class CollisionSystem(
                                         if (enemySystem.hp[j] <= 0) {
                                             onScoreAdd(5L)
                                             gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
-                                            enemySystem.killEnemy(j, gs, width, height)
+                                            enemySystem.killEnemy(j, gs)
                                         }
                                     }
                                 }
@@ -243,7 +260,7 @@ class CollisionSystem(
                                             if (enemySystem.hp[j] <= 0) {
                                                 val reward = (LevelEngine.getKillRewardKB(gs.currentLevel, false) * UpgradeSystem.getRewardMultiplier()).toLong()
                                                 gs.collectedDataKB += reward
-                                                enemySystem.killEnemy(j, gs, width, height)
+                                                enemySystem.killEnemy(j, gs)
                                             }
                                         }
                                     }
@@ -285,7 +302,7 @@ class CollisionSystem(
 
                                 // FIX: Enemies should always die if HP <= 0, regardless of boss state.
                                 // The old check prevented clearing the arena but caused invincibility bugs.
-                                enemySystem.killEnemy(i, gs, width, height)
+                                enemySystem.killEnemy(i, gs)
                             }
                             break // Spike breaks after impact
                         }
@@ -331,7 +348,7 @@ class CollisionSystem(
                     gs.shakeAmount = max(gs.shakeAmount, scale * 0.1f)
                     gs.chromaticIntensity = max(gs.chromaticIntensity, 0.6f)
 
-                    enemySystem.killEnemy(i, gs, width, height)
+                    enemySystem.killEnemy(i, gs)
 
                     if (gs.coreHp <= 0) {
                         gs.hp = 0
@@ -387,7 +404,7 @@ class CollisionSystem(
                             gs.elimTargetsKilled++
                             StoryProtocol.showIngameMessage("TARGET ELIMINATED!", 1.5f)
                         }
-                        enemySystem.killEnemy(i, gs, width, height)
+                        enemySystem.killEnemy(i, gs)
                     }
                 } else if (enemySystem.type[i] == 1) {
                     // --- HUNTER COLLISION ---
@@ -396,7 +413,7 @@ class CollisionSystem(
                             gs.shieldTimer = 0f
                             gs.playerIframe = 1.0f + UpgradeSystem.getIframeDurationBonus()
                             effectSystem.spawnParticles(enemySystem.ex[i], enemySystem.ey[i], 1, scale)
-                            enemySystem.killEnemy(i, gs, width, height) // Shield absorbs and kills
+                            enemySystem.killEnemy(i, gs) // Shield absorbs and kills
                         } else {
                             effectSystem.spawnParticles(gs.px, gs.py, 1, scale)
                             onDamage(scale)
@@ -413,7 +430,7 @@ class CollisionSystem(
                         EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 80)
                         playedEnemyHackSound = true
                     }
-                    enemySystem.killEnemy(i, gs, width, height)
+                    enemySystem.killEnemy(i, gs)
                 } else if (enemySystem.type[i] == 0) {
                     // --- NORMAL YELLOW (PATROL) ---
                     onScoreAdd(2L)
@@ -423,7 +440,7 @@ class CollisionSystem(
                         EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 60)
                         playedEnemyHackSound = true
                     }
-                    enemySystem.killEnemy(i, gs, width, height)
+                    enemySystem.killEnemy(i, gs)
                 }
             }
         }

@@ -21,13 +21,13 @@ class StoryMode : GameModeStrategy {
 
     override fun updateCameraAndMovement(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {
         // Use the centralized camera engine with mode-specific settings
-        gs.updateCameraLogic(dt, width, height, baseZoom = 1.0f, leadMult = 0.1f)
+        gs.updateCameraLogic(dt, width, height, leadMult = 0.1f)
 
         // Clamp the player within the visible screen (Story Mode restriction)
         // Only clamp if not in cinematic focus to prevent teleporting
         if (gs.cameraFocusWeight <= 0f) {
-            val visibleW = width / gs.cameraZoom
-            val visibleH = height / gs.cameraZoom
+            val visibleW = gs.getViewportW(width, height)
+            val visibleH = gs.getViewportH(width, height)
             gs.px = gs.px.coerceIn(gs.cameraX, gs.cameraX + visibleW)
             gs.py = gs.py.coerceIn(gs.cameraY, gs.cameraY + visibleH)
         }

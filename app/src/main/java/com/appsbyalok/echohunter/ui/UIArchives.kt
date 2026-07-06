@@ -38,6 +38,7 @@ class UIArchives {
 
     private val autoNextBoxRect = RectF()
     private val autoPilotBoxRect = RectF()
+    private var hitOnDown = -1
 
     // Garbage Collector stutter variables optimized out using object pools
     private val reusableRect = RectF()
@@ -248,20 +249,49 @@ class UIArchives {
         c.drawText("DISCONNECT", closeBtnRect.centerX(), closeBtnRect.centerY() + scale * 0.012f, pText)
     }
 
+    private var touchDownX = 0f
+    private var touchDownY = 0f
+
     fun onTouch(x: Float, y: Float, action: Int, scale: Float, gs: GameState, onSelect: (Int) -> Unit, onBack: () -> Unit): Boolean {
         when (action) {
             MotionEvent.ACTION_DOWN -> {
+                touchDownX = x
+                touchDownY = y
                 lastTouchY = y
                 lastTouchTime = System.currentTimeMillis()
                 scrollVelocity = 0f
                 isDragging = false
+                hitOnDown = when {
+                    closeBtnRect.contains(x, y) -> -2
+                    autoNextBoxRect.contains(x, y) -> -3
+                    autoPilotBoxRect.contains(x, y) -> -4
+                    else -> {
+                        var hit = -1
+                        for ((lvl, rect) in levelButtons) {
+                            if (rect.contains(x, y)) {
+                                hit = lvl
+                                break
+                            }
+                        }
+                        hit
+                    }
+                }
             }
             MotionEvent.ACTION_MOVE -> {
                 val currentTime = System.currentTimeMillis()
                 val dt = currentTime - lastTouchTime
                 val dy = y - lastTouchY
+                val dx = x - touchDownX
 
-                if (abs(dy) > scale * 0.02f) isDragging = true
+                val distSq = dx * dx + (y - touchDownY) * (y - touchDownY)
+                val threshold = scale * scale * 0.05f
+
+                if (abs(dy) > scale * 0.02f) {
+                    isDragging = true
+                    hitOnDown = -1
+                } else if (distSq > threshold) {
+                    hitOnDown = -1
+                }
 
                 // VELOCITY CALCULATION
                 if (dt > 0) {
@@ -284,43 +314,59 @@ class UIArchives {
             }
 
             MotionEvent.ACTION_UP -> {
-                if (!isDragging) {
-                    if (closeBtnRect.contains(x, y)) {
-                        EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
-                        onBack(); return true
-                    }
-                    if (autoNextBoxRect.contains(x, y)) {
-                        SaveManager.setAutoNextLevel(!SaveManager.isAutoNextLevelEnabled)
-                        EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 50)
-                        return true
-                    }
-                    else if (autoPilotBoxRect.contains(x, y)) {
-                        gs.isAutoPilotActive = !gs.isAutoPilotActive
-                        if (gs.isAutoPilotActive) {
-                            gs.autoPilotTimer = 600f
-                            EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 150)
-                            gs.showGlobalMessage("AUTOPILOT ENGAGED.\nSELECT A LEVEL TO START.", 3f)
-                        } else {
-                            gs.autoPilotTimer = 0f
-                            EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 50)
+                if (!isDragging && hitOnDown != -1) {
+                    val hitOnUp = when {
+                        closeBtnRect.contains(x, y) -> -2
+                        autoNextBoxRect.contains(x, y) -> -3
+                        autoPilotBoxRect.contains(x, y) -> -4
+                        else -> {
+                            var hit = -1
+                            for ((lvl, rect) in levelButtons) {
+                                if (rect.contains(x, y)) {
+                                    hit = lvl
+                                    break
+                                }
+                            }
+                            hit
                         }
-                        return true
                     }
 
-                    for ((lvl, rect) in levelButtons) {
-                        if (rect.contains(x, y)) {
-                            EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
-                            onSelect(lvl); return true
+                    if (hitOnUp != -1 && hitOnUp == hitOnDown) {
+                        when (hitOnUp) {
+                            -2 -> {
+                                EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
+                                onBack()
+                            }
+                            -3 -> {
+                                SaveManager.setAutoNextLevel(!SaveManager.isAutoNextLevelEnabled)
+                                EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 50)
+                            }
+                            -4 -> {
+                                gs.isAutoPilotActive = !gs.isAutoPilotActive
+                                if (gs.isAutoPilotActive) {
+                                    gs.autoPilotTimer = 600f
+                                    EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 150)
+                                    gs.showGlobalMessage("AUTOPILOT ENGAGED.\nSELECT A LEVEL TO START.", 3f)
+                                } else {
+                                    gs.autoPilotTimer = 0f
+                                    EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 50)
+                                }
+                            }
+                            else -> {
+                                EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
+                                onSelect(hitOnUp)
+                            }
                         }
                     }
                 }
                 isDragging = false
+                hitOnDown = -1
             }
             MotionEvent.ACTION_CANCEL -> {
                 isDragging = false
+                hitOnDown = -1
             }
         }
-        val returnValue = true
-        return returnValue
+        return true
     }
 }

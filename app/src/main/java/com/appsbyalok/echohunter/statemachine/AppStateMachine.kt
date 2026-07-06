@@ -74,12 +74,7 @@ class MainMenuState(private val manager: AppStateManager) : IAppState {
         manager.view.uiMainMenu.draw(c, scale, gs, width, height, manager.view.effectSys)
     }
     override fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean {
-        if (action == MotionEvent.ACTION_DOWN && vx > targetW - scale * 0.15f && vy < scale * 0.15f) {
-            manager.view.modMenu.isOpen = true
-            EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 100)
-            return true
-        }
-        return manager.view.uiMainMenu.onTouch(vx, vy, action, scale, targetW, targetH, manager.view, gs, manager.view.onDifficultyToggle, manager.view.onHelpOpen, manager.view.onMenuRoute)
+        return manager.view.uiMainMenu.onTouch(vx, vy, action, scale, targetW, targetH, manager.view, gs, manager.view.onDifficultyToggle, manager.view.onHelpOpen, manager.view.onModMenuOpen, manager.view.onMenuRoute)
     }
     override fun onBackPressed(gs: GameState): Boolean = false
 }
@@ -97,8 +92,9 @@ class GameplayState(private val manager: AppStateManager) : IAppState {
         // --- HUD ISOLATION: Apply Camera Transforms ONLY to the World ---
         
         // 1. Zoom Logic
-        if (gs.cameraZoom != 1.0f) {
-            c.scale(gs.cameraZoom, gs.cameraZoom, width / 2f, height / 2f)
+        val worldZoom = gs.getCameraZoom(width, height)
+        if (worldZoom != 1.0f) {
+            c.scale(worldZoom, worldZoom)
         } else if (gs.state == 9) {
             val zoom = 1f + (gs.mergeTimer * 0.5f)
             c.scale(zoom, zoom, gs.coreX - gs.cameraX, gs.coreY - gs.cameraY)
@@ -131,8 +127,12 @@ class GameplayState(private val manager: AppStateManager) : IAppState {
 }
 
 class PauseState(private val manager: AppStateManager) : IAppState {
+    private var hitOnDown = -1
+
     override fun onEnter(gs: GameState) {}
-    override fun onExit(gs: GameState) {}
+    override fun onExit(gs: GameState) {
+        hitOnDown = -1
+    }
     override fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {
         manager.view.uiHelpMenu.update(dt)
     }
@@ -141,28 +141,47 @@ class PauseState(private val manager: AppStateManager) : IAppState {
         manager.view.menuRenderer.drawPause(c, scale, gs, width, height)
     }
     override fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean {
+        if (action == MotionEvent.ACTION_DOWN) {
+            hitOnDown = when {
+                manager.view.menuRenderer.pauseModRect.contains(vx, vy) -> 1
+                manager.view.menuRenderer.pauseDiscRect.contains(vx, vy) -> 2
+                manager.view.menuRenderer.pauseAutoRect.contains(vx, vy) -> 3
+                manager.view.menuRenderer.pauseRestartRect.contains(vx, vy) -> 4
+                manager.view.menuRenderer.pauseResumeRect.contains(vx, vy) || (vx > targetW - scale * 0.15f && vy < scale * 0.15f) -> 5
+                else -> -1
+            }
+        }
+
         if (action == MotionEvent.ACTION_UP && gs.stateTimer > 0.2f) {
-            if (manager.view.menuRenderer.pauseModRect.contains(vx, vy)) {
-                manager.view.modMenu.isOpen = true
-                EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 100)
-            } else if (manager.view.menuRenderer.pauseDiscRect.contains(vx, vy)) {
-                manager.view.disconnectCable()
-            } else if (manager.view.menuRenderer.pauseAutoRect.contains(vx, vy)) {
-                gs.isAutoPilotActive = !gs.isAutoPilotActive
-                EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100)
-            } else if (manager.view.menuRenderer.pauseRestartRect.contains(vx, vy)) {
-                EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 150)
-                manager.view.resetGame()
-            } else if (manager.view.menuRenderer.pauseResumeRect.contains(vx, vy) || (vx > targetW - scale * 0.15f && vy < scale * 0.15f)) {
-                if (gs.isRotationWarning) {
-                    EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
-                } else {
-                    // FIX: Ensure we return to the correct sub-gameplay state (Normal or Merge)
-                    val returnState = if (gs.state == 8 || (gs.coreX > 0f && gs.bossHp <= 0 && gs.gameMode == 1 && gs.currentSector >= 8)) 8 else 1
-                    manager.view.changeState(returnState)
-                    manager.view.lastFrameTime = System.nanoTime()
+            val hitOnUp = when {
+                manager.view.menuRenderer.pauseModRect.contains(vx, vy) -> 1
+                manager.view.menuRenderer.pauseDiscRect.contains(vx, vy) -> 2
+                manager.view.menuRenderer.pauseAutoRect.contains(vx, vy) -> 3
+                manager.view.menuRenderer.pauseRestartRect.contains(vx, vy) -> 4
+                manager.view.menuRenderer.pauseResumeRect.contains(vx, vy) || (vx > targetW - scale * 0.15f && vy < scale * 0.15f) -> 5
+                else -> -1
+            }
+
+            if (hitOnUp != -1 && hitOnUp == hitOnDown) {
+                when (hitOnUp) {
+                    1 -> manager.view.onModMenuOpen()
+                    2 -> manager.view.disconnectCable()
+                    3 -> {
+                        gs.isAutoPilotActive = !gs.isAutoPilotActive
+                        EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100)
+                    }
+                    4 -> {
+                        EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 150)
+                        manager.view.resetGame()
+                    }
+                    5 -> {
+                        val returnState = if (gs.state == 8 || (gs.coreX > 0f && gs.bossHp <= 0 && gs.gameMode == 1 && gs.currentSector >= 8)) 8 else 1
+                        manager.view.changeState(returnState)
+                        manager.view.lastFrameTime = System.nanoTime()
+                    }
                 }
             }
+            hitOnDown = -1
         }
         return true
     }
@@ -191,8 +210,12 @@ class HelpState(private val manager: AppStateManager) : IAppState {
 }
 
 class VictoryState(private val manager: AppStateManager) : IAppState {
+    private var hitOnDown = -1
+
     override fun onEnter(gs: GameState) {}
-    override fun onExit(gs: GameState) {}
+    override fun onExit(gs: GameState) {
+        hitOnDown = -1
+    }
     override fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {
         if (SaveManager.isAutoNextLevelEnabled && gs.gameMode == 0 && gs.stateTimer > 2.0f) {
             manager.view.startGame(0, gs.currentLevel + 1)
@@ -203,15 +226,32 @@ class VictoryState(private val manager: AppStateManager) : IAppState {
         manager.view.menuRenderer.drawLevelVictory(c, scale, gs, width, height)
     }
     override fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean {
-        if (action == MotionEvent.ACTION_UP && gs.stateTimer > 0.3f) {
-            if (manager.view.menuRenderer.victoryNextRect.contains(vx, vy)) {
-                EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 150)
-                manager.view.startGame(0, gs.currentLevel + 1)
-                return true
-            } else if (manager.view.menuRenderer.victoryHomeRect.contains(vx, vy)) {
-                manager.view.returnToArchives()
-                return true
+        if (action == MotionEvent.ACTION_DOWN) {
+            hitOnDown = when {
+                manager.view.menuRenderer.victoryNextRect.contains(vx, vy) -> 1
+                manager.view.menuRenderer.victoryHomeRect.contains(vx, vy) -> 2
+                else -> -1
             }
+        }
+
+        if (action == MotionEvent.ACTION_UP && gs.stateTimer > 0.3f) {
+            val hitOnUp = when {
+                manager.view.menuRenderer.victoryNextRect.contains(vx, vy) -> 1
+                manager.view.menuRenderer.victoryHomeRect.contains(vx, vy) -> 2
+                else -> -1
+            }
+
+            if (hitOnUp != -1 && hitOnUp == hitOnDown) {
+                if (hitOnUp == 1) {
+                    EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 150)
+                    manager.view.startGame(0, gs.currentLevel + 1)
+                    return true
+                } else {
+                    manager.view.returnToArchives()
+                    return true
+                }
+            }
+            hitOnDown = -1
         }
         return true
     }
@@ -222,8 +262,12 @@ class VictoryState(private val manager: AppStateManager) : IAppState {
 }
 
 class StoryCutsceneState(private val manager: AppStateManager) : IAppState {
+    private var downY = -1f
+
     override fun onEnter(gs: GameState) {}
-    override fun onExit(gs: GameState) {}
+    override fun onExit(gs: GameState) {
+        downY = -1f
+    }
     override fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {
         manager.view.uiHelpMenu.update(dt)
     }
@@ -233,6 +277,9 @@ class StoryCutsceneState(private val manager: AppStateManager) : IAppState {
         manager.view.storyStep = manager.view.menuRenderer.drawStory(c, lines, scale, gs, width, height, manager.view.storyStep)
     }
     override fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean {
+        if (action == MotionEvent.ACTION_DOWN) {
+            downY = vy
+        }
         if (action == MotionEvent.ACTION_UP) {
             val activeLines = if (gs.state == 4) StoryProtocol.badEndingLines else manager.view.currentStoryLines
             
@@ -241,7 +288,7 @@ class StoryCutsceneState(private val manager: AppStateManager) : IAppState {
                 return true
             } 
             
-            if (vy > targetH * 0.5f) {
+            if (vy > targetH * 0.5f && downY > targetH * 0.5f) {
                 if (gs.stateTimer < 0.5f) return true
                 when (gs.state) {
                     5, 7 -> {
@@ -262,6 +309,7 @@ class StoryCutsceneState(private val manager: AppStateManager) : IAppState {
                     else -> manager.view.disconnectCable()
                 }
             }
+            downY = -1f
         }
         return true
     }
@@ -294,8 +342,8 @@ class SubMenuState(private val manager: AppStateManager) : IAppState {
         return when (gs.state) {
             10 -> manager.view.uiDecompiler.onTouch(vx, vy, action, scale, gs, manager.view.onAppClose)
             11 -> manager.view.uiArchives.onTouch(vx, vy, action, scale, gs, manager.view.onArchiveSelect, manager.view.onAppClose)
-            13 -> manager.view.uiArsenal.onTouch(vx, vy, action, gs, manager.view.onAppClose)
-            14 -> manager.view.uiNanoOS.onTouch(vx, vy, action, { appIndex ->
+            13 -> manager.view.uiArsenal.onTouch(vx, vy, action, scale, gs, manager.view.onAppClose)
+            14 -> manager.view.uiNanoOS.onTouch(vx, vy, action, scale, { appIndex ->
                 manager.view.menuReturnState = 14
                 when (appIndex) {
                     0 -> manager.view.changeState(10)
@@ -304,7 +352,7 @@ class SubMenuState(private val manager: AppStateManager) : IAppState {
                     3 -> manager.view.changeState(15)
                 }
             }, manager.view.onDisconnect)
-            15 -> manager.view.uiTerminal.onTouch(vx, vy, action, gs, manager.view.context, manager.view.onAppClose)
+            15 -> manager.view.uiTerminal.onTouch(vx, vy, action, scale, gs, manager.view.context, manager.view.onAppClose)
             else -> true
         }
     }
