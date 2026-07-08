@@ -29,6 +29,7 @@ class MenuRenderer(private val context: Context) {
     // --- PUBLIC HITBOXES FOR TOUCH HANDLING ---
     val pauseResumeRect = RectF()
     val pauseAutoRect = RectF()
+    val pauseAimRect = RectF()
     val pauseDiscRect = RectF()
     val pauseModRect = RectF()
     val pauseRestartRect = RectF()
@@ -171,6 +172,7 @@ class MenuRenderer(private val context: Context) {
                 com.appsbyalok.echohunter.data.LevelFeature.ADMIN_BONUS -> GameColors.HP
                 com.appsbyalok.echohunter.data.LevelFeature.BOMB -> 0xFFFF0000.toInt()
                 com.appsbyalok.echohunter.data.LevelFeature.DARKNESS -> 0xFF000000.toInt()
+                com.appsbyalok.echohunter.data.LevelFeature.CLEAN_SWEEP -> GameColors.COOLANT
             }
             // Passing pseudo-dark color for cutout blending (to match pause bg)
             com.appsbyalok.echohunter.utils.LevelIcons.drawMicroIcon(c, f, iconRect, pIcon, 0xFF1A1C20.toInt())
@@ -191,16 +193,17 @@ class MenuRenderer(private val context: Context) {
         drawButton(c, pauseRestartRect, "> RESTART LEVEL <", GameColors.YELLOW, scale)
         btnStartY += btnH + btnGap
 
-        // 3. AUTOPILOT BUTTON
+        // 3. AIM MODE BUTTON
+        pauseAimRect.set(btnStartX, btnStartY, btnStartX + btnW, btnStartY + btnH)
+        val aimText = "> AIM: ${if (gs.controls.activeAttackMode == com.appsbyalok.echohunter.input.AttackMode.AUTO_AIM) "AUTO" else "MANUAL"} <"
+        drawButton(c, pauseAimRect, aimText, GameColors.PULSE, scale)
+        btnStartY += btnH + btnGap
+
+        // 4. AUTOPILOT BUTTON
         pauseAutoRect.set(btnStartX, btnStartY, btnStartX + btnW, btnStartY + btnH)
         val autoText = "> AUTOPILOT: ${if (gs.isAutoPilotActive) "ON" else "OFF"} <"
         val autoColor = if (gs.isAutoPilotActive) GameColors.HP else GameColors.CLARITY
         drawButton(c, pauseAutoRect, autoText, autoColor, scale)
-        btnStartY += btnH + btnGap
-
-        // 4. MOD MENU BUTTON
-        pauseModRect.set(btnStartX, btnStartY, btnStartX + btnW, btnStartY + btnH)
-        drawButton(c, pauseModRect, "> MOD MENU <", GameColors.PULSE, scale)
         btnStartY += btnH + btnGap
 
         // 5. DISCONNECT BUTTON

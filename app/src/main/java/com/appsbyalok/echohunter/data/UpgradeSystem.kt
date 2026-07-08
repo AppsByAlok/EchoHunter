@@ -31,7 +31,8 @@ enum class UpgradeType {
     GHOST_PROTOCOL,      // ELITE: Massive I-Frames
     SONAR_RANGE,        // NEW: Increased Pulse Radius
     SILENT_SONAR,       // NEW: Reduced Enemy Alert Range
-    SONAR_DUR           // NEW: Enemies stay visible longer
+    SONAR_DUR,           // NEW: Enemies stay visible longer
+    RESONANCE_CHAMBER   // NEW: Clean Sweep Chain Radius
 }
 
 data class UpgradeConfig(
@@ -189,6 +190,12 @@ object UpgradeSystem {
             "Reduces the need for frequent pings, saving focus/energy.",
             "The memory of the enemy lingers on your reticle.",
             5, 500L, 1.6f
+        ),
+        UpgradeType.RESONANCE_CHAMBER to UpgradeConfig(
+            UpgradeType.RESONANCE_CHAMBER, "RESONANCE_CHAMBER.IO", "Clean Sweep Chain Radius +0.5m.",
+            "Increases the range of cascading compiler destructions.",
+            "Vibrations in the network. One fall, they all fall.",
+            5, 1500L, 2.0f
         )
     )
 

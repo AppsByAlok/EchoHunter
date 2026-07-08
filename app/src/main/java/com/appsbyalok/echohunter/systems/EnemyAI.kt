@@ -177,7 +177,7 @@ class EnemyAI {
             val dx = x1 - x0
             val dy = y1 - y0
             val distSq = dx * dx + dy * dy
-            val detectionRange = (gs.tileSize * 3f) * com.appsbyalok.echohunter.data.UpgradeSystem.getStealthDetectionMultiplier()
+            val detectionRange = (gs.tileSize * 2.5f) * com.appsbyalok.echohunter.data.UpgradeSystem.getStealthDetectionMultiplier()
             if (distSq > detectionRange * detectionRange) return false
         }
         val grid = gs.gridMap ?: return true

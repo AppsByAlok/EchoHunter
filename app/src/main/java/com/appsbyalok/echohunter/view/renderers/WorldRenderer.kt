@@ -67,6 +67,28 @@ class WorldRenderer(
 
         if (!showSpawners) return
 
+        // --- NEW: NETWORK DATA STREAMS ---
+        if (gs.activeObjective is com.appsbyalok.echohunter.modes.CleanSweepObjective) {
+            pGlow.style = Paint.Style.STROKE
+            pGlow.strokeWidth = scale * 0.003f
+            for (node in gs.spawnerNodes) {
+                if (node.parentNodeIdx >= 0 && node.parentNodeIdx < gs.spawnerNodes.size && node.state != com.appsbyalok.echohunter.systems.SpawnState.DESTROYED) {
+                    val parent = gs.spawnerNodes[node.parentNodeIdx]
+                    if (parent.state != com.appsbyalok.echohunter.systems.SpawnState.DESTROYED) {
+                        val x1 = node.x - gs.cameraX
+                        val y1 = node.y - gs.cameraY
+                        val x2 = parent.x - gs.cameraX
+                        val y2 = parent.y - gs.cameraY
+                        
+                        // Pulse effect along the stream
+                        val pulse = (sin(gs.timeSinceStart * 4f + node.x * 0.01f) + 1f) / 2f
+                        pGlow.color = (GameColors.PULSE and 0x00FFFFFF) or ((0.15f + pulse * 0.25f) * 255).toInt().shl(24)
+                        c.drawLine(x1, y1, x2, y2, pGlow)
+                    }
+                }
+            }
+        }
+
         // --- NEW: SPAWNER NODES (CIRCUIT CHIP LOOK) ---
         for (node in gs.spawnerNodes) {
             val nx = node.x - gs.cameraX
@@ -103,27 +125,98 @@ class WorldRenderer(
             if (nodeAlpha < 0.05f) continue
             val alphaInt = (nodeAlpha * 255).toInt()
 
-            val nodeColor = when(node.type) {
-                1 -> GameColors.RED
-                2 -> GameColors.YELLOW
-                else -> GameColors.PULSE
+            val nodeColor = when (node.state) {
+                com.appsbyalok.echohunter.systems.SpawnState.DESTROYED -> 0xFF333333.toInt()
+                com.appsbyalok.echohunter.systems.SpawnState.DISABLED -> GameColors.YELLOW
+                com.appsbyalok.echohunter.systems.SpawnState.REPAIRING -> 0xFF00FF88.toInt()
+                com.appsbyalok.echohunter.systems.SpawnState.SELF_DESTROYING -> GameColors.OVERCLOCK
+                else -> when (node.type) {
+                    1 -> GameColors.RED
+                    2 -> GameColors.YELLOW
+                    else -> GameColors.PULSE
+                }
             }
 
             // 1. Chip Base (Semi-transparent)
             p.style = Paint.Style.FILL
-            p.color = ( (alphaInt * 0.4f).toInt() shl 24) or (nodeColor and 0xFFFFFF)
+            
+            // Highlight ROOT nodes in Clean Sweep
+            val isRoot = gs.activeObjective is com.appsbyalok.echohunter.modes.CleanSweepObjective && node.parentNodeIdx == -1 && node.state != com.appsbyalok.echohunter.systems.SpawnState.DESTROYED
+            if (isRoot) {
+                p.color = (alphaInt shl 24) or (GameColors.PULSE and 0xFFFFFF)
+                c.drawCircle(nx, ny, r * 1.4f, p)
+            }
+
+            val baseAlpha = if (node.state == com.appsbyalok.echohunter.systems.SpawnState.DISABLED) 
+                (alphaInt * 0.2f * (0.5f + 0.5f * sin(gs.timeSinceStart * 15f))).toInt()
+            else (alphaInt * 0.4f).toInt()
+            
+            p.color = (baseAlpha shl 24) or (nodeColor and 0xFFFFFF)
             c.drawRect(nx - r, ny - r, nx + r, ny + r, p)
 
-            // 2. Progress Fill (Chip charging up)
-            val progress = 1f - (node.cooldownTimer / node.maxCooldown)
-            p.color = ( (alphaInt * 0.7f).toInt() shl 24) or (nodeColor and 0xFFFFFF)
-            c.drawRect(nx - r, ny + r - (2 * r * progress), nx + r, ny + r, p)
+            // 4. SELF-DESTRUCT LIGHTNING EFFECT
+            if (node.state == com.appsbyalok.echohunter.systems.SpawnState.SELF_DESTROYING) {
+                p.style = Paint.Style.STROKE
+                p.color = GameColors.OVERCLOCK
+                p.alpha = (alphaInt * (0.7f + 0.3f * kotlin.math.sin(gs.timeSinceStart * 25f))).toInt()
+                p.strokeWidth = scale * 0.008f
+                val jitter = scale * 0.005f * kotlin.math.sin(gs.timeSinceStart * 50f)
+                c.drawRect(nx - r - jitter, ny - r - jitter, nx + r + jitter, ny + r + jitter, p)
+            }
+
+            // 2. Progress Fill or Status Indicator
+            when (node.state) {
+                com.appsbyalok.echohunter.systems.SpawnState.DESTROYED -> {
+                    p.color = (alphaInt shl 24) or 0xFF440000.toInt()
+                    p.strokeWidth = scale * 0.005f
+                    c.drawLine(nx - r, ny - r, nx + r, ny + r, p)
+                    c.drawLine(nx + r, ny - r, nx - r, ny + r, p)
+                }
+                com.appsbyalok.echohunter.systems.SpawnState.REPAIRING -> {
+                    val repairProgress = node.hp / node.maxHp
+                    p.color = (alphaInt shl 24) or 0xFF00FF88.toInt()
+                    c.drawRect(nx - r, ny + r - (2 * r * repairProgress), nx + r, ny + r, p)
+                }
+                else -> {
+                    val progress = 1f - (node.cooldownTimer / node.maxCooldown)
+                    p.color = ((alphaInt * 0.7f).toInt() shl 24) or (nodeColor and 0xFFFFFF)
+                    c.drawRect(nx - r, ny + r - (2 * r * progress), nx + r, ny + r, p)
+                }
+            }
 
             // 3. Border & Pins
             p.style = Paint.Style.STROKE
             p.strokeWidth = scale * 0.005f
             p.color = (alphaInt shl 24) or (nodeColor and 0xFFFFFF)
+            if (node.state == com.appsbyalok.echohunter.systems.SpawnState.DISABLED && (gs.timeSinceStart * 10).toInt() % 2 == 0) {
+                p.color = (alphaInt shl 24) or 0xFFFFFFFF.toInt()
+            }
             c.drawRect(nx - r, ny - r, nx + r, ny + r, p)
+
+            // 4. SELF-DESTRUCT LIGHTNING EFFECT
+            if (node.state == com.appsbyalok.echohunter.systems.SpawnState.SELF_DESTROYING) {
+                p.style = Paint.Style.STROKE
+                p.color = GameColors.OVERCLOCK
+                p.alpha = (alphaInt * (0.7f + 0.3f * kotlin.math.sin(gs.timeSinceStart * 25f))).toInt()
+                p.strokeWidth = scale * 0.008f
+                val jitter = scale * 0.005f * kotlin.math.sin(gs.timeSinceStart * 50f)
+                c.drawRect(nx - r - jitter, ny - r - jitter, nx + r + jitter, ny + r + jitter, p)
+            }
+
+            // HP BAR for Spawners (Only if damaged or high tier)
+            if (node.hp < node.maxHp && node.state != com.appsbyalok.echohunter.systems.SpawnState.DESTROYED) {
+                val hpW = r * 1.5f
+                val hpH = scale * 0.005f
+                val hpX = nx - hpW / 2f
+                val hpY = ny - r - scale * 0.015f
+                
+                p.style = Paint.Style.FILL
+                p.color = 0x66000000
+                c.drawRect(hpX, hpY, hpX + hpW, hpY + hpH, p)
+                
+                p.color = (alphaInt shl 24) or GameColors.HP
+                c.drawRect(hpX, hpY, hpX + hpW * (node.hp / node.maxHp), hpY + hpH, p)
+            }
 
             // Inner technical detailing
             p.strokeWidth = scale * 0.001f
@@ -291,6 +384,32 @@ class WorldRenderer(
             pGlow.color = (max(0, alpha) shl 24) or (colorGlow and 0xFFFFFF)
             pGlow.strokeWidth = scale * 0.008f
             c.drawCircle(screenPlayerX, screenPlayerY, gs.pulseR, pGlow)
+
+            // CLEAN SWEEP COMPASS: Guide player to the nearest compiler during pulse
+            if (gs.activeObjective is com.appsbyalok.echohunter.modes.CleanSweepObjective) {
+                val nearest = gs.spawnerNodes
+                    .filter { it.state != com.appsbyalok.echohunter.systems.SpawnState.DESTROYED }
+                    .minByOrNull { (it.x - gs.px) * (it.x - gs.px) + (it.y - gs.py) * (it.y - gs.py) }
+
+                if (nearest != null) {
+                    val dx = nearest.x - gs.px
+                    val dy = nearest.y - gs.py
+                    val dist = kotlin.math.sqrt(dx * dx + dy * dy)
+                    if (dist > scale * 0.2f) {
+                        val lineLen = scale * 0.2f
+                        val dirX = dx / dist
+                        val dirY = dy / dist
+                        val startX = screenPlayerX + dirX * scale * 0.1f
+                        val startY = screenPlayerY + dirY * scale * 0.1f
+
+                        pGlow.strokeWidth = scale * 0.01f
+                        // Drawing a pointer line
+                        c.drawLine(startX, startY, startX + dirX * lineLen, startY + dirY * lineLen, pGlow)
+                        // Arrow tip
+                        c.drawCircle(startX + dirX * lineLen, startY + dirY * lineLen, scale * 0.015f, pGlow)
+                    }
+                }
+            }
         }
 
         if (gs.shockwaveActive) {
@@ -317,37 +436,44 @@ class WorldRenderer(
             drawCore(c, scale, gs, viewportW, viewportH, screenPlayerX, screenPlayerY)
         }
 
-        if (gs.empMineActive) {
-            val screenMineX = gs.empMineX - gs.cameraX
-            val screenMineY = gs.empMineY - gs.cameraY
-            p.style = Paint.Style.FILL
-            p.color = GameColors.RED
-            c.drawCircle(screenMineX, screenMineY, scale * 0.015f, p)
-
-            p.style = Paint.Style.STROKE
-            p.strokeWidth = scale * 0.003f
-            p.color = GameColors.YELLOW
-            val pulse = sin(gs.timeSinceStart * 10f) * scale * 0.015f
-            c.drawCircle(screenMineX, screenMineY, scale * 0.03f + max(0f, pulse), p)
-        }
-
-        if (gs.isDecoyActive) {
-            val screenDecoyX = gs.decoyX - gs.cameraX
-            val screenDecoyY = gs.decoyY - gs.cameraY
+        // 6. RENDER DECOYS / MINES / TRAPS
+        for (trap in gs.activeTraps) {
+            val tx = trap.x - gs.cameraX
+            val ty = trap.y - gs.cameraY
+            val alpha = (kotlin.math.min(1f, trap.timer / 0.5f) * 255).toInt()
+            
             p.style = Paint.Style.STROKE
             p.strokeWidth = scale * 0.005f
-            p.color = GameColors.PULSE
-            val holoPulse = sin(gs.timeSinceStart * 20f) * scale * 0.005f
-            c.drawCircle(screenDecoyX, screenDecoyY, scale * 0.02f + holoPulse, p)
-            c.drawCircle(screenDecoyX, screenDecoyY, scale * 0.035f - holoPulse, p)
+            
+            when (trap.type) {
+                1 -> { // DECOY
+                    p.color = (alpha shl 24) or (GameColors.PULSE and 0xFFFFFF)
+                    val holoPulse = kotlin.math.sin(gs.timeSinceStart * 20f) * scale * 0.005f
+                    c.drawCircle(tx, ty, scale * 0.02f + holoPulse, p)
+                    c.drawCircle(tx, ty, scale * 0.035f - holoPulse, p)
+                }
+                2 -> { // EMP MINE
+                    p.style = Paint.Style.FILL
+                    p.color = (alpha shl 24) or (GameColors.RED and 0xFFFFFF)
+                    c.drawCircle(tx, ty, scale * 0.015f, p)
 
-            // Glitch effect for Decoy
-            if (Random.nextFloat() < 0.2f) {
-                p.color = GameColors.OVERCLOCK
-                p.strokeWidth = scale * 0.002f
-                val dx = (Random.nextFloat() - 0.5f) * scale * 0.05f
-                val dy = (Random.nextFloat() - 0.5f) * scale * 0.05f
-                c.drawCircle(screenDecoyX + dx, screenDecoyY + dy, scale * 0.025f, p)
+                    p.style = Paint.Style.STROKE
+                    p.strokeWidth = scale * 0.003f
+                    p.color = (alpha shl 24) or (GameColors.YELLOW and 0xFFFFFF)
+                    val pulse = kotlin.math.sin(gs.timeSinceStart * 10f) * scale * 0.015f
+                    c.drawCircle(tx, ty, scale * 0.03f + kotlin.math.max(0f, pulse), p)
+                }
+                3 -> { // STASIS PULSE
+                    p.color = (alpha shl 24) or (0xFF00FFFF.toInt() and 0xFFFFFF)
+                    c.drawCircle(tx, ty, scale * 0.15f * (1f - trap.timer / trap.duration), p)
+                }
+                4 -> { // SONIC DECOY
+                    p.color = (alpha shl 24) or (GameColors.YELLOW and 0xFFFFFF)
+                    val r = scale * 0.03f
+                    c.drawCircle(tx, ty, r, p)
+                    val waveR = r + (gs.timeSinceStart * 2f % 1f) * scale * 0.05f
+                    c.drawCircle(tx, ty, waveR, p)
+                }
             }
         }
 

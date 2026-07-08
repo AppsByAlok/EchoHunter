@@ -6,6 +6,17 @@ import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.utils.SpawnValidator
 import kotlin.random.Random
 
+enum class SpawnState {
+    INACTIVE,       // Sleeping, player hasn't reached near
+    READY,          // Charged and waiting to spawn
+    ACTIVE,         // Currently producing enemies
+    COOLDOWN,       // Recharging after a spawn
+    DISABLED,       // Hacked or temporarily shut down
+    DESTROYED,      // Permanently gone
+    REPAIRING,      // Glitch is trying to bring it back
+    SELF_DESTROYING // Triggered for cinematic or gameplay reasons
+}
+
 // Data Class for Spawn Nodes (Where enemies originate from)
 class SpawnNode(
     var x: Float,
@@ -13,7 +24,13 @@ class SpawnNode(
     var type: Int, // 0 = Compiler (Normal), 1 = Glitch Tear (Swarm), 2 = Admin Gateway (HVT/Boss)
     var cooldownTimer: Float = 0f,
     var maxCooldown: Float = 5f,
-    var queue: Int = 0 // Number of enemies queued to be spawned
+    var queue: Int = 0, // Number of enemies queued to be spawned
+    var state: SpawnState = SpawnState.READY,
+    var hp: Float = 100f,
+    var maxHp: Float = 100f,
+    var visibility: Float = 0f, // For sonar detection
+    var overloadTimer: Float = 0f, // For Clean Sweep resonance puzzle
+    var parentNodeIdx: Int = -1 // For Network Link puzzle (Clean Sweep)
 )
 
 class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: EffectSystem) {
@@ -37,12 +54,13 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
                         // Still validate just in case, but usually markers are safe
                         if (SpawnValidator.isFarFromNodes(tx, ty, gs, ts * 2f)) {
                             val type = Random.nextInt(0, 3)
-                            val maxC = when(type) {
-                                0 -> 1.5f 
-                                1 -> 4.0f 
-                                else -> 6.0f 
-                            }
-                            gs.spawnerNodes.add(SpawnNode(tx, ty, type, maxCooldown = maxC))
+                            val stats = getNodeStats(type)
+                            gs.spawnerNodes.add(SpawnNode(
+                                tx, ty, type, 
+                                maxCooldown = stats.first,
+                                hp = stats.second,
+                                maxHp = stats.second
+                            ))
                         }
                     }
                 }
@@ -75,8 +93,17 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
                         // VALIDATION: Must be a valid spot, far from player, AND far from other nodes
                         val isValidSpot = SpawnValidator.isValid(tx, ty, ts / 2f, gs, minPlayerDist = 400f * scale)
                         val isFarEnough = SpawnValidator.isFarFromNodes(tx, ty, gs, ts * 4f)
+                        
+                        // NEW: In Defense mode, keep compilers away from the Core
+                        val isDefense = LevelEngine.getLevelConfig(gs.currentLevel).features.contains(LevelFeature.DEFENSE)
+                        val distToCoreSq = if (isDefense) {
+                            val dx = tx - gs.coreX
+                            val dy = ty - gs.coreY
+                            dx * dx + dy * dy
+                        } else Float.MAX_VALUE
+                        val isSafeFromCore = distToCoreSq > (ts * 6f) * (ts * 6f)
 
-                        if (isValidSpot && isFarEnough) {
+                        if (isValidSpot && isFarEnough && isSafeFromCore) {
                             nx = tx
                             ny = ty
                             found = true
@@ -95,98 +122,392 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
                     config.features.contains(LevelFeature.ELIMINATION) -> {
                         if (i < 3) 2 else Random.nextInt(0, 2)
                     }
+                    config.features.contains(LevelFeature.CLEAN_SWEEP) -> {
+                        // In Clean Sweep, inject a few Type 4 hubs to guarantee some repair drones
+                        if (i % 4 == 0) 4 else Random.nextInt(0, 2)
+                    }
                     i == 0 -> 0 
                     i == 1 -> 1 
                     Random.nextFloat() < 0.2f -> 2 
                     else -> Random.nextInt(0, 2)
                 }
 
-                val maxC = when(type) {
-                    0 -> 1.5f 
-                    1 -> 4.0f 
-                    else -> 6.0f 
-                }
-
-                gs.spawnerNodes.add(SpawnNode(nx, ny, type, maxCooldown = maxC))
+                val stats = getNodeStats(type)
+                gs.spawnerNodes.add(SpawnNode(
+                    nx, ny, type, 
+                    maxCooldown = stats.first,
+                    hp = stats.second,
+                    maxHp = stats.second
+                ))
             }
+        }
+
+        // 3. EMERGENCY SAFETY NET
+        if (gs.spawnerNodes.isEmpty() && grid != null) {
+            // ... (existing code) ...
+        }
+
+        // 4. CLEAN SWEEP: Generate Network Links (The Puzzle)
+        if (gs.activeObjective is com.appsbyalok.echohunter.modes.CleanSweepObjective) {
+            val nodes = gs.spawnerNodes
+            if (nodes.size > 1) {
+                // Shuffle to make the "Root" nodes random every time
+                val indices = nodes.indices.shuffled()
+                
+                // Root nodes (about 20-30%) have no parent
+                val rootCount = kotlin.math.max(1, nodes.size / 4)
+                
+                for (i in rootCount until indices.size) {
+                    val childIdx = indices[i]
+                    // Pick a parent from the nodes processed BEFORE this one to prevent cycles
+                    val parentIdx = indices[Random.nextInt(0, i)]
+                    nodes[childIdx].parentNodeIdx = parentIdx
+                }
+            }
+        }
+    }
+
+    private fun getNodeStats(type: Int): Pair<Float, Float> {
+        return when(type) {
+            0 -> 1.5f to 100f   // Normal: Fast, Standard HP
+            1 -> 4.0f to 200f   // Swarm: Medium, High HP
+            4 -> 3.0f to 300f   // Repair Hub: Medium, Beefy
+            else -> 6.0f to 500f // Admin: Slow, Tanky
         }
     }
 
     fun queueSpawns(count: Int, gs: GameState) {
-        if (gs.spawnerNodes.isEmpty()) return
+        val validNodes = gs.spawnerNodes.filter { it.state != SpawnState.DESTROYED && it.state != SpawnState.DISABLED }
+        if (validNodes.isEmpty()) return
+        
         for (i in 0 until count) {
-            val node = gs.spawnerNodes.random() 
+            val node = validNodes.random()
             node.queue++
+            // If it was READY, move it to ACTIVE to indicate it has work to do
+            if (node.state == SpawnState.READY) {
+                node.state = SpawnState.ACTIVE
+            }
         }
     }
 
     fun update(dt: Float, gs: GameState, targetW: Float, targetH: Float, scale: Float) {
-        val maxAllowedDistSq = (targetW * 1.5f) * (targetW * 1.5f)
+        val maxAllowedDistSq = (targetW * 2.5f) * (targetW * 2.5f)
+        val activationDistSq = (targetW * 1.5f) * (targetW * 1.5f)
 
         for (node in gs.spawnerNodes) {
+            if (node.state == SpawnState.DESTROYED) continue
+
             val dx = node.x - gs.px
             val dy = node.y - gs.py
-            
-            val isTooFar = dx * dx + dy * dy > maxAllowedDistSq
+            val distSq = dx * dx + dy * dy
 
-            if (isTooFar) {
-                // Relocate ONLY if too far. Initial closeness was handled at generation.
-                for (attempt in 0 until 15) {
-                    val angle = Random.nextFloat() * 6.2831855f
-                    // Stay between 0.8 and 1.3 of targetW to be off-screen but not too far
-                    val dist = (targetW * 0.8f) + Random.nextFloat() * (targetW * 0.5f)
-                    val tx = gs.px + kotlin.math.cos(angle) * dist
-                    val ty = gs.py + kotlin.math.sin(angle) * dist
+            // 1. VISIBILITY & SONAR DETECTION
+            val hitByPulse = (gs.pulse && distSq in gs.innerRSq..gs.outerRSq)
+            if (hitByPulse || distSq < gs.passiveAuraRadiusSq) {
+                if (hitByPulse && node.visibility <= 0f) {
+                    effectSys.spawnSonarPing(node.x, node.y, com.appsbyalok.echohunter.utils.GameColors.PULSE)
+                }
+                node.visibility = 1.0f
+                
+                // PUZZLE MECHANIC: Pulse "primes" the node for a chain reaction in Clean Sweep
+                if (hitByPulse && gs.activeObjective is com.appsbyalok.echohunter.modes.CleanSweepObjective) {
+                    node.overloadTimer = 8f 
+                }
+            } else {
+                val duration = com.appsbyalok.echohunter.data.UpgradeSystem.getSonarDurationBonus()
+                node.visibility = kotlin.math.max(0f, node.visibility - dt / duration)
+            }
 
-                    // Ensure new position is valid AND not on top of another node
-                    if (SpawnValidator.isValid(tx, ty, gs.tileSize / 2f, gs) && 
-                        SpawnValidator.isFarFromNodes(tx, ty, gs, gs.tileSize * 2f)) {
-                        node.x = tx
-                        node.y = ty
+            if (node.overloadTimer > 0f) {
+                node.overloadTimer -= dt
+                if (Random.nextFloat() < 6f * dt) {
+                    effectSys.spawnParticles(node.x, node.y, 1, scale * 0.5f)
+                }
+            }
+
+            // 2. PROXIMITY STATE MANAGEMENT
+            if (distSq > maxAllowedDistSq) {
+                // If extremely far (procedural drift), relocate safely
+                relocateNode(node, gs, targetW, scale)
+            }
+
+            if (distSq > activationDistSq) {
+                node.state = SpawnState.INACTIVE
+            } else if (node.state == SpawnState.INACTIVE) {
+                node.state = SpawnState.READY
+            }
+
+            // --- NEW: STASIS PULSE EFFECTS ---
+            var isStasised = false
+            for (trap in gs.activeTraps) {
+                if (trap.type == 3) { // Stasis Pulse
+                    val tr = scale * 0.25f
+                    val tdx = node.x - trap.x
+                    val tdy = node.y - trap.y
+                    if (tdx * tdx + tdy * tdy < tr * tr) {
+                        isStasised = true
                         break
                     }
                 }
             }
 
-            if (node.cooldownTimer > 0f) {
-                node.cooldownTimer -= dt
-            }
-
-            if (Random.nextFloat() < 0.05f) {
-                effectSys.spawnParticles(node.x, node.y, 0, scale * 0.5f)
-            }
-
-            if (node.cooldownTimer <= 0f && node.queue > 0) {
-                // Determine if we should count this as a defense enemy
-                val config = LevelEngine.getLevelConfig(gs.currentLevel)
-                val isDefenseWave = config.features.contains(LevelFeature.DEFENSE) && gs.defWaveState == 1
-
-                for (i in 0 until enemySys.n) {
-                    if (enemySys.ex[i] < -1000f) {
-                        enemySys.spawnAt(i, node.x, node.y, gs, scale, node.type)
-                        node.queue--
-
-                        if (isDefenseWave) {
-                            gs.defEnemiesAlive++
-                            gs.defEnemiesToSpawn--
-                            if (gs.defEnemiesToSpawn < 0) gs.defEnemiesToSpawn = 0
+            // 3. STATE MACHINE LOGIC
+            if (!isStasised) {
+                when (node.state) {
+                    SpawnState.COOLDOWN -> {
+                        node.cooldownTimer -= dt
+                        if (node.cooldownTimer <= 0f) {
+                            node.state = if (node.queue > 0) SpawnState.ACTIVE else SpawnState.READY
                         }
-
-                        val rushFactor = if (node.queue > 2) 0.5f else 1.0f
-                        node.cooldownTimer = node.maxCooldown * rushFactor * (0.8f + Random.nextFloat() * 0.4f)
-                        
-                        val particleType = if (node.type == 1) 1 else 0
-                        effectSys.spawnParticles(node.x, node.y, particleType, scale * 2f)
-                        break
                     }
+                    SpawnState.REPAIRING -> {
+                        node.hp += dt * 5f // Gradually regain HP
+                        if (node.hp >= node.maxHp) {
+                            node.hp = node.maxHp
+                            node.state = SpawnState.READY
+                            node.queue = 0
+                            node.cooldownTimer = 0f
+                            node.visibility = 0f
+                        }
+                    }
+                    SpawnState.DISABLED -> {
+                        node.cooldownTimer -= dt
+                        if (node.cooldownTimer <= 0f) node.state = SpawnState.READY
+                    }
+                    SpawnState.SELF_DESTROYING -> {
+                        if (node.cooldownTimer > 0f) {
+                            node.cooldownTimer -= dt
+                            if (Random.nextFloat() < 9f * dt) effectSys.spawnParticles(node.x, node.y, 0, scale * 0.5f)
+                        } else {
+                            node.hp -= dt * 100f
+                            if (node.hp <= 0f) onNodeDestroyed(node, gs, scale)
+                        }
+                    }
+                    SpawnState.READY, SpawnState.ACTIVE -> {
+                        if (node.queue > 0 && node.cooldownTimer <= 0f) {
+                            node.state = SpawnState.ACTIVE
+                            trySpawnEnemy(node, gs, scale)
+                        } else if (node.queue <= 0) {
+                            node.state = SpawnState.READY
+                        }
+                    }
+                    else -> {}
                 }
+            } else if (Random.nextFloat() < 6f * dt) {
+                // Visual feedback for stasis
+                effectSys.spawnParticles(node.x, node.y, 2, scale * 0.3f)
+            }
+
+            // Ambient particles for active nodes
+            if (Random.nextFloat() < 3f * dt && node.state != SpawnState.INACTIVE) {
+                effectSys.spawnParticles(node.x, node.y, 0, scale * 0.5f)
             }
         }
     }
 
+    private fun relocateNode(node: SpawnNode, gs: GameState, targetW: Float, scale: Float) {
+        for (attempt in 0 until 15) {
+            val angle = Random.nextFloat() * 6.2831855f
+            val dist = (targetW * 1.2f) + Random.nextFloat() * (targetW * 0.5f)
+            val tx = gs.px + kotlin.math.cos(angle) * dist
+            val ty = gs.py + kotlin.math.sin(angle) * dist
+
+            if (SpawnValidator.isValid(tx, ty, gs.tileSize / 2f, gs) && 
+                SpawnValidator.isFarFromNodes(tx, ty, gs, gs.tileSize * 2f)) {
+                node.x = tx
+                node.y = ty
+                break
+            }
+        }
+    }
+
+    private fun trySpawnEnemy(node: SpawnNode, gs: GameState, scale: Float) {
+        val config = LevelEngine.getLevelConfig(gs.currentLevel)
+        val isDefenseWave = config.features.contains(LevelFeature.DEFENSE) && gs.defWaveState == 1
+
+        for (i in 0 until enemySys.n) {
+            if (enemySys.ex[i] < -1000f) {
+                enemySys.spawnAt(i, node.x, node.y, gs, scale, node.type)
+                node.queue--
+
+                if (isDefenseWave) {
+                    gs.defEnemiesAlive++
+                    gs.defEnemiesToSpawn--
+                    if (gs.defEnemiesToSpawn < 0) gs.defEnemiesToSpawn = 0
+                }
+
+                // Set cooldown and move to COOLDOWN state
+                val rushFactor = if (node.queue > 2) 0.5f else 1.0f
+                node.cooldownTimer = node.maxCooldown * rushFactor * (0.8f + Random.nextFloat() * 0.4f)
+                node.state = SpawnState.COOLDOWN
+                
+                val particleType = if (node.type == 1) 1 else 0
+                effectSys.spawnParticles(node.x, node.y, particleType, scale * 2f)
+                break
+            }
+        }
+    }
+
+    fun damageNode(node: SpawnNode, amount: Float, gs: GameState, scale: Float) {
+        if (node.state == SpawnState.DESTROYED || node.state == SpawnState.SELF_DESTROYING) return
+
+        node.hp -= amount
+        node.visibility = 1.0f // Reveal on damage
+        
+        if (node.hp <= 0f) {
+            onNodeDestroyed(node, gs, scale)
+        } else {
+            effectSys.spawnParticles(node.x, node.y, 0, scale * 1f)
+        }
+    }
+
+    private fun onNodeDestroyed(node: SpawnNode, gs: GameState, scale: Float) {
+        if (node.state == SpawnState.DESTROYED) return
+        
+        node.state = SpawnState.DESTROYED
+        node.hp = 0f
+        effectSys.spawnParticles(node.x, node.y, 1, scale * 3f)
+
+        // Reward for EACH node destroyed
+        gs.collectedDataKB += 50
+        gs.score += 100
+        gs.overclockMeter = kotlin.math.min(100f, gs.overclockMeter + 15f)
+        effectSys.spawnFloatingText(node.x, node.y, 0, com.appsbyalok.echohunter.utils.GameColors.CLARITY, "+50 KB")
+
+        // CHAIN REACTION: If Clean Sweep mode, trigger cascading destruction
+        // Instead of immediate recursion, we use SpawnState.SELF_DESTROYING with a delay
+        // so the player can see the "Network" collapsing in real-time.
+        if (gs.activeObjective is com.appsbyalok.echohunter.modes.CleanSweepObjective) {
+            val isOverloaded = node.overloadTimer > 0f
+            val baseRadius = if (isOverloaded) 6f else 2.5f
+            val resonanceBonus = com.appsbyalok.echohunter.data.UpgradeSystem.getLevel(com.appsbyalok.echohunter.data.UpgradeType.RESONANCE_CHAMBER) * 0.5f
+            val chainRadiusSq = (scale * (baseRadius + resonanceBonus)) * (scale * (baseRadius + resonanceBonus))
+
+            // 1. Proximity Surge
+            for (other in gs.spawnerNodes) {
+                if (other.state == SpawnState.DESTROYED || other.state == SpawnState.SELF_DESTROYING) continue
+                val dx = node.x - other.x
+                val dy = node.y - other.y
+                val distSq = dx * dx + dy * dy
+                
+                if (distSq < chainRadiusSq || (isOverloaded && other.overloadTimer > 0f)) {
+                    other.state = SpawnState.SELF_DESTROYING
+                    other.cooldownTimer = 0.1f + Random.nextFloat() * 0.2f // Tiny delay for visuals
+                    other.hp = 1f 
+                }
+            }
+
+            // 2. NETWORK LINK PURGE (The Puzzle)
+            val nodeIdx = gs.spawnerNodes.indexOf(node)
+            if (nodeIdx != -1) {
+                for (child in gs.spawnerNodes) {
+                    if (child.parentNodeIdx == nodeIdx && child.state != SpawnState.DESTROYED && child.state != SpawnState.SELF_DESTROYING) {
+                        child.state = SpawnState.SELF_DESTROYING
+                        child.cooldownTimer = 0.35f // Fixed delay to show hierarchy flow
+                        child.hp = 1f
+                        effectSys.spawnSonarPing(child.x, child.y, com.appsbyalok.echohunter.utils.GameColors.PULSE)
+                        effectSys.spawnFloatingText(child.x, child.y, 0, com.appsbyalok.echohunter.utils.GameColors.PULSE, "LINK BREACH")
+                    }
+                }
+            }
+            
+            if (isOverloaded) {
+                effectSys.spawnSonarPing(node.x, node.y, com.appsbyalok.echohunter.utils.GameColors.PULSE)
+                effectSys.spawnFloatingText(node.x, node.y, 0, com.appsbyalok.echohunter.utils.GameColors.PULSE, "RESONANCE")
+            } else {
+                effectSys.spawnSonarPing(node.x, node.y, com.appsbyalok.echohunter.utils.GameColors.RED)
+            }
+        }
+
+        // Final Purge Check
+        val allActuallyDestroyed = gs.spawnerNodes.isNotEmpty() && gs.spawnerNodes.all { it.state == SpawnState.DESTROYED }
+        if (allActuallyDestroyed) {
+            triggerPurgeVictory(gs)
+        }
+    }
+
+    private fun triggerPurgeVictory(gs: GameState) {
+        val config = LevelEngine.getLevelConfig(gs.currentLevel)
+        var objectivesCompletedByPurge = false
+        
+        // 1. AUTO-COMPLETE OBJECTIVES that depend on compilers
+        if (config.features.contains(LevelFeature.ELIMINATION) && gs.elimTargetsKilled < gs.elimTargetsRequired) {
+            gs.elimTargetsKilled = gs.elimTargetsRequired
+            objectivesCompletedByPurge = true
+        }
+        
+        if (config.features.contains(LevelFeature.CLASSIC) && gs.score < config.targetScore) {
+            gs.score = config.targetScore
+            objectivesCompletedByPurge = true
+        }
+
+        if (config.features.contains(LevelFeature.DEFENSE) && gs.defWaveCurrent <= gs.defWaveMax) {
+            gs.defWaveCurrent = gs.defWaveMax + 1
+            gs.defWaveState = 3
+            objectivesCompletedByPurge = true
+        }
+
+        // 2. Wipe all current enemies since their source is gone
+        for (i in 0 until enemySys.n) {
+            if (enemySys.ex[i] > -1000f) {
+                enemySys.hp[i] = 0
+                enemySys.killEnemy(i, gs)
+            }
+        }
+
+        // 3. Victory or Progression Check
+        if (gs.activeObjective.checkWinCondition(gs)) {
+            if (!gs.isLevelCleared) {
+                gs.isLevelCleared = true
+                com.appsbyalok.echohunter.data.StoryProtocol.showTypewriterMessage(
+                    "CRITICAL SYSTEM FAILURE DETECTED...\n" +
+                    "ALL SECURITY COMPILERS TERMINATED.\n" +
+                    "ADMIN UPLINK SEVERED. ACCESS GRANTED."
+                )
+            }
+        } else {
+            // Level not cleared yet (maybe BOMB or ESCAPE still pending)
+            val msg = if (objectivesCompletedByPurge) {
+                "SECURITY LAYER PURGED: DEPENDENT PROTOCOLS BYPASSED.\n" +
+                "COMPLETE REMAINING OBJECTIVES."
+            } else {
+                "ALL COMPILERS DESTROYED.\n" +
+                "ADAPTIVE SECURITY OFFLINE."
+            }
+            com.appsbyalok.echohunter.data.StoryProtocol.showTypewriterMessage(msg, 4f)
+            
+            // Massive rewards for the purge
+            gs.collectedDataKB += 250 
+            gs.overclockTimer = 8f
+        }
+    }
+
+    fun disableNode(node: SpawnNode, duration: Float) {
+        if (node.state == SpawnState.DESTROYED) return
+        node.state = SpawnState.DISABLED
+        node.cooldownTimer = duration
+    }
+
+    fun triggerRepair(gs: GameState) {
+        val destroyed = gs.spawnerNodes.filter { it.state == SpawnState.DESTROYED }
+        if (destroyed.isNotEmpty()) {
+            val target = destroyed.random()
+            target.state = SpawnState.REPAIRING
+            target.hp = 1f 
+        }
+    }
+
+    fun findNearestNode(x: Float, y: Float, gs: GameState): SpawnNode? {
+        return gs.spawnerNodes
+            .filter { it.state != SpawnState.DESTROYED }
+            .minByOrNull { (it.x - x) * (it.x - x) + (it.y - y) * (it.y - y) }
+    }
+
     fun getTotalQueue(gs: GameState): Int {
-        var total = 0
-        for (node in gs.spawnerNodes) total += node.queue
-        return total
+        return gs.spawnerNodes.sumOf { it.queue }
+    }
+
+    fun getActiveNodesCount(gs: GameState): Int {
+        return gs.spawnerNodes.count { it.state != SpawnState.DESTROYED && it.state != SpawnState.INACTIVE }
     }
 }

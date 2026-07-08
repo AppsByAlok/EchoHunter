@@ -16,6 +16,7 @@ class CollisionSystem(
     val gs: GameState,
     val effectSystem: EffectSystem,
     val enemySystem: EnemySystem,
+    private val spawnerSys: SpawnerSystem
 ) {
 
     fun checkCollisions(
@@ -83,34 +84,39 @@ class CollisionSystem(
         }
 
         // --- 1. EMP MINE TRAP COLLISION ---
-        if (gs.empMineActive) {
+        val trapIter = gs.activeTraps.iterator()
+        while (trapIter.hasNext()) {
+            val trap = trapIter.next()
+            if (trap.type != 2) continue
+
             var mineTriggered = false
             for (i in 0 until enemySystem.n) {
-                val dx = gs.empMineX - enemySystem.ex[i]
-                val dy = gs.empMineY - enemySystem.ey[i]
+                val dx = trap.x - enemySystem.ex[i]
+                val dy = trap.y - enemySystem.ey[i]
                 if (dx * dx + dy * dy < (scale * 0.15f) * (scale * 0.15f)) {
                     mineTriggered = true; break
                 }
             }
             if (!mineTriggered && gs.bossActive) {
-                val bdx = gs.empMineX - gs.bossX
-                val bdy = gs.empMineY - gs.bossY
+                val bdx = trap.x - gs.bossX
+                val bdy = trap.y - gs.bossY
                 if (bdx * bdx + bdy * bdy < (scale * 0.2f) * (scale * 0.2f)) {
                     mineTriggered = true
                 }
             }
 
             if (mineTriggered) {
-                gs.empMineActive = false; gs.shockwaveActive = true
-                gs.shockwaveX = gs.empMineX; gs.shockwaveY = gs.empMineY; gs.shockwaveR = 0f
+                trapIter.remove()
+                gs.shockwaveActive = true
+                gs.shockwaveX = trap.x; gs.shockwaveY = trap.y; gs.shockwaveR = 0f
                 gs.shakeAmount = max(gs.shakeAmount, scale * 0.15f)
                 EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 300)
-                effectSystem.spawnParticles(gs.empMineX, gs.empMineY, 1, scale * 2f)
+                effectSystem.spawnParticles(trap.x, trap.y, 1, scale * 2f)
 
                 // Destroy nearby enemies & damage boss
                 for (j in 0 until enemySystem.n) {
-                    val edx = gs.empMineX - enemySystem.ex[j]
-                    val edy = gs.empMineY - enemySystem.ey[j]
+                    val edx = trap.x - enemySystem.ex[j]
+                    val edy = trap.y - enemySystem.ey[j]
                     if (edx * edx + edy * edy < (scale * 0.4f) * (scale * 0.4f)) {
                         // EMP Deals 5 Damage!
                         enemySystem.hp[j] -= 5
@@ -129,9 +135,33 @@ class CollisionSystem(
                         }
                     }
                 }
+
+                // NAYA: EMP damage/disable spawners
+                val explosionRadiusSq = (scale * 0.5f) * (scale * 0.5f)
+                for (node in gs.spawnerNodes) {
+                    val ndx = trap.x - node.x
+                    val ndy = trap.y - node.y
+                    if (ndx * ndx + ndy * ndy < explosionRadiusSq) {
+                        if (node.state != SpawnState.DESTROYED) {
+                            val prevHp = node.hp
+                            spawnerSys.damageNode(node, 50f, gs, scale) // Heavy EMP damage
+                            
+                            if (node.hp < prevHp) {
+                                if (node.state == SpawnState.DESTROYED) {
+                                    onScoreAdd(15L)
+                                    StoryProtocol.showIngameMessage("COMPILER FRIED", 1f)
+                                } else {
+                                    node.state = SpawnState.DISABLED
+                                    node.cooldownTimer = 5f
+                                    effectSystem.spawnFloatingText(node.x, node.y, 0, 0xFFFFFF00.toInt(), "GLITCHED")
+                                }
+                            }
+                        }
+                    }
+                }
                 if (gs.bossActive) {
-                    val bdx = gs.empMineX - gs.bossX
-                    val bdy = gs.empMineY - gs.bossY
+                    val bdx = trap.x - gs.bossX
+                    val bdy = trap.y - gs.bossY
                     if (bdx * bdx + bdy * bdy < (scale * 0.5f) * (scale * 0.5f)) {
                         gs.bossHp -= 5 // Massive EMP damage
                         if (gs.bossHp <= 0) triggerBossDeath(scale, onScoreAdd, onCoreUnlock)
@@ -305,6 +335,42 @@ class CollisionSystem(
                                 enemySystem.killEnemy(i, gs)
                             }
                             break // Spike breaks after impact
+                        }
+                    }
+                }
+
+                // C. Spawner Node Hit Detection
+                if (!spikeHit) {
+                    val spawnerHitRadiusSq = (scale * 0.05f) * (scale * 0.05f)
+                    for (node in gs.spawnerNodes) {
+                        if (node.state == SpawnState.DESTROYED || node.state == SpawnState.INACTIVE) continue
+                        val dx = gs.spikeX[s] - node.x
+                        val dy = gs.spikeY[s] - node.y
+                        if (dx * dx + dy * dy < spawnerHitRadiusSq) {
+                            spikeHit = true
+                            
+                            val isCrit = kotlin.random.Random.nextFloat() < UpgradeSystem.getCritChance()
+                            val damage = (if (isCrit) UpgradeSystem.getCritDamageMultiplier() else 1) * 10f // Spawners take more damage from spikes
+                            
+                            val prevHp = node.hp
+                            spawnerSys.damageNode(node, damage, gs, scale)
+                            
+                            if (node.hp < prevHp) {
+                                effectSystem.spawnParticles(node.x, node.y, if (isCrit) 3 else 0, scale)
+                                if (node.state == SpawnState.DESTROYED) {
+                                    onScoreAdd(20L)
+                                    gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, false) * 3
+                                    StoryProtocol.showIngameMessage("COMPILER BREACHED", 1.5f)
+
+                                    // OVERCLOCK FRENZY: Clean Sweep specific reward
+                                    if (gs.activeObjective is com.appsbyalok.echohunter.modes.CleanSweepObjective) {
+                                        gs.overclockTimer = max(gs.overclockTimer, 4.0f) // 4 sec of pure chaos
+                                        gs.overclockMeter = 100f
+                                        EchoAudioManager.playSound(android.media.ToneGenerator.TONE_CDMA_ALERT_NETWORK_LITE, 100)
+                                    }
+                                }
+                            }
+                            break
                         }
                     }
                 }

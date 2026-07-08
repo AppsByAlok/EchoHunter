@@ -37,6 +37,12 @@ interface IGameObjective {
         if (config.features.contains(LevelFeature.DEFENSE)) {
             if (gs.defWaveCurrent <= gs.defWaveMax || gs.coreHp <= 0) return false
         }
+
+        // 5. Clean Sweep Check
+        if (config.features.contains(LevelFeature.CLEAN_SWEEP)) {
+            val allDestroyed = gs.spawnerNodes.all { it.state == com.appsbyalok.echohunter.systems.SpawnState.DESTROYED }
+            if (!allDestroyed) return false
+        }
         
         return true
     }
@@ -378,11 +384,16 @@ class EscapeObjective : IGameObjective {
                                 node.x = safeSpot.first
                                 node.y = safeSpot.second
                             } else {
-                                // Last resort: just keep old position if it's not terrible
-                                if (com.appsbyalok.echohunter.utils.SpawnValidator.isCollidingWithWall(node.x, node.y, ts * 0.4f, gs)) {
-                                     // Hard fallback to player's current safe ground (dangerous but better than stuck)
-                                     node.x = gs.px
-                                     node.y = gs.py
+                                // IMPROVED: Search for a safe spot near the player instead of snapping exactly to gs.px
+                                val safeNearPlayer = com.appsbyalok.echohunter.utils.SpawnValidator.findValidNear(
+                                    gs.px, gs.py, ts * 0.4f, gs, 20, ts * 3f
+                                )
+                                if (safeNearPlayer != null) {
+                                    node.x = safeNearPlayer.first
+                                    node.y = safeNearPlayer.second
+                                } else {
+                                    node.x = gs.px
+                                    node.y = gs.py
                                 }
                             }
                         }
@@ -626,5 +637,84 @@ class BombObjective : IGameObjective {
 
     override fun isBossTriggerReady(gs: GameState): Boolean {
         return bombPlanted && defuseTimer <= 15f && defuseTimer > 0f
+    }
+}
+
+// 7. CLEAN SWEEP OBJECTIVE (Destroy all Spawners)
+class CleanSweepObjective : IGameObjective {
+    private var trickleTimer = 1f
+    private var initialNodes = 0
+
+    override fun setupObjective(gs: GameState, targetW: Float, targetH: Float, scale: Float) {
+        gs.coreX = -9999f
+        gs.coreY = -9999f
+        gs.coreRadius = 0f
+        initialNodes = gs.spawnerNodes.size
+    }
+
+    override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
+        trickleTimer -= dt
+        if (trickleTimer <= 0f) {
+            var activeCount = 0
+            for (i in 0 until enemySys.n) if (enemySys.ex[i] > -1000f) activeCount++
+            val baseLimit = if (gs.difficulty == 1) 22f else 18f
+            val limit = LevelEngine.getSaturatedValue(gs.currentLevel, baseLimit, 45f - baseLimit, 100f).toInt()
+            val queued = spawnerSys.getTotalQueue(gs)
+            if (activeCount + queued < limit) {
+                spawnerSys.queueSpawns(limit - (activeCount + queued), gs)
+            }
+
+            // CLEAN SWEEP: If a lot of compilers are destroyed, speed up spawns for remaining ones
+            val total = gs.spawnerNodes.size
+            val destroyed = gs.spawnerNodes.count { it.state == com.appsbyalok.echohunter.systems.SpawnState.DESTROYED }
+            val destroyRatio = if (total > 0) destroyed.toFloat() / total else 0f
+            trickleTimer = if (destroyRatio > 0.5f) 0.5f else 1f
+        }
+
+        val total = gs.spawnerNodes.size
+        val destroyed = gs.spawnerNodes.count { it.state == com.appsbyalok.echohunter.systems.SpawnState.DESTROYED }
+        val remaining = total - destroyed
+
+        // NETWORK REVEAL: If only 2 compilers are left, reveal them permanently
+        if (remaining in 1..2) {
+            for (node in gs.spawnerNodes) {
+                if (node.state != com.appsbyalok.echohunter.systems.SpawnState.DESTROYED) {
+                    node.visibility = 1.0f
+                }
+            }
+            if (gs.timeSinceStart.toInt() % 2 == 0) {
+                gs.objectiveLabel = "CRITICAL: FINAL COMPILERS LOCATED"
+            } else {
+                gs.objectiveLabel = "PURGE REMAINING SECURITY"
+            }
+        } else {
+            gs.objectiveLabel = "PURGE SECURITY COMPILERS"
+        }
+
+        gs.objectiveProgress = if (total > 0) destroyed.toFloat() / total else 1f
+
+        // Hybrid Feature Support: Handle Darkness ambient reveal in Clean Sweep
+        if (gs.isDarknessLevel) {
+            for (node in gs.spawnerNodes) {
+                if (node.state == com.appsbyalok.echohunter.systems.SpawnState.READY && node.visibility < 0.2f) {
+                   // Clean sweep nodes in dark levels should ping occasionally to avoid frustration
+                   if (kotlin.random.Random.nextFloat() < 0.005f) {
+                       node.visibility = 0.5f
+                   }
+                }
+            }
+        }
+    }
+
+    override fun checkWinCondition(gs: GameState): Boolean {
+        val allDestroyed = gs.spawnerNodes.all { it.state == com.appsbyalok.echohunter.systems.SpawnState.DESTROYED }
+        return allDestroyed && areSecondaryFeaturesMet(gs)
+    }
+
+    override fun isBossTriggerReady(gs: GameState): Boolean {
+        // Boss triggers when 70% of nodes are destroyed
+        val total = gs.spawnerNodes.size
+        val destroyed = gs.spawnerNodes.count { it.state == com.appsbyalok.echohunter.systems.SpawnState.DESTROYED }
+        return if (total > 0) (destroyed.toFloat() / total) >= 0.7f else false
     }
 }

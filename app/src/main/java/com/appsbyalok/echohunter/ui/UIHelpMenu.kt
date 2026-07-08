@@ -262,6 +262,7 @@ class UIHelpMenu(private val context: Context) {
                     LevelFeature.ADMIN_BONUS -> GameColors.HP
                     LevelFeature.BOMB -> 0xFFFF0000.toInt()
                     LevelFeature.DARKNESS -> 0xFF000000.toInt()
+                    LevelFeature.CLEAN_SWEEP -> GameColors.COOLANT
                 }
 
                 // Draw icon using utility (bgColor matches the terminal background)
@@ -358,6 +359,12 @@ class UIHelpMenu(private val context: Context) {
             "ROOT ACCESS: Admin stash discovered. Massive payload.",
             GameColors.TEXT,
             featureIcon = LevelFeature.ADMIN_BONUS
+        )
+        sy += lh * 0.2f
+        drawLine(
+            "CLEAN SWEEP: Destroy all security compilers to clear.",
+            GameColors.TEXT,
+            featureIcon = LevelFeature.CLEAN_SWEEP
         )
         sy += lh * 0.5f
 

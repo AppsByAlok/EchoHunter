@@ -31,6 +31,7 @@ object MazeGenerator {
         val type = when {
             config.features.contains(LevelFeature.ADMIN_BONUS) -> MazeType.ARENA
             config.features.contains(LevelFeature.ESCAPE) -> MazeType.LABYRINTH   // Escape/Maze take priority for layout
+            config.features.contains(LevelFeature.CLEAN_SWEEP) -> MazeType.LABYRINTH // Intense hunt in complex paths
             config.features.contains(LevelFeature.MAZE) -> MazeType.LABYRINTH
             config.features.contains(LevelFeature.BOSS) -> MazeType.ARENA       // Bosses need wide-open kiting space
             config.features.contains(LevelFeature.DEFENSE) -> MazeType.QUARANTINE // Defense needs a specialized fortified shell

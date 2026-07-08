@@ -16,6 +16,7 @@ import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.data.UpgradeSystem
 import com.appsbyalok.echohunter.engine.GameEngine
 import com.appsbyalok.echohunter.engine.GameState
+import com.appsbyalok.echohunter.input.AttackMode
 import com.appsbyalok.echohunter.input.TouchController
 import com.appsbyalok.echohunter.statemachine.AppStateManager
 import com.appsbyalok.echohunter.systems.CollisionSystem
@@ -24,6 +25,7 @@ import com.appsbyalok.echohunter.systems.EnemySystem
 import com.appsbyalok.echohunter.systems.GlitchBossBehavior
 import com.appsbyalok.echohunter.systems.GuardianBossBehavior
 import com.appsbyalok.echohunter.systems.OmegaBossBehavior
+import com.appsbyalok.echohunter.systems.SpawnerSystem
 import com.appsbyalok.echohunter.systems.StalkerBossBehavior
 import com.appsbyalok.echohunter.systems.UltimaBossBehavior
 import com.appsbyalok.echohunter.systems.triggerCinematicFocus
@@ -49,9 +51,10 @@ class GameView(context: Context) : View(context) {
     val gs = GameState()
     internal val effectSys = EffectSystem()
     internal val enemySys = EnemySystem()
-    internal val collisionSys = CollisionSystem(gs, effectSys, enemySys)
+    internal val spawnerSys = SpawnerSystem(enemySys, effectSys)
+    internal val collisionSys = CollisionSystem(gs, effectSys, enemySys, spawnerSys)
 
-    val engine = GameEngine(gs, effectSys, enemySys, collisionSys, context)
+    val engine = GameEngine(gs, effectSys, enemySys, spawnerSys, collisionSys, context)
 
     internal val worldRenderer = WorldRenderer(context, effectSys, enemySys)
     internal val hudRenderer = HUDRenderer(context)
@@ -154,9 +157,7 @@ class GameView(context: Context) : View(context) {
             override fun onForceBossSpawn() { triggerBoss(Random.nextInt(0, 5), gameScale) }
             override fun onTriggerCoreMerge() { handleCoreUnlock(true) }
             override fun onForceEMP() {
-                gs.empMineActive = true
-                gs.empMineX = gs.px
-                gs.empMineY = gs.py
+                gs.activeTraps.add(GameState.ActiveTrap(2, gs.px, gs.py, 8f, 8f))
                 EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 200)
             }
         }
@@ -166,6 +167,10 @@ class GameView(context: Context) : View(context) {
         gs.gameMode = mode
         gs.currentLevel = level
         gs.resetGame()
+        
+        // Restore Aiming preference from SaveManager
+        gs.controls.activeAttackMode = AttackMode.entries.toTypedArray()[com.appsbyalok.echohunter.data.SaveManager.activeAttackMode]
+
         effectSys.reset()
         enemySys.respawnAll(gs)
         engine.generateLevelMaze(width.toFloat(), height.toFloat(), gameScale)

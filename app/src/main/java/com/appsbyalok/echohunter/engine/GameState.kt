@@ -110,15 +110,22 @@ class GameState {
     var globalSonarAlert = false // Flag for high-priority sonar-detected threats
     var localAttackAlert = false // Flag for immediate proximity threats
 
-    var isCamouflaged = false // Whether the player is currently hidden from enemies
-    var camoTimer = 0f // Remaining duration for the camouflage effect
-    var isDecoyActive = false // Whether a decoy hologram is currently active
-    var decoyX = 0f // World X position of the active decoy
-    var decoyY = 0f // World Y position of the active decoy
-    var decoyTimer = 0f // Remaining duration for the decoy effect
-    var empMineActive = false // Whether an EMP mine has been deployed
-    var empMineX = 0f // World X position of the EMP mine
-    var empMineY = 0f // World Y position of the EMP mine
+    class ActiveTrap(
+        val type: Int,
+        var x: Float,
+        var y: Float,
+        var timer: Float,
+        val duration: Float
+    )
+    val activeTraps = mutableListOf<ActiveTrap>()
+
+    val isCamouflaged: Boolean get() = activeTraps.any { it.type == 0 }
+    val isDecoyActive: Boolean get() = activeTraps.any { it.type == 1 || it.type == 4 }
+    val decoyX: Float get() = activeTraps.firstOrNull { it.type == 1 || it.type == 4 }?.x ?: 0f
+    val decoyY: Float get() = activeTraps.firstOrNull { it.type == 1 || it.type == 4 }?.y ?: 0f
+    val empMineActive: Boolean get() = activeTraps.any { it.type == 2 }
+    val empMineX: Float get() = activeTraps.firstOrNull { it.type == 2 }?.x ?: 0f
+    val empMineY: Float get() = activeTraps.firstOrNull { it.type == 2 }?.y ?: 0f
 
     var hp = 3 // Current health points of the player
     val maxHp: Int get() = 3 + UpgradeSystem.getBonusMaxHp() // Derived maximum health including upgrades
@@ -358,9 +365,7 @@ class GameState {
         attackCooldown = 0f
         trapCooldownTimer = 0f
         sonarTimer = 0f
-        isCamouflaged = false
-        isDecoyActive = false
-        empMineActive = false
+        activeTraps.clear()
 
         for (i in 0 until maxSpikes) spikeActive[i] = false
 
@@ -375,6 +380,7 @@ class GameState {
             config.features.contains(LevelFeature.ESCAPE) -> com.appsbyalok.echohunter.modes.EscapeObjective()
             config.features.contains(LevelFeature.DEFENSE) -> com.appsbyalok.echohunter.modes.DefenseObjective()
             config.features.contains(LevelFeature.ELIMINATION) -> com.appsbyalok.echohunter.modes.EliminationObjective()
+            config.features.contains(LevelFeature.CLEAN_SWEEP) -> com.appsbyalok.echohunter.modes.CleanSweepObjective()
             else -> StandardObjective()
         }
 
@@ -551,7 +557,7 @@ class GameState {
         }
     }
 
-    private fun isCollidingWithWall(cx: Float, cy: Float, radius: Float): Boolean {
+    fun isCollidingWithWall(cx: Float, cy: Float, radius: Float): Boolean {
         val grid = gridMap ?: return false
         val ts = tileSize
         val hitbox = radius * 0.6f

@@ -13,21 +13,53 @@ object StoryProtocol {
     var areControlsInverted: Boolean = false
     var isBlackoutActive: Boolean = false
 
+    // --- Typewriter Effect ---
+    var typewriterText: String? = null
+    var typewriterVisibleChars: Int = 0
+    private var typewriterCharTimer: Float = 0f
+
     fun showIngameMessage(resId: Int, duration: Float = 3f) {
         currentPopupRes = resId
         currentPopupText = null
         currentPopupArg = null
+        typewriterText = null
         popupTimer = duration
     }
 
     fun showIngameMessage(text: String, duration: Float = 3f) {
         currentPopupRes = 0
         currentPopupText = text
+        typewriterText = null
+        popupTimer = duration
+    }
+
+    fun showTypewriterMessage(text: String, duration: Float = 5f) {
+        currentPopupRes = 0
+        currentPopupText = null
+        typewriterText = text
+        typewriterVisibleChars = 0
+        typewriterCharTimer = 0f
         popupTimer = duration
     }
 
     fun update(dt: Float) {
-        if (popupTimer > 0f) popupTimer -= dt
+        if (popupTimer > 0f) {
+            popupTimer -= dt
+            
+            // Handle Typewriter Progression
+            typewriterText?.let { text ->
+                if (typewriterVisibleChars < text.length) {
+                    typewriterCharTimer += dt
+                    while (typewriterCharTimer >= 0.04f && typewriterVisibleChars < text.length) {
+                        typewriterVisibleChars++
+                        typewriterCharTimer -= 0.04f
+                    }
+                }
+            }
+        } else {
+            typewriterText = null
+        }
+
         if (bossIntroTimer > 0f) bossIntroTimer -= dt
     }
 

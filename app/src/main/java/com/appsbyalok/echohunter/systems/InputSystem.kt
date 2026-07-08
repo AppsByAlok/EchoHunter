@@ -27,8 +27,9 @@ class InputSystem(private val gs: GameState) {
             }
         } else {
             if (gs.controls.isWeaponMenuOpen) {
-                if (gs.controls.selectedWeaponIdx != -1) {
-                    gs.controls.activeAttackMode = AttackMode.entries.toTypedArray()[gs.controls.selectedWeaponIdx]
+                val idx = gs.controls.selectedWeaponIdx
+                if (idx != -1) {
+                    gs.controls.currentWeapon = idx
                 }
                 gs.controls.isWeaponMenuOpen = false
                 gs.controls.selectedWeaponIdx = -1
@@ -44,6 +45,7 @@ class InputSystem(private val gs: GameState) {
             if (tDist > menuThreshold) {
                 gs.controls.isTrapMenuOpen = true
                 gs.controls.selectedTrapIdx = getIndexByAngle(tdx, tdy, 3)
+                gs.controls.trapRequested = false // Cancel deploy if we are selecting from menu
             } else {
                 gs.controls.selectedTrapIdx = -1
             }
@@ -51,7 +53,7 @@ class InputSystem(private val gs: GameState) {
             if (gs.controls.isTrapMenuOpen) {
                 if (gs.controls.selectedTrapIdx != -1) {
                     gs.controls.currentTrap = gs.controls.selectedTrapIdx
-                    gs.controls.isTrapPressed = false // Safety: prevent trigger on release
+                    gs.controls.trapRequested = false // Safety: prevent trigger on release
                 }
                 gs.controls.isTrapMenuOpen = false
                 gs.controls.selectedTrapIdx = -1
@@ -161,8 +163,10 @@ class InputSystem(private val gs: GameState) {
             }
 
             // Target search logic
-            var bestTargetIdx = -1
+            var bestTargetIdx = -1 // -1: none, -2: boss, -3: security compiler, >=0: enemy
             var bestScore = Float.MAX_VALUE
+            var tX = 0f
+            var tY = 0f
 
             // Define ranges (in world units)
             val normalProximityThreshold = 600f
@@ -179,13 +183,13 @@ class InputSystem(private val gs: GameState) {
                 if (dist < immediateThreatThreshold) {
                     bestScore = d2 // Immediate threat priority
                     bestTargetIdx = -2 // -2 represents boss
+                    tX = gs.bossX; tY = gs.bossY
                 } else if (dist < bossProximityThreshold) {
-                    // Score for boss is prioritized by subtracting a "priority bonus" from its distance
-                    // This makes it "feel" closer to the auto-aim logic
                     val prioritizedDistSq = d2 * 0.4f // Multiplier < 1 means higher priority
                     if (prioritizedDistSq < bestScore) {
                         bestScore = prioritizedDistSq
                         bestTargetIdx = -2
+                        tX = gs.bossX; tY = gs.bossY
                     }
                 }
             }
@@ -202,6 +206,7 @@ class InputSystem(private val gs: GameState) {
                         if (d2 < bestScore) {
                             bestScore = d2
                             bestTargetIdx = i
+                            tX = enemySys.ex[i]; tY = enemySys.ey[i]
                         }
                     } else if (dist < normalProximityThreshold) {
                         var score = d2
@@ -213,26 +218,48 @@ class InputSystem(private val gs: GameState) {
                         if (score < bestScore) {
                             bestScore = score
                             bestTargetIdx = i
+                            tX = enemySys.ex[i]; tY = enemySys.ey[i]
                         }
                     }
                 }
             }
 
+            // 3. Evaluate Security Compilers (Spawn Nodes)
+            for (node in gs.spawnerNodes) {
+                if (node.state == SpawnState.DESTROYED || node.visibility < 0.2f) continue
+                
+                val dx = node.x - gs.px
+                val dy = node.y - gs.py
+                val d2 = dx * dx + dy * dy
+                val dist = sqrt(d2)
+
+                if (dist < normalProximityThreshold) {
+                    var score = d2
+                    // Compilers are primary targets in Clean Sweep
+                    if (gs.activeObjective is com.appsbyalok.echohunter.modes.CleanSweepObjective) {
+                        score *= 0.5f 
+                    } else {
+                        score *= 5.0f // Low priority in other modes (further reduced)
+                    }
+
+                    if (score < bestScore) {
+                        bestScore = score
+                        bestTargetIdx = -3
+                        tX = node.x; tY = node.y
+                    }
+                }
+            }
+
             // Apply best target
-            if (bestTargetIdx == -2) { // Boss
-                val dx = gs.bossX - gs.px
-                val dy = gs.bossY - gs.py
+            if (bestTargetIdx != -1) {
+                val dx = tX - gs.px
+                val dy = tY - gs.py
                 val dist = sqrt(dx * dx + dy * dy)
-                gs.controls.aimDirX = dx / dist
-                gs.controls.aimDirY = dy / dist
-                return
-            } else if (bestTargetIdx != -1) { // Normal Enemy
-                val dx = enemySys.ex[bestTargetIdx] - gs.px
-                val dy = enemySys.ey[bestTargetIdx] - gs.py
-                val dist = sqrt(dx * dx + dy * dy)
-                gs.controls.aimDirX = dx / dist
-                gs.controls.aimDirY = dy / dist
-                return
+                if (dist > 0f) {
+                    gs.controls.aimDirX = dx / dist
+                    gs.controls.aimDirY = dy / dist
+                    return
+                }
             }
         }
         // Fallback to last facing direction if no targets in range

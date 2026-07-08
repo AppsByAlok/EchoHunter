@@ -18,6 +18,7 @@ class GameEngine(
     private val gs: GameState,
     private val effectSys: EffectSystem,
     private val enemySys: EnemySystem,
+    private val spawnerSys: SpawnerSystem,
     private val collisionSys: CollisionSystem,
     private val context: Context
 ) {
@@ -29,10 +30,13 @@ class GameEngine(
     var onBossTrigger: ((Int, Float) -> Unit)? = null
     var onStoryState: ((IntArray, Int) -> Unit)? = null
 
-    private val arsenalSys = ArsenalSystem(gs, effectSys)
+    private val arsenalSys = ArsenalSystem(gs, effectSys, spawnerSys, enemySys)
     private val playerAI = PlayerAI(gs, enemySys)
-    private val spawnerSys = SpawnerSystem(enemySys, effectSys)
     private val inputSys = com.appsbyalok.echohunter.systems.InputSystem(gs)
+
+    init {
+        enemySys.setEffectSystem(effectSys)
+    }
 
     fun update(dt: Float, targetW: Float, targetH: Float, scale: Float) {
         gs.lastDt = dt
@@ -66,7 +70,6 @@ class GameEngine(
             if (gs.isAutoPilotActive) playerAI.update(simDt, scale)
             arsenalSys.update(simDt, scale)
 
-            if (gs.controls.isTrapPressed && gs.trapCooldownTimer <= 0f) arsenalSys.deployTrap()
             if (gs.controls.isOverclockPressed && gs.overclockMeter >= 100f && !gs.isOverclocked) activateOverclock(scale)
 
             for (i in 0 until gs.maxSpikes) {
@@ -188,7 +191,7 @@ class GameEngine(
         val rows = gs.gridMap!![0].size
         
         // NAYA: Initialize wall visibility map
-        gs.wallVisMap = Array(columns) { FloatArray(rows) { 0f } }
+        gs.wallVisMap = Array(columns) { FloatArray(rows) }
 
         gs.tileSize = scale * 0.15f
         gs.mapWidth = columns * gs.tileSize

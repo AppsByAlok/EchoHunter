@@ -168,6 +168,19 @@ object LevelIcons {
                 p.color = bgColor
                 c.drawCircle(cx + r * 0.4f, cy - r * 0.2f, r * 0.8f, p)
             }
+            LevelFeature.CLEAN_SWEEP -> {
+                // Circular Sweep / Radar
+                p.style = Paint.Style.STROKE
+                p.strokeWidth = r * 0.2f
+                c.drawCircle(cx, cy, r * 0.8f, p)
+                c.drawCircle(cx, cy, r * 0.4f, p)
+                
+                // Sweep Line
+                val angle = -45f
+                val lx = cx + r * 0.8f * kotlin.math.cos(Math.toRadians(angle.toDouble())).toFloat()
+                val ly = cy + r * 0.8f * kotlin.math.sin(Math.toRadians(angle.toDouble())).toFloat()
+                c.drawLine(cx, cy, lx, ly, p)
+            }
         }
 
         // Restore original paint settings

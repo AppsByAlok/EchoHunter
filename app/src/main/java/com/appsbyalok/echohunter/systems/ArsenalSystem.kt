@@ -8,18 +8,18 @@ import kotlin.math.max
 import kotlin.math.sqrt
 
 // ArsenalSystem: Modular class handling all Weapons and Traps
-class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSystem) {
+class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSystem, private val spawnerSys: SpawnerSystem, private val enemySys: EnemySystem) {
 
     fun update(dt: Float, scale: Float) {
         if (gs.trapCooldownTimer > 0f) gs.trapCooldownTimer -= dt
 
-        if (gs.camoTimer > 0f) {
-            gs.camoTimer -= dt
-            if (gs.camoTimer <= 0f) gs.isCamouflaged = false
-        }
-        if (gs.decoyTimer > 0f) {
-            gs.decoyTimer -= dt
-            if (gs.decoyTimer <= 0f) gs.isDecoyActive = false
+        val iterator = gs.activeTraps.iterator()
+        while (iterator.hasNext()) {
+            val trap = iterator.next()
+            trap.timer -= dt
+            if (trap.timer <= 0f) {
+                iterator.remove()
+            }
         }
 
         // Logic check for firing/sonar
@@ -40,8 +40,16 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
             gs.controls.isSonarPressed = false
         }
 
-        if (gs.controls.isTrapPressed && gs.trapCooldownTimer <= 0f) {
-            deployTrap()
+        if (gs.controls.trapRequested && gs.trapCooldownTimer <= 0f) {
+            deployTrap(scale)
+        }
+
+        // --- NEW: TRAP EFFECT LOGIC ---
+        for (trap in gs.activeTraps) {
+            if (trap.type == 3) { // Stasis Pulse
+                // This logic is better handled inside EnemySystem's movement loop
+                // to avoid double iterations and provide access to enemy arrays.
+            }
         }
     }
 
@@ -128,7 +136,7 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
         gs.globalSonarAlert = true
     }
 
-    fun deployTrap() {
+    fun deployTrap(scale: Float) {
         if (gs.modInfinityTraps) {
             gs.trapCooldownTimer = 0f
         } else {
@@ -138,23 +146,67 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
         EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
 
         // DYNAMIC TRAP DEPLOYMENT
-        when (gs.controls.currentTrap) {
-            0 -> { // Camouflage (Invisibility)
-                gs.isCamouflaged = true
-                gs.camoTimer = 4f
+        val duration = when (gs.controls.currentTrap) {
+            0 -> 4f
+            1 -> 5f
+            2 -> 8f
+            3 -> 6f // Stasis Pulse
+            4 -> 5f // Sonic Decoy
+            else -> 5f
+        }
+
+        val newTrap = GameState.ActiveTrap(
+            gs.controls.currentTrap,
+            gs.px,
+            gs.py,
+            duration,
+            duration
+        )
+
+        // Special handling for deployment logic
+        when (newTrap.type) {
+            0 -> { // Camouflage - Break existing aggro
+                for (i in 0 until gs.activeTraps.size) {
+                    if (gs.activeTraps[i].type == 0) {
+                        gs.activeTraps.removeAt(i)
+                        break
+                    }
+                }
+                // Enemies in chase state lose target
+                for (i in 0 until enemySys.n) {
+                    // Note: We don't have direct access to enemySys here for state changes easily,
+                    // but they will check isCamouflaged in their next updateBehavior call.
+                }
             }
-            1 -> { // Decoy Hologram
-                gs.isDecoyActive = true
-                gs.decoyX = gs.px
-                gs.decoyY = gs.py
-                gs.decoyTimer = 5f
-            }
-            2 -> { // EMP Mine
-                gs.empMineActive = true
-                gs.empMineX = gs.px
-                gs.empMineY = gs.py
+            2 -> { // EMP Mine logic (consume immediately if on spawner)
+                val nearest = gs.spawnerNodes
+                    .filter { it.state != SpawnState.DESTROYED && 
+                             it.state != SpawnState.DISABLED &&
+                             it.state != SpawnState.SELF_DESTROYING }
+                    .minByOrNull { (it.x - gs.px) * (it.x - gs.px) + (it.y - gs.py) * (it.y - gs.py) }
+                
+                if (nearest != null) {
+                    val distSq = (nearest.x - gs.px) * (nearest.x - gs.px) + (nearest.y - gs.py) * (nearest.y - gs.py)
+                    if (distSq < (gs.tileSize * 1.2f) * (gs.tileSize * 1.2f)) {
+                        // BOTH: Heavy damage + Hack
+                        spawnerSys.damageNode(nearest, 40f, gs, scale)
+                        
+                        // If it survived the damage, disable it
+                        if (nearest.state != SpawnState.DESTROYED) {
+                            nearest.state = SpawnState.DISABLED
+                            nearest.cooldownTimer = 10f 
+                            effectSys.spawnFloatingText(nearest.x, nearest.y, 0, 0xFFFFFF00.toInt(), "SYSTEM OVERLOAD")
+                        }
+
+                        EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 200)
+                        gs.controls.trapRequested = false
+                        return // Exit without adding to active traps
+                    }
+                }
             }
         }
-        gs.controls.isTrapPressed = false
+
+        gs.activeTraps.add(newTrap)
+        gs.controls.trapRequested = false
     }
 }

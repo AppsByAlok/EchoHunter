@@ -28,8 +28,19 @@ class StoryMode : GameModeStrategy {
         if (gs.cameraFocusWeight <= 0f) {
             val visibleW = gs.getViewportW(width, height)
             val visibleH = gs.getViewportH(width, height)
-            gs.px = gs.px.coerceIn(gs.cameraX, gs.cameraX + visibleW)
-            gs.py = gs.py.coerceIn(gs.cameraY, gs.cameraY + visibleH)
+            val playerRadius = scale * 0.015f
+
+            // Handle X clamping independently
+            val targetPx = gs.px.coerceIn(gs.cameraX + playerRadius, gs.cameraX + visibleW - playerRadius)
+            if (targetPx != gs.px && !gs.isCollidingWithWall(targetPx, gs.py, playerRadius)) {
+                gs.px = targetPx
+            }
+
+            // Handle Y clamping independently
+            val targetPy = gs.py.coerceIn(gs.cameraY + playerRadius, gs.cameraY + visibleH - playerRadius)
+            if (targetPy != gs.py && !gs.isCollidingWithWall(gs.px, targetPy, playerRadius)) {
+                gs.py = targetPy
+            }
         }
     }
 

@@ -12,7 +12,7 @@ class ControlsState {
     var moveDirY = 0f
 
     // --- ATTACK SYSTEM ---
-    var activeAttackMode = AttackMode.DEFAULT
+    var activeAttackMode = AttackMode.AUTO_AIM // Default to AUTO_AIM now
 
     // Raw Input (Filled by TouchController)
     var isAttackTouching = false
@@ -52,6 +52,7 @@ class ControlsState {
     var currentWeapon = 1 
     var currentTrap = 2 
     var isTrapPressed = false
+    var trapRequested = false
     var isOverclockPressed = false
     var isSonarPressed = false
     var isAutoSonarLocked = false

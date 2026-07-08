@@ -169,6 +169,10 @@ class TouchController(private val gs: GameState) {
                 }
                 if (pointerId == gs.touch.trapTouchId) {
                     gs.touch.trapTouchId = -1
+                    // Only trigger trap if we didn't open the menu
+                    if (gs.controls.isTrapPressed && !gs.controls.isTrapMenuOpen && gs.trapCooldownTimer <= 0f) {
+                        gs.controls.trapRequested = true
+                    }
                     gs.controls.isTrapPressed = false
                 }
                 if (pointerId == gs.touch.sonarTouchId) {
@@ -178,6 +182,9 @@ class TouchController(private val gs: GameState) {
 
                 if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
                     gs.controls.isAttackTouching = false
+                    if (gs.controls.isTrapPressed && !gs.controls.isTrapMenuOpen && gs.trapCooldownTimer <= 0f) {
+                        gs.controls.trapRequested = true
+                    }
                     gs.controls.isTrapPressed = false
                     gs.controls.isSonarPressed = false
                     gs.controls.isOverclockPressed = false

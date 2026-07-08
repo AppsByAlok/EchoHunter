@@ -23,6 +23,10 @@ class EnemySystem {
 
     val ai = EnemyAI()
     private var heatTimer = 0f
+    private var effectSys: EffectSystem? = null
+
+    fun setEffectSystem(es: EffectSystem) { effectSys = es }
+    fun getEffectSystem(): EffectSystem? = effectSys
 
     val n = 25
     val enemyBrains = Array<IEnemyBehavior>(n) { PatrolBehavior } // MODULAR BRAIN ARRAY
@@ -144,9 +148,17 @@ class EnemySystem {
                         type[i] = 1; enemyBrains[i] = HunterBehavior
                     }
                 }
+                4 -> { // REPAIR DRONE
+                    type[i] = 4; enemyBrains[i] = RepairDroneBehavior
+                }
                 else -> { // Compiler (Normal)
-                    type[i] = if (Random.nextFloat() < hunterProb) 1 else 0
-                    enemyBrains[i] = if (type[i] == 1) HunterBehavior else PatrolBehavior
+                    val repairProb = 0.15f // 15% chance to spawn repair drone instead of patrol
+                    if (gs.spawnerNodes.any { it.state == SpawnState.DESTROYED } && Random.nextFloat() < repairProb) {
+                        type[i] = 4; enemyBrains[i] = RepairDroneBehavior
+                    } else {
+                        type[i] = if (Random.nextFloat() < hunterProb) 1 else 0
+                        enemyBrains[i] = if (type[i] == 1) HunterBehavior else PatrolBehavior
+                    }
                 }
             }
         }
@@ -194,11 +206,26 @@ class EnemySystem {
             // If already in a wall, try to push out to the center of the current tile or a neighbor
             if (isCollidingWithWall(ex[i], ey[i], enemyRadius, gs)) {
                 val ts = gs.tileSize
-                val cx = ((ex[i] / ts).toInt() * ts) + (ts / 2f)
-                val cy = ((ey[i] / ts).toInt() * ts) + (ts / 2f)
+                val centerCol = (ex[i] / ts).toInt()
+                val centerRow = (ey[i] / ts).toInt()
+                
+                // Check current tile center first
+                val cx = centerCol * ts + ts / 2f
+                val cy = centerRow * ts + ts / 2f
                 if (!isCollidingWithWall(cx, cy, enemyRadius, gs)) {
-                    ex[i] = cx
-                    ey[i] = cy
+                    ex[i] = cx; ey[i] = cy
+                } else {
+                    // Search neighboring tiles (N, S, E, W)
+                    val dxs = intArrayOf(0, 0, -1, 1)
+                    val dys = intArrayOf(-1, 1, 0, 0)
+                    for (dir in 0 until 4) {
+                        val ncx = (centerCol + dxs[dir]) * ts + ts / 2f
+                        val ncy = (centerRow + dys[dir]) * ts + ts / 2f
+                        if (!isCollidingWithWall(ncx, ncy, enemyRadius, gs)) {
+                            ex[i] = ncx; ey[i] = ncy
+                            break
+                        }
+                    }
                 }
             }
 
@@ -216,6 +243,19 @@ class EnemySystem {
 
             // DELEGATE TO MODULAR AI BRAIN
             enemyBrains[i].updateBehavior(i, dt, gs, this, ai, width, height, scale)
+
+            // --- NEW: TRAP INFLUENCE (STASIS) ---
+            for (trap in gs.activeTraps) {
+                if (trap.type == 3) {
+                    val r = scale * 0.25f
+                    val dx = trap.x - ex[i]
+                    val dy = trap.y - ey[i]
+                    if (dx * dx + dy * dy < r * r) {
+                        evx[i] *= 0.3f
+                        evy[i] *= 0.3f
+                    }
+                }
+            }
 
             val d2 = (gs.px - ex[i]) * (gs.px - ex[i]) + (gs.py - ey[i]) * (gs.py - ey[i])
             val hitByPulse = (gs.pulse && d2 in gs.innerRSq..gs.outerRSq)
@@ -357,6 +397,19 @@ class EnemySystem {
             gs.bossVx = vx
             gs.bossVy = vy
 
+            // --- TRAP INFLUENCE (STASIS) ---
+            for (trap in gs.activeTraps) {
+                if (trap.type == 3) {
+                    val r = scale * 0.35f
+                    val dx = trap.x - gs.bossX
+                    val dy = trap.y - gs.bossY
+                    if (dx * dx + dy * dy < r * r) {
+                        gs.bossVx *= 0.6f
+                        gs.bossVy *= 0.6f
+                    }
+                }
+            }
+
             // --- NEW: FAST CLOSING LOGIC ---
             val (finalVx, finalVy) = if (isClosingIn) {
                 Pair(vx * 1.5f, vy * 1.5f)
@@ -368,10 +421,25 @@ class EnemySystem {
             // --- ANTI-STUCK LOGIC ---
             if (isCollidingWithWall(gs.bossX, gs.bossY, bossRadius * 0.8f, gs)) {
                 val ts = gs.tileSize
-                val bcx = ((gs.bossX / ts).toInt() * ts) + (ts / 2f)
-                val bcy = ((gs.bossY / ts).toInt() * ts) + (ts / 2f)
+                val bCol = (gs.bossX / ts).toInt()
+                val bRow = (gs.bossY / ts).toInt()
+                
+                val bcx = bCol * ts + ts / 2f
+                val bcy = bRow * ts + ts / 2f
+                
                 if (!isCollidingWithWall(bcx, bcy, bossRadius * 0.8f, gs)) {
                     gs.bossX = bcx; gs.bossY = bcy
+                } else {
+                    val dxs = intArrayOf(0, 0, -1, 1)
+                    val dys = intArrayOf(-1, 1, 0, 0)
+                    for (dir in 0 until 4) {
+                        val ncx = (bCol + dxs[dir]) * ts + ts / 2f
+                        val ncy = (bRow + dys[dir]) * ts + ts / 2f
+                        if (!isCollidingWithWall(ncx, ncy, bossRadius * 0.8f, gs)) {
+                            gs.bossX = ncx; gs.bossY = ncy
+                            break
+                        }
+                    }
                 }
             }
 
@@ -531,6 +599,22 @@ class EnemySystem {
                         pText.color = (a shl 24) or (0xFFFF2A4D.toInt() and 0xFFFFFF)
                         pText.textSize = scale * 0.025f
                         c.drawText("TARGET", screenEx, screenEy - entitySize * 1.5f, pText)
+                    }
+                    4 -> {
+                        // --- NEW: REPAIR DRONE (Support) ---
+                        p.color = (a shl 24) or (0xFF00FF88.toInt() and 0xFFFFFF) // Spring Green
+                        entityPath.reset()
+                        entityPath.moveTo(screenEx, screenEy - entitySize)
+                        entityPath.lineTo(screenEx + entitySize, screenEy)
+                        entityPath.lineTo(screenEx, screenEy + entitySize)
+                        entityPath.lineTo(screenEx - entitySize, screenEy)
+                        entityPath.close()
+                        c.drawPath(entityPath, p)
+                        
+                        // Inner "wrench" or tool symbol
+                        p.color = (a shl 24) or (GameColors.BG and 0xFFFFFF)
+                        c.drawRect(screenEx - entitySize * 0.4f, screenEy - entitySize * 0.1f, screenEx + entitySize * 0.4f, screenEy + entitySize * 0.1f, p)
+                        c.drawRect(screenEx - entitySize * 0.1f, screenEy - entitySize * 0.4f, screenEx + entitySize * 0.1f, screenEy + entitySize * 0.4f, p)
                     }
                     else -> {
                         p.color = (a shl 24) or (GameColors.YELLOW and 0xFFFFFF)

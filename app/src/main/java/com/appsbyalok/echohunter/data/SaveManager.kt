@@ -28,6 +28,9 @@ object SaveManager {
     var isEffectsEnabled: Boolean = true
         private set
 
+    var activeAttackMode: Int = 1 // Default to AUTO_AIM (index 1)
+        private set
+
     fun setAutoNextLevel(enabled: Boolean) {
         isAutoNextLevelEnabled = enabled
         prefs.edit().putBoolean("isAutoNextLevelEnabled", isAutoNextLevelEnabled).apply()
@@ -46,6 +49,11 @@ object SaveManager {
     fun setEffectsEnabled(enabled: Boolean) {
         isEffectsEnabled = enabled
         prefs.edit().putBoolean("isEffectsEnabled", isEffectsEnabled).apply()
+    }
+
+    fun setAttackMode(mode: Int) {
+        activeAttackMode = mode
+        prefs.edit().putInt("attackMode", activeAttackMode).apply()
     }
     // --- NAYA STREAK SYSTEM (ROGUELITE) ---
     var currentStoryStreak: Int = 0
@@ -83,6 +91,7 @@ object SaveManager {
         isSoundEnabled = prefs.getBoolean("isSoundEnabled", true)
         isVibrationEnabled = prefs.getBoolean("isVibrationEnabled", true)
         isEffectsEnabled = prefs.getBoolean("isEffectsEnabled", true)
+        activeAttackMode = prefs.getInt("attackMode", 1) // Default to AUTO_AIM
 
         // Load Streaks
         currentStoryStreak = prefs.getInt("currStory", 0)

@@ -10,6 +10,7 @@ enum class LevelFeature {
     ESCAPE,        // Prime 11: Secure target threshold then locate escape gate
     DEFENSE,       // Prime 13: Protect the central core protocol
     BOMB,          // Prime 17: Plant a Logic Bomb and defend it
+    CLEAN_SWEEP,   // Prime 19: Destroy all security compilers (spawners)
     SPECIAL,       // Narrative anomaly elements
     ADMIN_BONUS    // Level 100 Easter Egg override
 }
@@ -52,6 +53,7 @@ object LevelEngine {
         if (level % 11 == 0) activeFeatures.add(LevelFeature.ESCAPE)
         if (level % 13 == 0) activeFeatures.add(LevelFeature.DEFENSE)
         if (level % 17 == 0) activeFeatures.add(LevelFeature.BOMB)
+        if (level % 19 == 0) activeFeatures.add(LevelFeature.CLEAN_SWEEP)
 
         // --- 2. THE EVEN PROTOCOL (Environmental Modifiers) ---
         if (level % 6 == 0) activeFeatures.add(LevelFeature.MAZE)
@@ -65,7 +67,8 @@ object LevelEngine {
                 activeFeatures.contains(LevelFeature.ELIMINATION) ||
                 activeFeatures.contains(LevelFeature.ESCAPE) ||
                 activeFeatures.contains(LevelFeature.DEFENSE) ||
-                activeFeatures.contains(LevelFeature.BOMB)
+                activeFeatures.contains(LevelFeature.BOMB) ||
+                activeFeatures.contains(LevelFeature.CLEAN_SWEEP)
 
         // If no primary objective exists, the base mode defaults to CLASSIC
         // This ensures levels like 6 (Maze only) become Classic + Maze
@@ -111,6 +114,7 @@ object LevelEngine {
         if (features.contains(LevelFeature.DEFENSE)) featureMult *= 1.5
         if (features.contains(LevelFeature.ESCAPE)) featureMult *= 1.3
         if (features.contains(LevelFeature.BOMB)) featureMult *= 1.8 // Bomb reward modifier
+        if (features.contains(LevelFeature.CLEAN_SWEEP)) featureMult *= 2.0 // High reward for total destruction
         if (features.contains(LevelFeature.DARKNESS)) featureMult *= 1.2 // Bonus for playing in the dark
 
         clearReward = (clearReward * featureMult).toLong()

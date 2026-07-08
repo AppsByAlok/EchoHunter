@@ -143,7 +143,7 @@ class PauseState(private val manager: AppStateManager) : IAppState {
     override fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean {
         if (action == MotionEvent.ACTION_DOWN) {
             hitOnDown = when {
-                manager.view.menuRenderer.pauseModRect.contains(vx, vy) -> 1
+                manager.view.menuRenderer.pauseAimRect.contains(vx, vy) -> 1
                 manager.view.menuRenderer.pauseDiscRect.contains(vx, vy) -> 2
                 manager.view.menuRenderer.pauseAutoRect.contains(vx, vy) -> 3
                 manager.view.menuRenderer.pauseRestartRect.contains(vx, vy) -> 4
@@ -154,7 +154,7 @@ class PauseState(private val manager: AppStateManager) : IAppState {
 
         if (action == MotionEvent.ACTION_UP && gs.stateTimer > 0.2f) {
             val hitOnUp = when {
-                manager.view.menuRenderer.pauseModRect.contains(vx, vy) -> 1
+                manager.view.menuRenderer.pauseAimRect.contains(vx, vy) -> 1
                 manager.view.menuRenderer.pauseDiscRect.contains(vx, vy) -> 2
                 manager.view.menuRenderer.pauseAutoRect.contains(vx, vy) -> 3
                 manager.view.menuRenderer.pauseRestartRect.contains(vx, vy) -> 4
@@ -164,7 +164,11 @@ class PauseState(private val manager: AppStateManager) : IAppState {
 
             if (hitOnUp != -1 && hitOnUp == hitOnDown) {
                 when (hitOnUp) {
-                    1 -> manager.view.onModMenuOpen()
+                    1 -> {
+                        gs.controls.activeAttackMode = if (gs.controls.activeAttackMode == com.appsbyalok.echohunter.input.AttackMode.AUTO_AIM) 
+                            com.appsbyalok.echohunter.input.AttackMode.MANUAL_AIM else com.appsbyalok.echohunter.input.AttackMode.AUTO_AIM
+                        EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100)
+                    }
                     2 -> manager.view.disconnectCable()
                     3 -> {
                         gs.isAutoPilotActive = !gs.isAutoPilotActive

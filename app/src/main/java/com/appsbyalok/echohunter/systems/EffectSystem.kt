@@ -81,14 +81,18 @@ class EffectSystem {
         }
     }
 
-    fun spawnFloatingText(x: Float, y: Float, value: Long, color: Int) {
+    fun spawnFloatingText(x: Float, y: Float, value: Long, color: Int, overrideStr: String? = null) {
         for (i in 0 until ftn) {
             if (ftLife[i] <= 0f) {
                 ftX[i] = x; ftY[i] = y; ftLife[i] = 1f; ftColor[i] = color
-                ftStr[i] = "+$value"
+                ftStr[i] = overrideStr ?: "+$value"
                 break
             }
         }
+    }
+
+    fun spawnAlertPulse(x: Float, y: Float, color: Int) {
+        spawnSonarPing(x, y, color)
     }
 
     fun spawnSonarPing(x: Float, y: Float, color: Int) {

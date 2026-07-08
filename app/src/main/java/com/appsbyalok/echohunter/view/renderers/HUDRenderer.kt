@@ -74,10 +74,16 @@ class HUDRenderer(private val context: Context) {
 
         // --- 5. RADIAL MENUS (Upper Arc Distribution) ---
         if (gs.controls.isWeaponMenuOpen) {
-            drawRadialMenu(c, scale, gs.hudLayout.atkX, gs.hudLayout.atkY, arrayOf("ATK", "AUTO", "MAN"), intArrayOf(GameColors.RED, GameColors.SHIELD, GameColors.RED), gs.controls.selectedWeaponIdx)
+            drawRadialMenu(c, scale, gs.hudLayout.atkX, gs.hudLayout.atkY, 
+                arrayOf("SPIKE", "BLAST", "SLUG"), 
+                intArrayOf(GameColors.TEXT, GameColors.YELLOW, GameColors.PULSE),
+                gs.controls.selectedWeaponIdx)
         }
         if (gs.controls.isTrapMenuOpen) {
-            drawRadialMenu(c, scale, gs.hudLayout.trapX, gs.hudLayout.trapY, arrayOf("MINE", "STUN", "EMP"), intArrayOf(GameColors.TEXT, GameColors.OVERCLOCK, GameColors.SHIELD), gs.controls.selectedTrapIdx)
+            drawRadialMenu(c, scale, gs.hudLayout.trapX, gs.hudLayout.trapY, 
+                arrayOf("CAMO", "DECOY", "EMP"), 
+                intArrayOf(GameColors.TEXT, GameColors.OVERCLOCK, GameColors.SHIELD), 
+                gs.controls.selectedTrapIdx)
         }
         if (gs.controls.isSonarMenuOpen) {
             drawRadialMenu(c, scale, gs.hudLayout.pulseX, gs.hudLayout.pulseY, arrayOf("MANUAL", "LOCK"), intArrayOf(GameColors.TEXT, GameColors.SHIELD), gs.controls.selectedSonarIdx)
@@ -297,7 +303,13 @@ class HUDRenderer(private val context: Context) {
     private fun drawStoryPopups(c: Canvas, scale: Float, targetW: Float, gs: GameState) {
         val msgTimer = StoryProtocol.popupTimer
         if (msgTimer <= 0f) return
-        val msgText = StoryProtocol.currentPopupText ?: ""
+        
+        val msgText = if (StoryProtocol.typewriterText != null) {
+            StoryProtocol.typewriterText!!.take(StoryProtocol.typewriterVisibleChars)
+        } else {
+            StoryProtocol.currentPopupText ?: ""
+        }
+
         if (msgText.isBlank()) return
 
         val alpha = if (msgTimer < 0.5f) (msgTimer * 2 * 255).toInt().coerceIn(0, 255) else 255
