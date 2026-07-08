@@ -42,6 +42,16 @@ class UINanoOS {
     fun draw(c: Canvas, targetW: Float, targetH: Float, scale: Float, time: Float) {
         c.drawColor(0xEE050A0F.toInt()) // Deep Hacker Blue-Black BG
 
+        // --- SCANLINE EFFECT ---
+        p.style = Paint.Style.STROKE
+        p.strokeWidth = scale * 0.002f
+        p.color = 0x0AFFFFFF
+        var slY = 0f
+        while (slY < targetH) {
+            c.drawLine(0f, slY, targetW, slY, p)
+            slY += scale * 0.012f
+        }
+
         val isPortrait = targetH > targetW
 
         // --- 1. TOP HEADER (STATUS BAR) ---
@@ -118,23 +128,30 @@ class UINanoOS {
             targetH - bottomMargin
         )
 
-        p.style = Paint.Style.FILL; p.color = 0xFF330000.toInt()
+        val isPressed = (hitOnDown == 4)
+        val baseRed = 0xFF330000.toInt()
+        p.style = Paint.Style.FILL; p.color = if (isPressed) GameColors.mixColors(baseRed, GameColors.RED, 0.4f) else baseRed
         c.drawRoundRect(closeBtnRect, scale * 0.02f, scale * 0.02f, p)
         p.style = Paint.Style.STROKE; p.color = GameColors.RED; p.strokeWidth = scale * 0.005f
         c.drawRoundRect(closeBtnRect, scale * 0.02f, scale * 0.02f, p)
 
         pText.textAlign = Paint.Align.CENTER
         pText.color = GameColors.RED; pText.textSize = scale * 0.045f
+        if (isPressed) pText.setShadowLayer(10f, 0f, 0f, GameColors.RED)
         c.drawText("DISCONNECT", closeBtnRect.centerX(), closeBtnRect.centerY() + scale * 0.015f, pText)
+        pText.clearShadowLayer()
     }
 
     private fun drawCard(c: Canvas, rect: RectF, index: Int, scale: Float) {
+        val isPressed = (hitOnDown == index)
+        val baseCardColor = 0xFF051515.toInt()
+
         p.style = Paint.Style.FILL
-        p.color = 0xFF051515.toInt()
+        p.color = if (isPressed) GameColors.mixColors(baseCardColor, GameColors.PULSE, 0.15f) else baseCardColor
         c.drawRoundRect(rect, scale * 0.03f, scale * 0.03f, p)
 
         p.style = Paint.Style.STROKE
-        p.color = GameColors.PULSE
+        p.color = if (isPressed) GameColors.CLARITY else GameColors.PULSE
         p.strokeWidth = scale * 0.005f
         c.drawRoundRect(rect, scale * 0.03f, scale * 0.03f, p)
 

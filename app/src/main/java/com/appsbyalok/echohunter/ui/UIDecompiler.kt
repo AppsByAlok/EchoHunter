@@ -36,6 +36,8 @@ class UIDecompiler {
     private val closeBtnRect = RectF()
     private var hitOnDown = -1
     private var hitTypeOnDown: UpgradeType? = null
+    private var listTop = 0f
+    private var listBottom = 0f
 
     private val branches = listOf(
         Triple("--- [ ARCHITECT ] ---", "CORE SYSTEMS & SURVIVAL", listOf(UpgradeType.MAX_HP, UpgradeType.THRUSTER_OPTIMIZE, UpgradeType.DATA_MAGNET, UpgradeType.COMPRESSION_ALGO, UpgradeType.NANITE_REPAIR, UpgradeType.QUANTUM_CORE, UpgradeType.DATA_SYNDICATE, UpgradeType.OVERCLOCK_DUR, UpgradeType.OPTIC_SENSORS)),
@@ -45,6 +47,16 @@ class UIDecompiler {
 
     fun draw(c: Canvas, targetW: Float, targetH: Float, scale: Float) {
         c.drawColor(0xEE020502.toInt()) // Even darker terminal BG
+
+        // --- SCANLINE EFFECT ---
+        p.style = Paint.Style.STROKE
+        p.strokeWidth = scale * 0.002f
+        p.color = 0x0AFFFFFF
+        var slY = 0f
+        while (slY < targetH) {
+            c.drawLine(0f, slY, targetW, slY, p)
+            slY += scale * 0.012f
+        }
 
         if (!isDragging && abs(scrollVelocity) > 0.5f) {
             scrollY += scrollVelocity
@@ -72,8 +84,8 @@ class UIDecompiler {
         c.drawText("AVAILABLE DATA: ${SaveManager.formatDataString(SaveManager.dataCoinsKB)}", targetW / 2f, scale * 0.18f, pText)
 
         // --- Tier Labels & List ---
-        val listTop = scale * 0.22f
-        val listBottom = targetH - scale * 0.16f
+        listTop = scale * 0.22f
+        listBottom = targetH - scale * 0.16f
         
         c.save()
         c.clipRect(0f, listTop, targetW, listBottom)
@@ -211,8 +223,14 @@ class UIDecompiler {
 
                 // Draw Button (ONLY IF NOT MAXED OR NOT EXPANDED to avoid overlap and redundancy)
                 if (!isMaxed || !isExpanded) {
+                    val isPressed = hitOnDown == 2 && hitTypeOnDown == type
+                    
                     p.style = Paint.Style.FILL
-                    p.color = if (isMaxed) 0xFF002200.toInt() else if (canAfford) 0xFF002222.toInt() else 0xFF220000.toInt()
+                    val btnBaseColor = if (isMaxed) 0xFF002200.toInt() 
+                                      else if (canAfford) 0xFF002222.toInt() 
+                                      else 0xFF220000.toInt()
+                    
+                    p.color = if (isPressed) GameColors.mixColors(btnBaseColor, 0xFFFFFFFF.toInt(), 0.3f) else btnBaseColor
                     c.drawRoundRect(btnRect, scale*0.005f, scale*0.005f, p)
 
                     p.style = Paint.Style.STROKE
@@ -221,6 +239,7 @@ class UIDecompiler {
 
                     pText.textAlign = Paint.Align.CENTER
                     pText.color = p.color
+                    if (isPressed) pText.setShadowLayer(8f, 0f, 0f, p.color)
                     pText.textSize = scale * 0.028f
 
                     val btnLabel = if (isMaxed) "OPTIMIZED" else "COMPILE\n${SaveManager.formatDataString(cost)}"
@@ -232,6 +251,7 @@ class UIDecompiler {
                         pText.textSize = scale * 0.024f
                         c.drawText(lines[1], btnRect.centerX(), btnRect.centerY() + scale * 0.025f, pText)
                     }
+                    pText.clearShadowLayer()
                 }
 
                 currentY += currentItemH
@@ -246,13 +266,15 @@ class UIDecompiler {
 
         // --- DISCONNECT BUTTON ---
         closeBtnRect.set(targetW / 2f - scale * 0.2f, targetH - scale * 0.12f, targetW / 2f + scale * 0.2f, targetH - scale * 0.03f)
-        p.style = Paint.Style.FILL; p.color = 0xFF330000.toInt()
+        p.style = Paint.Style.FILL; p.color = if (hitOnDown == 1) 0xFF660A0A.toInt() else 0xFF330000.toInt()
         c.drawRoundRect(closeBtnRect, scale * 0.02f, scale * 0.02f, p)
         p.style = Paint.Style.STROKE; p.color = GameColors.RED
         c.drawRoundRect(closeBtnRect, scale * 0.02f, scale * 0.02f, p)
 
         pText.textAlign = Paint.Align.CENTER; pText.color = GameColors.RED; pText.textSize = scale * 0.04f
+        if (hitOnDown == 1) pText.setShadowLayer(10f, 0f, 0f, GameColors.RED)
         c.drawText("DISCONNECT", closeBtnRect.centerX(), closeBtnRect.centerY() + scale * 0.015f, pText)
+        pText.clearShadowLayer()
     }
 
     private var touchDownX = 0f
@@ -274,19 +296,21 @@ class UIDecompiler {
                 }
 
                 hitTypeOnDown = null
-                for ((type, rect) in buyButtons) {
-                    if (rect.contains(x, y)) {
-                        hitTypeOnDown = type
-                        hitOnDown = 2
-                        break
-                    }
-                }
-                if (hitTypeOnDown == null) {
-                    for ((type, rect) in cardRects) {
+                if (hitOnDown == 0 && y >= listTop && y <= listBottom) {
+                    for ((type, rect) in buyButtons) {
                         if (rect.contains(x, y)) {
                             hitTypeOnDown = type
-                            hitOnDown = 3
+                            hitOnDown = 2
                             break
+                        }
+                    }
+                    if (hitTypeOnDown == null) {
+                        for ((type, rect) in cardRects) {
+                            if (rect.contains(x, y)) {
+                                hitTypeOnDown = type
+                                hitOnDown = 3
+                                break
+                            }
                         }
                     }
                 }
@@ -300,28 +324,37 @@ class UIDecompiler {
                 val distSq = dx * dx + (y - touchDownY) * (y - touchDownY)
                 val threshold = scale * scale * 0.05f
 
-                if (abs(dy) > scale * 0.02f) {
-                    isDragging = true
-                    hitOnDown = -1
-                    hitTypeOnDown = null
-                } else if (distSq > threshold) {
-                    hitOnDown = -1
-                    hitTypeOnDown = null
-                }
+                if (hitOnDown == 1) {
+                    // Started on Disconnect button: don't scroll and don't cancel easily
+                    if (distSq > threshold) {
+                        hitOnDown = -1
+                    }
+                } else {
+                    if (abs(dy) > scale * 0.02f) {
+                        isDragging = true
+                        hitOnDown = -1
+                        hitTypeOnDown = null
+                    } else if (distSq > threshold) {
+                        hitOnDown = -1
+                        hitTypeOnDown = null
+                    }
 
-                if (dt > 0) {
-                    val rawVelocity = (dy / dt.toFloat()) * 20f
-                    scrollVelocity = (scrollVelocity * 0.4f) + (rawVelocity * 0.6f)
-                }
+                    if (isDragging || hitOnDown == 0) {
+                        if (dt > 0) {
+                            val rawVelocity = (dy / dt.toFloat()) * 20f
+                            scrollVelocity = (scrollVelocity * 0.4f) + (rawVelocity * 0.6f)
+                        }
 
-                scrollY += dy
-                if (scrollY > 0f) {
-                    scrollY = 0f
-                    scrollVelocity = 0f
-                }
-                if (scrollY < -maxScroll) {
-                    scrollY = -maxScroll
-                    scrollVelocity = 0f
+                        scrollY += dy
+                        if (scrollY > 0f) {
+                            scrollY = 0f
+                            scrollVelocity = 0f
+                        }
+                        if (scrollY < -maxScroll) {
+                            scrollY = -maxScroll
+                            scrollVelocity = 0f
+                        }
+                    }
                 }
 
                 lastTouchY = y
@@ -336,19 +369,21 @@ class UIDecompiler {
 
                     var hitTypeOnUp: UpgradeType? = null
                     var upType = 0
-                    for ((type, rect) in buyButtons) {
-                        if (rect.contains(x, y)) {
-                            hitTypeOnUp = type
-                            upType = 2
-                            break
-                        }
-                    }
-                    if (hitTypeOnUp == null) {
-                        for ((type, rect) in cardRects) {
+                    if (hitOnUp == 0 && y >= listTop && y <= listBottom) {
+                        for ((type, rect) in buyButtons) {
                             if (rect.contains(x, y)) {
                                 hitTypeOnUp = type
-                                upType = 3
+                                upType = 2
                                 break
+                            }
+                        }
+                        if (hitTypeOnUp == null) {
+                            for ((type, rect) in cardRects) {
+                                if (rect.contains(x, y)) {
+                                    hitTypeOnUp = type
+                                    upType = 3
+                                    break
+                                }
                             }
                         }
                     }
@@ -365,7 +400,7 @@ class UIDecompiler {
                                 EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
                                 gs.showGlobalMessage("ERROR: INSUFFICIENT DATA.\nREQUIRE MORE KILOBYTES.", 2f)
                             }
-                        } else if (upType == 3) {
+                        } else { // upType == 3
                             expandedType = if (expandedType == hitTypeOnUp) null else hitTypeOnUp
                             EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 50)
                         }

@@ -39,6 +39,8 @@ class UIArchives {
     private val autoNextBoxRect = RectF()
     private val autoPilotBoxRect = RectF()
     private var hitOnDown = -1
+    private var listTop = 0f
+    private var listBottom = 0f
 
     // Garbage Collector stutter variables optimized out using object pools
     private val reusableRect = RectF()
@@ -65,30 +67,18 @@ class UIArchives {
         }
     }
 
-    // High-performance Manual ARGB Blend Logic via Bitwise Masks
-    private fun mixColorsManual(colorA: Int, colorB: Int, ratio: Float): Int {
-        val inverseRatio = 1f - ratio
-
-        val aA = (colorA shr 24 and 0xFF)
-        val aR = (colorA shr 16 and 0xFF)
-        val aG = (colorA shr 8 and 0xFF)
-        val aaVal = colorA and 0xFF
-
-        val bA = (colorB shr 24 and 0xFF)
-        val bR = (colorB shr 16 and 0xFF)
-        val bG = (colorB shr 8 and 0xFF)
-        val bbVal = colorB and 0xFF
-
-        val outA = ((aA * inverseRatio) + (bA * ratio)).toInt()
-        val outR = ((aR * inverseRatio) + (bR * ratio)).toInt()
-        val outG = ((aG * inverseRatio) + (bG * ratio)).toInt()
-        val outB = ((aaVal * inverseRatio) + (bbVal * ratio)).toInt()
-
-        return (outA shl 24) or (outR shl 16) or (outG shl 8) or outB
-    }
-
     fun draw(c: Canvas, width: Float, height: Float, gs: GameState, scale: Float) {
         c.drawColor(0xEE050508.toInt()) // Dark cyber hacking base background
+
+        // --- SCANLINE EFFECT ---
+        p.style = Paint.Style.STROKE
+        p.strokeWidth = scale * 0.002f
+        p.color = 0x0AFFFFFF
+        var slY = 0f
+        while (slY < height) {
+            c.drawLine(0f, slY, width, slY, p)
+            slY += scale * 0.012f
+        }
 
         if (!isDragging && abs(scrollVelocity) > 0.5f) {
             scrollY += scrollVelocity
@@ -103,30 +93,44 @@ class UIArchives {
             }
         }
 
+        // --- Tier Labels & List ---
+        listTop = scale * 0.28f
+        listBottom = height - scale * 0.13f
+
         if (SaveManager.maxCampaignLevel != lastMaxLevel || cachedList.isEmpty()) generateNodeList()
+
+        // Header Render with improved Glow
+        p.style = Paint.Style.FILL
+        p.shader = android.graphics.LinearGradient(0f, 0f, 0f, listTop, 0xDD001A1A.toInt(), 0x00000000, android.graphics.Shader.TileMode.CLAMP)
+        c.drawRect(0f, 0f, width, listTop, p)
+        p.shader = null
 
         pText.textSize = scale * 0.07f
         pText.color = GameColors.PULSE
+        pText.setShadowLayer(15f, 0f, 0f, GameColors.PULSE) // Glow effect
         c.drawText("SYSTEM ARCHIVES", width / 2f, scale * 0.11f, pText)
+        pText.clearShadowLayer()
 
         val boxWidth = if (width > height) scale * 0.35f else scale * 0.38f
 
         // Auto-Next Checkbox Button Layout
-        autoNextBoxRect.set(width / 2f - boxWidth, scale * 0.17f, width / 2f - scale * 0.015f, scale * 0.26f)
-        p.style = Paint.Style.STROKE; p.color = if (SaveManager.isAutoNextLevelEnabled) GameColors.HP else GameColors.RED; p.strokeWidth = scale * 0.004f
+        autoNextBoxRect.set(width / 2f - boxWidth, scale * 0.16f, width / 2f - scale * 0.015f, scale * 0.25f)
+        val autoNextColor = if (SaveManager.isAutoNextLevelEnabled) GameColors.HP else GameColors.RED
+        p.style = Paint.Style.FILL; p.color = if (hitOnDown == -3) GameColors.mixColors(autoNextColor, 0, 0.4f) else 0x1A000000
         c.drawRoundRect(autoNextBoxRect, scale * 0.01f, scale * 0.01f, p)
-        p.style = Paint.Style.FILL; p.color = 0x1F000000
+        p.style = Paint.Style.STROKE; p.color = autoNextColor; p.strokeWidth = scale * 0.004f
         c.drawRoundRect(autoNextBoxRect, scale * 0.01f, scale * 0.01f, p)
-        pText.textSize = scale * 0.032f; pText.color = if (SaveManager.isAutoNextLevelEnabled) GameColors.HP else GameColors.RED
+        pText.textSize = scale * 0.032f; pText.color = autoNextColor
         c.drawText(if (SaveManager.isAutoNextLevelEnabled) "AUTO-NEXT: ON" else "AUTO-NEXT: OFF", autoNextBoxRect.centerX(), autoNextBoxRect.centerY() + scale * 0.011f, pText)
 
         // Autopilot Checkbox Button Layout
-        autoPilotBoxRect.set(width / 2f + scale * 0.015f, scale * 0.17f, width / 2f + boxWidth, scale * 0.26f)
-        p.style = Paint.Style.STROKE; p.color = if (gs.isAutoPilotActive) GameColors.HP else GameColors.RED; p.strokeWidth = scale * 0.004f
+        autoPilotBoxRect.set(width / 2f + scale * 0.015f, scale * 0.16f, width / 2f + boxWidth, scale * 0.25f)
+        val autoPilotColor = if (gs.isAutoPilotActive) GameColors.HP else GameColors.RED
+        p.style = Paint.Style.FILL; p.color = if (hitOnDown == -4) GameColors.mixColors(autoPilotColor, 0, 0.4f) else 0x1A000000
         c.drawRoundRect(autoPilotBoxRect, scale * 0.01f, scale * 0.01f, p)
-        p.style = Paint.Style.FILL; p.color = 0x1F000000
+        p.style = Paint.Style.STROKE; p.color = autoPilotColor; p.strokeWidth = scale * 0.004f
         c.drawRoundRect(autoPilotBoxRect, scale * 0.01f, scale * 0.01f, p)
-        pText.textSize = scale * 0.032f; pText.color = if (gs.isAutoPilotActive) GameColors.HP else GameColors.RED
+        pText.textSize = scale * 0.032f; pText.color = autoPilotColor
         c.drawText(if (gs.isAutoPilotActive) "AUTOPILOT: ON" else "AUTOPILOT: OFF", autoPilotBoxRect.centerX(), autoPilotBoxRect.centerY() + scale * 0.011f, pText)
 
         // Dynamic Row Generation Layout Config
@@ -142,8 +146,8 @@ class UIArchives {
         var col = 0
         var row = 0
 
-        val topClipLimit = scale * 0.28f
-        val bottomClipLimit = height - scale * 0.13f
+        c.save()
+        c.clipRect(0f, listTop, width, listBottom)
 
         for (lvl in cachedList) {
             val cx = startX + col * (boxSize + gap)
@@ -151,7 +155,7 @@ class UIArchives {
 
             reusableRect.set(cx, cy, cx + boxSize, cy + boxSize)
 
-            if (reusableRect.bottom >= topClipLimit && reusableRect.top <= bottomClipLimit) {
+            if (reusableRect.bottom >= listTop && reusableRect.top <= listBottom) {
                 levelButtons[lvl] = RectF(reusableRect)
 
                 val config = LevelEngine.getLevelConfig(lvl)
@@ -176,21 +180,30 @@ class UIArchives {
                             LevelFeature.DARKNESS -> 0xFF000000.toInt()
                             LevelFeature.CLEAN_SWEEP -> GameColors.COOLANT
                         }
-                        mixedColor = if (colorCount == 0) featureColor else mixColorsManual(mixedColor, featureColor, 0.5f)
+                        mixedColor = if (colorCount == 0) featureColor else GameColors.mixColors(mixedColor, featureColor, 0.5f)
                         colorCount++
                     }
                 }
 
-                val baseBgTone = if (isNextNode) 0xFF052510.toInt() else GameColors.BG
-                val finalBgColor = mixColorsManual(baseBgTone, mixedColor, 0.25f)
+                val baseBgTone = when {
+                    isNextNode -> 0xFF052510.toInt()
+                    hitOnDown == lvl -> 0xFF222222.toInt()
+                    else -> GameColors.BG
+                }
+                val finalBgColor = GameColors.mixColors(baseBgTone, mixedColor, 0.25f)
 
                 // Background Matrix Render
                 p.style = Paint.Style.FILL; p.color = finalBgColor
                 c.drawRoundRect(reusableRect, scale * 0.015f, scale * 0.015f, p)
 
                 // Circuit Board Framing Borders
-                p.style = Paint.Style.STROKE; p.strokeWidth = scale * 0.003f
-                p.color = if (isNextNode) GameColors.HP else mixColorsManual(0x22FFFFFF, mixedColor, 0.4f)
+                p.style = Paint.Style.STROKE
+                p.strokeWidth = if (hitOnDown == lvl) scale * 0.006f else scale * 0.003f
+                p.color = when {
+                    isNextNode -> GameColors.HP
+                    hitOnDown == lvl -> GameColors.CLARITY
+                    else -> GameColors.mixColors(0x22FFFFFF, mixedColor, 0.4f)
+                }
                 c.drawRoundRect(reusableRect, scale * 0.015f, scale * 0.015f, p)
 
                 // --- 2. MICRO-CHIP ICONS ROW LAYOUT ---
@@ -236,19 +249,29 @@ class UIArchives {
             col++
             if (col >= columns) { col = 0; row++ }
         }
+        c.restore()
 
         val totalHeight = (row + 1) * (boxSize + gap)
-        maxScroll = max(0f, totalHeight - height + scale * 0.45f)
+        maxScroll = max(0f, totalHeight - (listBottom - listTop) + scale * 0.1f)
+
+        // Footer Background Glow
+        p.style = Paint.Style.FILL
+        val footerGradient = android.graphics.LinearGradient(0f, listBottom, 0f, height, 0x00000000, 0xCC1A0000.toInt(), android.graphics.Shader.TileMode.CLAMP)
+        p.shader = footerGradient
+        c.drawRect(0f, listBottom, width, height, p)
+        p.shader = null
 
         // Micro-console Terminate Core System Button
         closeBtnRect.set(width / 2f - scale * 0.16f, height - scale * 0.10f, width / 2f + scale * 0.16f, height - scale * 0.03f)
-        p.style = Paint.Style.FILL; p.color = 0xFF220505.toInt()
+        p.style = Paint.Style.FILL; p.color = if (hitOnDown == -2) 0xFF660A0A.toInt() else 0xFF220505.toInt()
         c.drawRoundRect(closeBtnRect, scale * 0.01f, scale * 0.01f, p)
         p.style = Paint.Style.STROKE; p.color = GameColors.RED; p.strokeWidth = scale * 0.004f
         c.drawRoundRect(closeBtnRect, scale * 0.01f, scale * 0.01f, p)
 
         pText.color = GameColors.RED; pText.textSize = scale * 0.035f
+        if (hitOnDown == -2) pText.setShadowLayer(10f, 0f, 0f, GameColors.RED)
         c.drawText("DISCONNECT", closeBtnRect.centerX(), closeBtnRect.centerY() + scale * 0.012f, pText)
+        pText.clearShadowLayer()
     }
 
     private var touchDownX = 0f
@@ -267,7 +290,7 @@ class UIArchives {
                     closeBtnRect.contains(x, y) -> -2
                     autoNextBoxRect.contains(x, y) -> -3
                     autoPilotBoxRect.contains(x, y) -> -4
-                    else -> {
+                    y in listTop..listBottom -> {
                         var hit = -1
                         for ((lvl, rect) in levelButtons) {
                             if (rect.contains(x, y)) {
@@ -277,6 +300,7 @@ class UIArchives {
                         }
                         hit
                     }
+                    else -> -1
                 }
             }
             MotionEvent.ACTION_MOVE -> {
@@ -288,27 +312,37 @@ class UIArchives {
                 val distSq = dx * dx + (y - touchDownY) * (y - touchDownY)
                 val threshold = scale * scale * 0.05f
 
-                if (abs(dy) > scale * 0.02f) {
-                    isDragging = true
-                    hitOnDown = -1
-                } else if (distSq > threshold) {
-                    hitOnDown = -1
-                }
+                if (hitOnDown in -4..-2) {
+                    // Static buttons (Auto-Next, Autopilot, Disconnect) take precedence.
+                    // If we started on one, don't scroll and only cancel if we move too far.
+                    if (distSq > threshold) {
+                        hitOnDown = -1
+                    }
+                } else {
+                    if (abs(dy) > scale * 0.02f) {
+                        isDragging = true
+                        hitOnDown = -1
+                    } else if (distSq > threshold) {
+                        hitOnDown = -1
+                    }
 
-                // VELOCITY CALCULATION
-                if (dt > 0) {
-                    val rawVelocity = (dy / dt.toFloat()) * 20f
-                    scrollVelocity = (scrollVelocity * 0.4f) + (rawVelocity * 0.6f)
-                }
-                scrollY += dy
-                // Hard stops check
-                if (scrollY > 0f) {
-                    scrollY = 0f
-                    scrollVelocity = 0f
-                }
-                if (scrollY < -maxScroll) {
-                    scrollY = -maxScroll
-                    scrollVelocity = 0f
+                    if (isDragging || hitOnDown == -1) {
+                        // VELOCITY CALCULATION
+                        if (dt > 0) {
+                            val rawVelocity = (dy / dt.toFloat()) * 20f
+                            scrollVelocity = (scrollVelocity * 0.4f) + (rawVelocity * 0.6f)
+                        }
+                        scrollY += dy
+                        // Hard stops check
+                        if (scrollY > 0f) {
+                            scrollY = 0f
+                            scrollVelocity = 0f
+                        }
+                        if (scrollY < -maxScroll) {
+                            scrollY = -maxScroll
+                            scrollVelocity = 0f
+                        }
+                    }
                 }
 
                 lastTouchY = y
@@ -321,7 +355,7 @@ class UIArchives {
                         closeBtnRect.contains(x, y) -> -2
                         autoNextBoxRect.contains(x, y) -> -3
                         autoPilotBoxRect.contains(x, y) -> -4
-                        else -> {
+                        y in listTop..listBottom -> {
                             var hit = -1
                             for ((lvl, rect) in levelButtons) {
                                 if (rect.contains(x, y)) {
@@ -331,6 +365,7 @@ class UIArchives {
                             }
                             hit
                         }
+                        else -> -1
                     }
 
                     if (hitOnUp != -1 && hitOnUp == hitOnDown) {

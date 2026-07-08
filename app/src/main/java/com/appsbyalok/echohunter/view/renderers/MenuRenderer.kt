@@ -31,7 +31,6 @@ class MenuRenderer(private val context: Context) {
     val pauseAutoRect = RectF()
     val pauseAimRect = RectF()
     val pauseDiscRect = RectF()
-    val pauseModRect = RectF()
     val pauseRestartRect = RectF()
     val victoryNextRect = RectF()
     val victoryHomeRect = RectF()
@@ -267,66 +266,93 @@ class MenuRenderer(private val context: Context) {
         drawButton(c, victoryHomeRect, "RETURN TO MENU", GameColors.RED, scale)
     }
 
+    private val scrambleSymbols = "01#@$%&<>[]{}?+*=".toCharArray()
+    private fun getScrambledLine(text: String, visibleCount: Int, time: Float): String {
+        if (visibleCount >= text.length) return text
+        val sb = StringBuilder(text.substring(0, visibleCount))
+        val scrambleCount = minOf(3, text.length - visibleCount)
+        for (i in 0 until scrambleCount) {
+            val charAtPos = text[visibleCount + i]
+            if (charAtPos == ' ' || charAtPos == '\n') sb.append(charAtPos)
+            else sb.append(scrambleSymbols[(time * 20).toInt() % scrambleSymbols.size])
+        }
+        if ((time * 4).toInt() % 2 == 0) sb.append("█")
+        return sb.toString()
+    }
+
     fun drawStory(c: Canvas, lines: IntArray, scale: Float, gs: GameState, targetW: Float, targetH: Float, currentStoryStep: Int): Int {
+        // --- Hacker Terminal Background ---
+        c.drawColor(0xFF020502.toInt()) // Deep Terminal Black
+        
+        // Scanlines for the story screen
+        pBtn.style = Paint.Style.STROKE
+        pBtn.strokeWidth = 1f
+        pBtn.color = 0x0AFFFFFF
+        var scanY = 0f
+        while (scanY < targetH) {
+            c.drawLine(0f, scanY, targetW, scanY, pBtn)
+            scanY += scale * 0.01f
+        }
+
         pText.textAlign = Paint.Align.LEFT
-        pText.textSize = scale * 0.04f
-        pText.color = when (gs.state) {
+        pText.textSize = scale * 0.042f
+        val textColor = when (gs.state) {
             4 -> GameColors.RED
             6 -> if (lines.contentEquals(StoryProtocol.storyPerfectEnding)) GameColors.YELLOW else GameColors.HP
             else -> GameColors.PULSE
         }
+        pText.color = textColor
 
         val isPortrait = targetW < targetH
-        val leftMargin = if (isPortrait) targetW * 0.05f else targetW * 0.1f
+        val leftMargin = if (isPortrait) targetW * 0.08f else targetW * 0.15f
         val maxTextW = targetW - (leftMargin * 2f)
-        val lh = scale * 0.05f
+        val lh = scale * 0.06f
 
-        var y = targetH * 0.25f
-        val typeSpeed = 35f
-        val pauseBetweenLines = 15
+        var y = targetH * 0.2f
+        val typeSpeed = 45f // Faster, "hacker" speed
+        val pauseBetweenLines = 12
 
-        var charsAllowed = (gs.stateTimer * typeSpeed).toInt()
-        if (currentStoryStep >= lines.size) charsAllowed = Int.MAX_VALUE
-
+        var totalCharsAllowed = (gs.stateTimer * typeSpeed).toInt()
         var linesFullyTyped = 0
 
+        // Draw "[ SYSTEM LOG: INCOMING UPLINK ]" header
+        pText.textSize = scale * 0.03f
+        pText.alpha = (150 + sin(gs.timeSinceStart * 3.0) * 50).toInt()
+        c.drawText("[ SYSTEM LOG: SECURE CONNECTION ESTABLISHED ]", leftMargin, y - scale * 0.05f, pText)
+        pText.alpha = 255
+        pText.textSize = scale * 0.042f
+
         for (i in lines.indices) {
-            if (charsAllowed <= 0) break
-
             val fullText = getCachedString(lines[i])
-            val charsForThisLine = min(fullText.length, charsAllowed)
-            val isCurrentlyTyping = charsForThisLine < fullText.length
+            val charsForThisLine = min(fullText.length, max(0, totalCharsAllowed))
+            val isCurrentlyTyping = charsForThisLine > 0 && charsForThisLine < fullText.length
+            
+            val textToDraw = getScrambledLine(fullText, charsForThisLine, gs.timeSinceStart)
 
-            val cursor = if (isCurrentlyTyping && (gs.timeSinceStart * 15).toInt() % 2 == 0) "_" else ""
-            val textToDraw = fullText.substring(0, charsForThisLine) + cursor
-
-            if (isCurrentlyTyping && charsAllowed % 3 == 0) {
-                EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 20)
+            if (isCurrentlyTyping && totalCharsAllowed % 4 == 0) {
+                // Short, sharp beep for hacking feel
+                EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 15)
             }
 
-            val words = textToDraw.split(" ")
-            var currentLine = ""
-
-            for (word in words) {
-                val testLine = if (currentLine.isEmpty()) word else "$currentLine $word"
-                val textWidth = pText.measureText(testLine)
-
-                if (textWidth > maxTextW && currentLine.isNotEmpty()) {
-                    c.drawText(currentLine, leftMargin, y, pText)
-                    y += lh
-                    currentLine = word
-                } else {
-                    currentLine = testLine
+            if (totalCharsAllowed > 0) {
+                val words = textToDraw.split(" ")
+                var currentLine = ""
+                for (word in words) {
+                    val testLine = if (currentLine.isEmpty()) word else "$currentLine $word"
+                    if (pText.measureText(testLine) > maxTextW) {
+                        c.drawText(currentLine, leftMargin, y, pText)
+                        y += lh
+                        currentLine = word
+                    } else {
+                        currentLine = testLine
+                    }
                 }
-            }
-
-            if (currentLine.isNotEmpty()) {
                 c.drawText(currentLine, leftMargin, y, pText)
                 y += scale * 0.08f
             }
 
-            charsAllowed -= (fullText.length + pauseBetweenLines)
-            if (!isCurrentlyTyping) linesFullyTyped++
+            totalCharsAllowed -= (fullText.length + pauseBetweenLines)
+            if (charsForThisLine >= fullText.length) linesFullyTyped++
         }
 
         if (linesFullyTyped >= lines.size) {

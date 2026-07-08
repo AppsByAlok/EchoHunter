@@ -90,7 +90,7 @@ class HUDRenderer(private val context: Context) {
         }
 
         // --- 6. PAUSE & STORY POPUPS ---
-        drawStoryPopups(c, scale, targetW, gs)
+        drawStoryPopups(c, scale, targetW)
 
         // --- 7. CAMERA FOCUS INDICATOR ---
         if (gs.cameraFocusWeight > 0.5f) {
@@ -300,12 +300,12 @@ class HUDRenderer(private val context: Context) {
         }
     }
 
-    private fun drawStoryPopups(c: Canvas, scale: Float, targetW: Float, gs: GameState) {
+    private fun drawStoryPopups(c: Canvas, scale: Float, targetW: Float) {
         val msgTimer = StoryProtocol.popupTimer
         if (msgTimer <= 0f) return
         
         val msgText = if (StoryProtocol.typewriterText != null) {
-            StoryProtocol.typewriterText!!.take(StoryProtocol.typewriterVisibleChars)
+            StoryProtocol.getScrambledTypewriterText()
         } else {
             StoryProtocol.currentPopupText ?: ""
         }

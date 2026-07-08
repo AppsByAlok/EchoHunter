@@ -7,6 +7,7 @@ import android.graphics.Typeface
 import android.media.ToneGenerator
 import android.view.MotionEvent
 import com.appsbyalok.echohunter.engine.GameState
+import com.appsbyalok.echohunter.input.AttackMode
 import com.appsbyalok.echohunter.utils.EchoAudioManager
 import com.appsbyalok.echohunter.utils.GameColors
 import kotlin.math.sin
@@ -31,6 +32,16 @@ class UIArsenal {
 
     fun draw(c: Canvas, targetW: Float, targetH: Float, scale: Float, gs: GameState) {
         c.drawColor(0xEE051015.toInt()) // Dark Cyan-ish Terminal BG
+
+        // --- SCANLINE EFFECT ---
+        p.style = Paint.Style.STROKE
+        p.strokeWidth = scale * 0.002f
+        p.color = 0x0AFFFFFF
+        var slY = 0f
+        while (slY < targetH) {
+            c.drawLine(0f, slY, targetW, slY, p)
+            slY += scale * 0.012f
+        }
 
         // --- NANO OS HEADER (Responsive) ---
         p.style = Paint.Style.FILL; p.color = GameColors.PULSE
@@ -74,18 +85,22 @@ class UIArsenal {
             targetH - btnBottomMargin
         )
 
-        p.style = Paint.Style.FILL; p.color = 0xFF330000.toInt()
+        val isPressed = (hitOnDown == 100)
+        val baseRed = 0xFF330000.toInt()
+        p.style = Paint.Style.FILL; p.color = if (isPressed) GameColors.mixColors(baseRed, GameColors.RED, 0.4f) else baseRed
         c.drawRoundRect(closeBtnRect, scale * 0.02f, scale * 0.02f, p)
         p.style = Paint.Style.STROKE; p.color = GameColors.RED; p.strokeWidth = scale * 0.005f
         c.drawRoundRect(closeBtnRect, scale * 0.02f, scale * 0.02f, p)
 
         pText.color = GameColors.RED; pText.textSize = scale * 0.045f
+        if (isPressed) pText.setShadowLayer(10f, 0f, 0f, GameColors.RED)
         c.drawText(
             if (currentTab == 0) "DISCONNECT" else "< BACK",
             closeBtnRect.centerX(),
             closeBtnRect.centerY() + scale * 0.015f,
             pText
         )
+        pText.clearShadowLayer()
     }
 
     private fun drawMainScreen(c: Canvas, targetW: Float, targetH: Float, scale: Float, gs: GameState) {
@@ -129,15 +144,24 @@ class UIArsenal {
     }
 
     private fun drawAttackModeFolder(c: Canvas, targetW: Float, targetH: Float, scale: Float, gs: GameState) {
-        val modes = com.appsbyalok.echohunter.input.AttackMode.values()
+        val modes = AttackMode.entries.toTypedArray()
         val names = modes.map { it.name }.toTypedArray()
         drawList(c, targetW, targetH, scale, "SELECT AIMING LOGIC", gs.controls.activeAttackMode.ordinal, names)
     }
 
     private fun drawFolderBox(c: Canvas, rect: RectF, title: String, activeItem: String, scale: Float, isPortrait: Boolean) {
-        p.style = Paint.Style.FILL; p.color = 0xFF051515.toInt()
+        val hitId = when (rect) {
+            weaponDirRect -> 1
+            trapDirRect -> 2
+            attackModeRect -> 3
+            else -> -1
+        }
+        val isPressed = hitOnDown == hitId
+        val baseColor = 0xFF051515.toInt()
+
+        p.style = Paint.Style.FILL; p.color = if (isPressed) GameColors.mixColors(baseColor, GameColors.PULSE, 0.2f) else baseColor
         c.drawRoundRect(rect, scale * 0.02f, scale * 0.02f, p)
-        p.style = Paint.Style.STROKE; p.color = GameColors.PULSE; p.strokeWidth = scale * 0.005f
+        p.style = Paint.Style.STROKE; p.color = if (isPressed) GameColors.CLARITY else GameColors.PULSE; p.strokeWidth = scale * 0.005f
         c.drawRoundRect(rect, scale * 0.02f, scale * 0.02f, p)
 
         pText.textAlign = Paint.Align.LEFT
@@ -146,11 +170,13 @@ class UIArsenal {
         val titleSize = if (isPortrait) scale * 0.05f else scale * 0.045f
         val subSize = if (isPortrait) scale * 0.035f else scale * 0.03f
 
-        pText.color = GameColors.CLARITY; pText.textSize = titleSize
+        pText.color = p.color; pText.textSize = titleSize
+        if (isPressed) pText.setShadowLayer(10f, 0f, 0f, p.color)
         c.drawText("> $title", rect.left + scale * 0.04f, rect.top + titleSize * 1.6f, pText)
 
         pText.color = GameColors.YELLOW; pText.textSize = subSize
         c.drawText("STATUS: $activeItem", rect.left + scale * 0.04f, rect.bottom - scale * 0.03f, pText)
+        pText.clearShadowLayer()
     }
 
     private fun drawWeaponFolder(c: Canvas, targetW: Float, targetH: Float, scale: Float, gs: GameState) {
@@ -182,15 +208,20 @@ class UIArsenal {
             itemReacts[i] = rect
 
             val isActive = (i == currentActive)
-            p.style = Paint.Style.FILL; p.color = if (isActive) 0xFF003333.toInt() else 0xFF111111.toInt()
+            val isPressed = (hitOnDown == i)
+            
+            val baseItemColor = if (isActive) 0xFF002222.toInt() else 0xFF111111.toInt()
+            p.style = Paint.Style.FILL; p.color = if (isPressed) GameColors.mixColors(baseItemColor, GameColors.CLARITY, 0.3f) else baseItemColor
             c.drawRoundRect(rect, scale * 0.02f, scale * 0.02f, p)
 
-            p.style = Paint.Style.STROKE; p.color = if (isActive) GameColors.PULSE else 0xFF555555.toInt()
+            p.style = Paint.Style.STROKE; p.color = if (isPressed) GameColors.CLARITY else if (isActive) GameColors.PULSE else 0xFF555555.toInt()
             c.drawRoundRect(rect, scale * 0.02f, scale * 0.02f, p)
 
             pText.textAlign = Paint.Align.LEFT
-            pText.color = if (isActive) GameColors.CLARITY else 0xFFAAAAAA.toInt()
+            pText.color = if (isPressed || isActive) GameColors.CLARITY else 0xFFAAAAAA.toInt()
             pText.textSize = if(isPortrait) scale * 0.05f else scale * 0.045f
+            
+            if (isPressed) pText.setShadowLayer(8f, 0f, 0f, pText.color)
 
             c.drawText(
                 if(isActive) "[ACTIVE] ${items[i]}" else "[ ] ${items[i]}",
@@ -198,6 +229,7 @@ class UIArsenal {
                 rect.centerY() + pText.textSize / 3f,
                 pText
             )
+            pText.clearShadowLayer()
 
             startY += itemHeight + spacing
         }
@@ -282,7 +314,7 @@ class UIArsenal {
                                 gs.showGlobalMessage("TRAP MODULE LOADED.", 1.5f)
                             }
                             3 -> {
-                                gs.controls.activeAttackMode = com.appsbyalok.echohunter.input.AttackMode.values()[hitOnUp]
+                                gs.controls.activeAttackMode = AttackMode.entries.toTypedArray()[hitOnUp]
                                 gs.showGlobalMessage("AIMING LOGIC RECONFIGURED.", 1.5f)
                             }
                         }

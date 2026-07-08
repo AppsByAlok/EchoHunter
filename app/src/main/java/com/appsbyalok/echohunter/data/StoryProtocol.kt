@@ -17,6 +17,37 @@ object StoryProtocol {
     var typewriterText: String? = null
     var typewriterVisibleChars: Int = 0
     private var typewriterCharTimer: Float = 0f
+    private val scrambleSymbols = "01#@$%&<>[]{}?+*=".toCharArray()
+
+    /**
+     * Returns a version of the text where the characters currently being revealed
+     * are scrambled with hacker symbols for a "decryption" effect.
+     */
+    fun getScrambledTypewriterText(): String {
+        val text = typewriterText ?: return ""
+        val visible = typewriterVisibleChars
+        if (visible >= text.length) return text
+
+        val sb = StringBuilder(text.substring(0, visible))
+        
+        // Add 1-2 scrambling characters at the reveal point
+        val scrambleCount = minOf(2, text.length - visible)
+        for (i in 0 until scrambleCount) {
+            val charAtPos = text[visible + i]
+            if (charAtPos == ' ' || charAtPos == '\n') {
+                sb.append(charAtPos)
+            } else {
+                sb.append(scrambleSymbols[Random.nextInt(scrambleSymbols.size)])
+            }
+        }
+        
+        // Add blinking cursor
+        if ((System.currentTimeMillis() / 250) % 2 == 0L) {
+            sb.append("█")
+        }
+
+        return sb.toString()
+    }
 
     fun showIngameMessage(resId: Int, duration: Float = 3f) {
         currentPopupRes = resId
@@ -50,9 +81,13 @@ object StoryProtocol {
             typewriterText?.let { text ->
                 if (typewriterVisibleChars < text.length) {
                     typewriterCharTimer += dt
-                    while (typewriterCharTimer >= 0.04f && typewriterVisibleChars < text.length) {
+                    // Hacker speed: Reveal roughly 20-30 chars per second
+                    val charDelay = 0.035f 
+                    while (typewriterCharTimer >= charDelay && typewriterVisibleChars < text.length) {
                         typewriterVisibleChars++
-                        typewriterCharTimer -= 0.04f
+                        typewriterCharTimer -= charDelay
+                        
+                        // Optional: Play a tiny click sound here if supported
                     }
                 }
             }
