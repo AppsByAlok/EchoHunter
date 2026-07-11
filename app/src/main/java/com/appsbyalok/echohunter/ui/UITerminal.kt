@@ -9,6 +9,7 @@ import android.media.ToneGenerator
 import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
+import com.appsbyalok.echohunter.data.SaveManager
 import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.ui.terminal.CatCommand
@@ -16,26 +17,32 @@ import com.appsbyalok.echohunter.ui.terminal.ClearCommand
 import com.appsbyalok.echohunter.ui.terminal.CommandContext
 import com.appsbyalok.echohunter.ui.terminal.CommandRegistry
 import com.appsbyalok.echohunter.ui.terminal.ConfigCommand
-import com.appsbyalok.echohunter.ui.terminal.DataInjectCommand
 import com.appsbyalok.echohunter.ui.terminal.DateCommand
+import com.appsbyalok.echohunter.ui.terminal.DebugCommand
 import com.appsbyalok.echohunter.ui.terminal.DirCommand
 import com.appsbyalok.echohunter.ui.terminal.EchoCommand
 import com.appsbyalok.echohunter.ui.terminal.ExitCommand
-import com.appsbyalok.echohunter.ui.terminal.GodModeCommand
+import com.appsbyalok.echohunter.ui.terminal.FixCommand
+import com.appsbyalok.echohunter.ui.terminal.GlitchCommand
 import com.appsbyalok.echohunter.ui.terminal.HelpCommand
+import com.appsbyalok.echohunter.ui.terminal.HelpTechCommand
+import com.appsbyalok.echohunter.ui.terminal.InputHandler
 import com.appsbyalok.echohunter.ui.terminal.LevelCommand
+import com.appsbyalok.echohunter.ui.terminal.MarketCommand
+import com.appsbyalok.echohunter.ui.terminal.OutputMode
 import com.appsbyalok.echohunter.ui.terminal.RebootCommand
 import com.appsbyalok.echohunter.ui.terminal.ScanCommand
 import com.appsbyalok.echohunter.ui.terminal.StoryLogCommand
 import com.appsbyalok.echohunter.ui.terminal.SudoCommand
 import com.appsbyalok.echohunter.ui.terminal.SysInfoCommand
-import com.appsbyalok.echohunter.ui.terminal.UnlockAllCommand
+import com.appsbyalok.echohunter.ui.terminal.UICommand
 import com.appsbyalok.echohunter.ui.terminal.VerCommand
 import com.appsbyalok.echohunter.ui.terminal.WhoamiCommand
 import com.appsbyalok.echohunter.utils.EchoAudioManager
 import com.appsbyalok.echohunter.utils.GameColors
 import java.util.Calendar
 import java.util.Locale
+import kotlin.math.abs
 
 class UITerminal {
     private val pText = Paint().apply {
@@ -46,6 +53,23 @@ class UITerminal {
 
     private val lines = mutableListOf<String>() // Raw lines history
     private val wrappedLines = mutableListOf<String>() // Wrapped lines for display
+    private val typewriterQueue = StringBuilder()
+    private val lineByLineQueue = mutableListOf<String>()
+    private var lastTypeTime = 0L
+    private var lastLineTime = 0L
+    private val TYPE_DELAY: Long
+        get() = when (SaveManager.typewriterSpeed) {
+            1 -> 60L
+            2 -> 40L
+            3 -> 20L
+            4 -> 10L
+            5 -> 2L
+            else -> 20L
+        }
+    private val LINE_DELAY = 150L // ms per line
+
+    private var activeSubSession: InputHandler? = null
+    
     private val tokenRegex = Regex("(?<=\\s)|(?=\\s)")
     private var currentInput = ""
     
@@ -68,6 +92,9 @@ class UITerminal {
         "SECTOR_MAP.IMG" to "5.5 MB"
     )
     private val keyRects = mutableMapOf<String, RectF>()
+    private val activePointers = mutableMapOf<Int, String>() // PointerID -> KeyName
+    private val pressedKeys = mutableSetOf<String>() // Currently pressed keys (for visual feedback)
+    
     private val currentYear = Calendar.getInstance().get(Calendar.YEAR)
     private val handler = Handler(Looper.getMainLooper())
     private val delRunnable = object : Runnable {
@@ -89,6 +116,11 @@ class UITerminal {
     private var isAltActive = false
     private var isKeyboardVisible = true
     private var lastShiftTapTime = 0L
+    private var shiftWasUsedAsModifier = false
+    private var ctrlWasUsedAsModifier = false
+    private var altWasUsedAsModifier = false
+    private var isPendingExit = false
+    private var exitCallback: (() -> Unit)? = null
 
     private val commandHistory = mutableListOf<String>()
     private var historyIndex = -1
@@ -96,9 +128,8 @@ class UITerminal {
     // Autocomplete state for TAB cycling
     private var autocompleteMatches = listOf<String>()
     private var autocompleteIndex = -1
-    private var autocompleteBase = ""
     private var lastGeneratedInput = ""
-    private var hitKeyOnDown: String? = null
+    private var lastManualInput = ""
 
     // Alphabetic Keyboard Layout
     private val kbAlpha = listOf(
@@ -123,6 +154,7 @@ class UITerminal {
     init {
         // Register all commands
         CommandRegistry.register(HelpCommand())
+        CommandRegistry.register(HelpTechCommand())
         CommandRegistry.register(ClearCommand())
         CommandRegistry.register(ExitCommand())
         CommandRegistry.register(DirCommand())
@@ -134,13 +166,15 @@ class UITerminal {
         CommandRegistry.register(EchoCommand())
         CommandRegistry.register(SudoCommand())
         CommandRegistry.register(RebootCommand())
-        CommandRegistry.register(UnlockAllCommand())
-        CommandRegistry.register(DataInjectCommand())
+        CommandRegistry.register(DebugCommand())
         CommandRegistry.register(SysInfoCommand())
-        CommandRegistry.register(GodModeCommand())
         CommandRegistry.register(ConfigCommand())
         CommandRegistry.register(LevelCommand())
         CommandRegistry.register(StoryLogCommand())
+        CommandRegistry.register(MarketCommand())
+        CommandRegistry.register(FixCommand())
+        CommandRegistry.register(GlitchCommand())
+        CommandRegistry.register(UICommand())
 
         addLines("NANO-OS [Version 4.2.0-ROOT]")
         addLines("(c) $currentYear ECHO CORP. ALL RIGHTS RESERVED.")
@@ -148,23 +182,39 @@ class UITerminal {
         addLines("TERMINAL INITIALIZED. TYPE 'HELP' FOR CMDS.")
     }
 
-    private fun addLines(text: String) {
-        val splitLines = text.split("\n")
-        lines.addAll(splitLines)
-        
+    private fun clearScreen() {
+        lines.clear()
+        wrappedLines.clear()
+        typewriterQueue.setLength(0)
+        lineByLineQueue.clear()
+        scrollOffset = 0
+    }
+
+    private fun addLines(text: String, mode: OutputMode = OutputMode.TYPEWRITER) {
+        when (mode) {
+            OutputMode.INSTANT -> {
+                val splitLines = text.split("\n")
+                lines.addAll(splitLines)
+                if (maxTextWidth > 0f) {
+                    pText.textSize = lastScale * 0.03f
+                    for (line in splitLines) {
+                        wrappedLines.addAll(wrapLine(line, pText, maxTextWidth))
+                    }
+                } else {
+                    wrappedLines.addAll(splitLines)
+                }
+            }
+            OutputMode.TYPEWRITER -> {
+                typewriterQueue.append(text).append("\n")
+            }
+            OutputMode.LINE_BY_LINE -> {
+                lineByLineQueue.addAll(text.split("\n"))
+            }
+        }
+
         // Limit raw history to 200 lines
         if (lines.size > 200) {
             repeat(lines.size - 200) { lines.removeAt(0) }
-        }
-
-        // Add to wrappedLines
-        if (maxTextWidth > 0f) {
-            pText.textSize = lastScale * 0.03f
-            for (line in splitLines) {
-                wrappedLines.addAll(wrapLine(line, pText, maxTextWidth))
-            }
-        } else {
-            wrappedLines.addAll(splitLines)
         }
 
         // Limit wrapped lines for display performance
@@ -175,12 +225,74 @@ class UITerminal {
         }
     }
 
+    private fun processQueues() {
+        val now = System.currentTimeMillis()
+
+        // Professional Exit: Trigger only after typewriter finishes
+        if (isPendingExit && typewriterQueue.isEmpty() && lineByLineQueue.isEmpty()) {
+            isPendingExit = false
+            handler.postDelayed({
+                clearScreen()
+                exitCallback?.invoke()
+            }, 600)
+            return
+        }
+
+        // 1. Process Line by Line (higher priority for systemic feel)
+        if (lineByLineQueue.isNotEmpty() && now - lastLineTime >= LINE_DELAY) {
+            val line = lineByLineQueue.removeAt(0)
+            addLines(line, OutputMode.INSTANT)
+            lastLineTime = now
+            if (scrollOffset == 0) rebuildWrappedLines()
+            return // Process one thing at a time
+        }
+
+        // 2. Process Typewriter
+        if (typewriterQueue.isNotEmpty() && now - lastTypeTime >= TYPE_DELAY) {
+            val charsToProcess = ((now - lastTypeTime) / TYPE_DELAY).toInt().coerceAtMost(typewriterQueue.length)
+            
+            for (i in 0 until charsToProcess) {
+                if (typewriterQueue.isEmpty()) break
+                val char = typewriterQueue[0]
+                typewriterQueue.deleteCharAt(0)
+                
+                if (char == '\n') {
+                    lines.add("")
+                    wrappedLines.add("")
+                } else {
+                    if (lines.isEmpty()) lines.add("")
+                    val lastRaw = lines.last()
+                    lines[lines.size - 1] = lastRaw + char
+                    
+                    if (maxTextWidth > 0f) {
+                        pText.textSize = lastScale * 0.03f
+                        if (wrappedLines.isEmpty()) wrappedLines.add("")
+                        val lastWrapped = wrappedLines.last()
+                        if (pText.measureText(lastWrapped + char) <= maxTextWidth) {
+                            wrappedLines[wrappedLines.size - 1] = lastWrapped + char
+                        } else {
+                            wrappedLines.add(char.toString())
+                        }
+                    } else {
+                        if (wrappedLines.isEmpty()) wrappedLines.add("")
+                        wrappedLines[wrappedLines.size - 1] = wrappedLines.last() + char
+                    }
+                }
+            }
+            lastTypeTime = now
+            if (scrollOffset == 0) rebuildWrappedLines()
+        }
+    }
+
+    private var lastTheme = ""
+    private var lastFontSize = ""
+
     private fun rebuildWrappedLines() {
         wrappedLines.clear()
         if (maxTextWidth <= 0f) {
             wrappedLines.addAll(lines)
         } else {
-            pText.textSize = lastScale * 0.03f
+            updateStyle(lastScale)
             for (line in lines) {
                 wrappedLines.addAll(wrapLine(line, pText, maxTextWidth))
             }
@@ -239,9 +351,40 @@ class UITerminal {
         }
     }
 
-    fun draw(c: Canvas, targetW: Float, targetH: Float, scale: Float, gs: GameState, context: Context) {
-        val sizeChanged = targetW != lastW || scale != lastScale
-        lastW = targetW; lastH = targetH; lastScale = scale
+    private fun updateStyle(scale: Float) {
+        if (scale <= 0f) return
+        val theme = SaveManager.terminalTheme
+        val sizeStr = SaveManager.fontSize
+
+        pText.color = when (theme) {
+            "AMBER" -> 0xFFFFB000.toInt()
+            "MATRIX" -> 0xFF00FF41.toInt()
+            "CLARITY" -> 0xFF00E5FF.toInt()
+            "BLOOD" -> 0xFFFF3D00.toInt()
+            else -> 0xFFFFFFFF.toInt()
+        }
+
+        val sizeMult = when (sizeStr) {
+            "SMALL" -> 0.75f
+            "LARGE" -> 1.35f
+            else -> 1.0f
+        }
+        pText.textSize = scale * 0.03f * sizeMult
+    }
+
+    fun draw(c: Canvas, targetW: Float, targetH: Float, scale: Float) {
+        processQueues()
+        updateStyle(scale)
+        val sizeChanged = targetW != lastW || scale != lastScale || 
+                         SaveManager.fontSize != lastFontSize || SaveManager.terminalTheme != lastTheme
+        
+        if (sizeChanged) {
+            lastW = targetW; lastH = targetH; lastScale = scale
+            lastFontSize = SaveManager.fontSize
+            lastTheme = SaveManager.terminalTheme
+            rebuildWrappedLines()
+        }
+        
         c.drawColor(0xFF050505.toInt())
 
         val isLandscape = targetW > targetH
@@ -251,9 +394,7 @@ class UITerminal {
         val startY = targetH - kbHeight
 
         val padding = scale * 0.04f
-        val textSize = scale * 0.03f
-        pText.textSize = textSize
-        val lineHeight = textSize * 1.5f
+        val lineHeight = pText.textSize * 1.5f
         
         val newMaxWidth = targetW - padding * 2
         if (sizeChanged || newMaxWidth != maxTextWidth) {
@@ -282,7 +423,7 @@ class UITerminal {
         val endIndex = (wrappedLines.size - scrollOffset).coerceAtLeast(0)
         val visibleLines = if (wrappedLines.isNotEmpty()) wrappedLines.subList(startIndex, endIndex) else emptyList()
 
-        var currY = padding + textSize
+        var currY = padding + pText.textSize
         for (line in visibleLines) {
             c.drawText(line, padding, currY, pText)
             currY += lineHeight
@@ -291,7 +432,8 @@ class UITerminal {
         // Draw Input Prompt (Only if at the bottom)
         if (scrollOffset == 0) {
             val blink = (System.currentTimeMillis() / 600) % 2 == 0L
-            val prompt = "> $currentInput"
+            val promptStr = activeSubSession?.getPrompt() ?: ">"
+            val prompt = "$promptStr $currentInput"
             pText.color = 0xFFFFFFFF.toInt()
             
             val promptY = currY.coerceAtMost(startY - padding * 0.5f)
@@ -299,15 +441,15 @@ class UITerminal {
 
             if (blink) {
                 val promptWidth = pText.measureText(prompt)
-                c.drawRect(padding + promptWidth + 2f, promptY - textSize * 0.8f,
-                           padding + promptWidth + textSize * 0.6f, promptY + textSize * 0.2f, pText)
+                c.drawRect(padding + promptWidth + 2f, promptY - pText.textSize * 0.8f,
+                           padding + promptWidth + pText.textSize * 0.6f, promptY + pText.textSize * 0.2f, pText)
             }
         }
 
         // Keyboard Toggle / Show Button (when hidden)
+        val showBtnH = scale * 0.08f
         if (!isKeyboardVisible) {
             val showBtnW = scale * 0.2f
-            val showBtnH = scale * 0.08f
             val showBtnRect = RectF(targetW - showBtnW - padding, targetH - showBtnH - padding, targetW - padding, targetH - padding)
             pBg.color = 0xCC222222.toInt()
             c.drawRoundRect(showBtnRect, scale * 0.01f, scale * 0.01f, pBg)
@@ -324,8 +466,11 @@ class UITerminal {
         if (scrollOffset > 0) {
             val btnW = scale * 0.22f
             val btnH = scale * 0.07f
-            // Adjust position if keyboard is hidden
-            val bottomAnchor = if (isKeyboardVisible) startY else targetH
+            
+            // UX FIX: If keyboard is hidden, shift "BOTTOM" button up to avoid overlap with "SHOW KEY"
+            val bottomShift = if (!isKeyboardVisible) (showBtnH + padding * 0.5f) else 0f
+            val bottomAnchor = if (isKeyboardVisible) startY else targetH - bottomShift
+
             scrollToBottomRect.set(targetW - btnW - padding, bottomAnchor - btnH - padding, targetW - padding, bottomAnchor - padding)
             
             pBg.color = 0xCC111111.toInt()
@@ -378,21 +523,35 @@ class UITerminal {
                 keyRects[key] = rect
 
                 // Button colors
+                val isPressed = activePointers.values.contains(key)
                 pBg.color = when (key) {
-                    "ENTER" -> 0xFF00AA00.toInt() // Green
-                    "EXIT" -> 0xFFAA0000.toInt() // Red
+                    "ENTER" -> 0xFF00AA00.toInt()
+                    "EXIT" -> 0xFFAA0000.toInt()
                     "DEL" -> 0xFFCC3333.toInt()
-                    "SCAN", "DIR", "HELP" -> 0xFF0055AA.toInt() // Blue
-                    "SHIFT" -> if (isCapsLock) 0xFF00AAFF.toInt() else if (isShiftActive) 0xFF888888.toInt() else 0xFF444444.toInt()
-                    "CTRL" -> if (isCtrlActive) 0xFF888888.toInt() else 0xFF444444.toInt()
-                    "ALT" -> if (isAltActive) 0xFF888888.toInt() else 0xFF444444.toInt()
-                    "TAB", "?123", "ABC" -> 0xFF444444.toInt() // Dark Gray
-                    "SPACE" -> 0xFF222222.toInt() // Dark Background
+                    "SCAN", "DIR", "HELP" -> 0xFF0055AA.toInt()
+                    "SHIFT" -> if (isCapsLock) 0xFF00AAFF.toInt() else if (isShiftActive) 0xFF0088CC.toInt() else 0xFF444444.toInt()
+                    "CTRL" -> if (isCtrlActive) 0xFF0088CC.toInt() else 0xFF444444.toInt()
+                    "ALT" -> if (isAltActive) 0xFF0088CC.toInt() else 0xFF444444.toInt()
+                    "TAB", "?123", "ABC" -> 0xFF444444.toInt()
+                    "SPACE" -> 0xFF222222.toInt()
                     else -> 0xFF111111.toInt()
                 }
+                
+                if (isPressed) {
+                    // Darken/Highlight pressed key
+                    val hsv = FloatArray(3)
+                    android.graphics.Color.colorToHSV(pBg.color, hsv)
+                    hsv[2] *= 0.7f 
+                    pBg.color = android.graphics.Color.HSVToColor(hsv)
+                }
+                
                 pBg.alpha = 240
+                
+                val visualRect = if (isPressed) {
+                    RectF(rect.left + 2, rect.top + 2, rect.right - 2, rect.bottom - 2)
+                } else rect
 
-                c.drawRoundRect(rect, scale * 0.005f, scale * 0.005f, pBg)
+                c.drawRoundRect(visualRect, scale * 0.005f, scale * 0.005f, pBg)
                 
                 // Key Border/Shadow
                 pBg.style = Paint.Style.STROKE
@@ -423,52 +582,61 @@ class UITerminal {
         }
     }
 
-    private var touchDownX = 0f
-    private var touchDownY = 0f
+    fun onTouch(event: MotionEvent, scale: Float, gs: GameState, context: Context, onExit: () -> Unit): Boolean {
+        val action = event.actionMasked
+        val pointerIndex = event.actionIndex
+        val pointerId = event.getPointerId(pointerIndex)
+        val x = event.getX(pointerIndex)
+        val y = event.getY(pointerIndex)
 
-    fun onTouch(x: Float, y: Float, action: Int, scale: Float, gs: GameState, context: Context, onExit: () -> Unit): Boolean {
         when (action) {
-            MotionEvent.ACTION_DOWN -> {
-                touchDownX = x
-                touchDownY = y
-                hitKeyOnDown = null
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 if (scrollToBottomRect.contains(x, y)) {
-                    hitKeyOnDown = "SCROLL_TO_BOTTOM"
+                    activePointers[pointerId] = "SCROLL_TO_BOTTOM"
                     return true
                 }
 
                 if (!isKeyboardVisible) {
                     val showRect = keyRects["SHOW_KEY"]
                     if (showRect != null && showRect.contains(x, y)) {
-                        hitKeyOnDown = "SHOW_KEY"
+                        activePointers[pointerId] = "SHOW_KEY"
                         return true
                     }
                 }
 
                 // Dragging start check (above keyboard area)
-                val isLandscape = lastW > lastH
-                val kbHeight = if (isKeyboardVisible) {
-                    if (isLandscape) lastH * 0.68f else lastH * 0.5f
-                } else 0f
+                val kbHeight = if (isKeyboardVisible) (if (lastW > lastH) lastH * 0.68f else lastH * 0.5f) else 0f
                 val kbStartY = lastH - kbHeight
                 
                 if (y < kbStartY || !isKeyboardVisible) {
                     isDragging = true
                     lastTouchY = y
-                    hitKeyOnDown = "DRAG_AREA"
+                    activePointers[pointerId] = "DRAG_AREA"
                     return true
                 }
 
                 for ((key, rect) in keyRects) {
                     if (rect.contains(x, y)) {
-                        hitKeyOnDown = key
+                        activePointers[pointerId] = key
+                        pressedKeys.add(key)
+                        
+                        // Modifier Tracking: If we press a key while a modifier is held, mark it as used
+                        if (key != "SHIFT" && key != "CTRL" && key != "ALT") {
+                            if (activePointers.values.contains("SHIFT")) shiftWasUsedAsModifier = true
+                            if (activePointers.values.contains("CTRL")) ctrlWasUsedAsModifier = true
+                            if (activePointers.values.contains("ALT")) altWasUsedAsModifier = true
+                        } else {
+                            // Reset tracking when a modifier itself is pressed down
+                            when (key) {
+                                "SHIFT" -> shiftWasUsedAsModifier = false
+                                "CTRL" -> ctrlWasUsedAsModifier = false
+                                "ALT" -> altWasUsedAsModifier = false
+                            }
+                        }
+
                         if (key == "DEL") {
                             EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 50)
-                            // Initial deletion
-                            if (currentInput.isNotEmpty()) {
-                                currentInput = currentInput.substring(0, currentInput.length - 1)
-                            }
-                            // Schedule repeating deletion
+                            if (currentInput.isNotEmpty()) currentInput = currentInput.substring(0, currentInput.length - 1)
                             handler.removeCallbacks(delRunnable)
                             handler.postDelayed(delRunnable, 500)
                         }
@@ -477,49 +645,51 @@ class UITerminal {
                 }
             }
             MotionEvent.ACTION_MOVE -> {
-                val dx = x - touchDownX
-                val dy = y - touchDownY
-                val distSq = dx * dx + dy * dy
-                val threshold = scale * scale * 0.05f
-
-                if (isDragging) {
+                if (isDragging && activePointers[pointerId] == "DRAG_AREA") {
                     val deltaY = y - lastTouchY
                     val lineHeight = (scale * 0.03f) * 1.5f
-                    if (Math.abs(deltaY) >= lineHeight) {
-                        val linesToScroll = (deltaY / lineHeight).toInt()
-                        scrollOffset += linesToScroll
+                    if (abs(deltaY) >= lineHeight) {
+                        scrollOffset += (deltaY / lineHeight).toInt()
                         lastTouchY = y
                     }
                     return true
-                } else {
-                    // Standardized "drag-to-cancel" protocol
-                    if (hitKeyOnDown != null && hitKeyOnDown != "DRAG_AREA") {
-                        if (distSq > threshold) {
-                            hitKeyOnDown = null
-                            handler.removeCallbacks(delRunnable)
+                }
+                
+                // Update pressed state for all active pointers
+                for (i in 0 until event.pointerCount) {
+                    val pId = event.getPointerId(i)
+                    val px = event.getX(i)
+                    val py = event.getY(i)
+                    val originalKey = activePointers[pId]
+                    if (originalKey != null && originalKey != "DRAG_AREA") {
+                        val rect = keyRects[originalKey]
+                        if (rect != null) {
+                            if (rect.contains(px, py)) pressedKeys.add(originalKey)
+                            else pressedKeys.remove(originalKey)
                         }
                     }
                 }
             }
-            MotionEvent.ACTION_UP -> {
-                if (!isDragging && hitKeyOnDown != null) {
-                    val hitOnUp = when {
-                        scrollToBottomRect.contains(x, y) -> "SCROLL_TO_BOTTOM"
-                        !isKeyboardVisible && (keyRects["SHOW_KEY"]?.contains(x, y) == true) -> "SHOW_KEY"
-                        else -> {
-                            var upKey: String? = null
-                            for ((key, rect) in keyRects) {
-                                if (rect.contains(x, y)) {
-                                    upKey = key
-                                    break
-                                }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+                val keyOnDown = activePointers.remove(pointerId)
+                if (keyOnDown != null) {
+                    pressedKeys.remove(keyOnDown)
+                    if (keyOnDown == "DEL") handler.removeCallbacks(delRunnable)
+
+                    var keyOnUp: String? = null
+                    if (scrollToBottomRect.contains(x, y)) keyOnUp = "SCROLL_TO_BOTTOM"
+                    else if (!isKeyboardVisible && keyRects["SHOW_KEY"]?.contains(x, y) == true) keyOnUp = "SHOW_KEY"
+                    else {
+                        for ((key, rect) in keyRects) {
+                            if (rect.contains(x, y)) {
+                                keyOnUp = key
+                                break
                             }
-                            upKey
                         }
                     }
 
-                    if (hitOnUp != null && hitOnUp == hitKeyOnDown) {
-                        when (hitOnUp) {
+                    if (keyOnUp == keyOnDown) {
+                        when (keyOnUp) {
                             "SCROLL_TO_BOTTOM" -> {
                                 scrollOffset = 0
                                 EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 50)
@@ -528,24 +698,43 @@ class UITerminal {
                                 isKeyboardVisible = true
                                 EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 50)
                             }
-                            "DRAG_AREA" -> { /* Already handled by isDragging */ }
-                            else -> {
-                                if (hitOnUp != "DEL") {
+                            "DRAG_AREA" -> {}
+                            "SHIFT" -> {
+                                if (!shiftWasUsedAsModifier) {
                                     EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 50)
-                                    handleKeyPress(hitOnUp, gs, context, onExit)
+                                    handleKeyPress(keyOnUp, gs, context, onExit)
+                                }
+                                shiftWasUsedAsModifier = false
+                            }
+                            "CTRL" -> {
+                                if (!ctrlWasUsedAsModifier) {
+                                    EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 50)
+                                    handleKeyPress(keyOnUp, gs, context, onExit)
+                                }
+                                ctrlWasUsedAsModifier = false
+                            }
+                            "ALT" -> {
+                                if (!altWasUsedAsModifier) {
+                                    EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 50)
+                                    handleKeyPress(keyOnUp, gs, context, onExit)
+                                }
+                                altWasUsedAsModifier = false
+                            }
+                            else -> {
+                                if (keyOnUp != "DEL") {
+                                    EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 50)
+                                    handleKeyPress(keyOnUp, gs, context, onExit)
                                 }
                             }
                         }
                     }
                 }
-
-                isDragging = false
-                hitKeyOnDown = null
-                handler.removeCallbacks(delRunnable)
+                if (activePointers.isEmpty()) isDragging = false
             }
             MotionEvent.ACTION_CANCEL -> {
+                activePointers.clear()
+                pressedKeys.clear()
                 isDragging = false
-                hitKeyOnDown = null
                 handler.removeCallbacks(delRunnable)
             }
         }
@@ -572,7 +761,7 @@ class UITerminal {
                 isCtrlActive = false
                 isAltActive = false
             }
-            "EXIT" -> onExit()
+            "EXIT" -> processCommand("EXIT", gs, context, onExit)
             "HIDE" -> {
                 isKeyboardVisible = false
                 isShiftActive = false
@@ -603,10 +792,21 @@ class UITerminal {
             "SCAN", "DIR", "HELP" -> processCommand(key, gs, context, onExit)
             "..." -> currentInput += "..."
             else -> {
-                if (isCtrlActive) {
+                val ctrl = isCtrlActive || activePointers.values.contains("CTRL")
+                val alt = isAltActive || activePointers.values.contains("ALT")
+                
+                if (ctrl) {
                     when (key.uppercase()) {
                         "C" -> currentInput = ""
-                        "L" -> lines.clear()
+                        "L" -> clearScreen()
+                        "Q" -> {
+                            if (activeSubSession != null) {
+                                activeSubSession = null
+                                addLines(">> SUB-SESSION TERMINATED. RETURNED TO ROOT.", OutputMode.INSTANT)
+                            } else {
+                                processCommand("EXIT", gs, context, onExit)
+                            }
+                        }
                         "P" -> if (commandHistory.isNotEmpty()) {
                             historyIndex = (historyIndex - 1).coerceAtLeast(0)
                             currentInput = commandHistory[historyIndex]
@@ -617,7 +817,7 @@ class UITerminal {
                         }
                     }
                     isCtrlActive = false
-                } else if (isAltActive) {
+                } else if (alt) {
                     when (key) {
                         "." -> if (commandHistory.isNotEmpty()) {
                             val lastCmd = commandHistory.last()
@@ -630,7 +830,8 @@ class UITerminal {
                     if (currentInput.length < 40) {
                         var char = key
                         if (char.length == 1 && char[0].isLetter()) {
-                            char = if (isShiftActive || isCapsLock) char.uppercase() else char.lowercase()
+                            val isShift = isShiftActive || isCapsLock || activePointers.values.contains("SHIFT")
+                            char = if (isShift) char.uppercase() else char.lowercase()
                         }
                         currentInput += char
                     }
@@ -647,19 +848,34 @@ class UITerminal {
         if (autocompleteMatches.isNotEmpty() && currentInput == lastGeneratedInput) {
             autocompleteIndex = (autocompleteIndex + 1) % autocompleteMatches.size
             val nextMatch = autocompleteMatches[autocompleteIndex]
-            currentInput = autocompleteBase + nextMatch + (if (autocompleteBase.isEmpty()) " " else "")
+            
+            val parts = lastManualInput.split(" ").filter { it.isNotEmpty() }.toMutableList()
+            if (lastManualInput.endsWith(" ")) {
+                parts.add(nextMatch)
+            } else {
+                if (parts.isNotEmpty()) parts[parts.size - 1] = nextMatch
+                else parts.add(nextMatch)
+            }
+            
+            currentInput = parts.joinToString(" ")
+            if (parts.size == 1) currentInput += " " // Add space after command
+            
             lastGeneratedInput = currentInput
             return
         }
 
         // Search for new matches
         val isTrailingSpace = currentInput.endsWith(" ")
-        val parts = currentInput.trim().uppercase().split(" ").filter { it.isNotEmpty() }
-
+        val parts = currentInput.trim().split(" ").filter { it.isNotEmpty() }
         if (parts.isEmpty()) return
+        
+        lastManualInput = currentInput
+        val mainCmdName = parts[0].uppercase()
+        val command = CommandRegistry.getCommand(mainCmdName)
 
         if (parts.size == 1 && !isTrailingSpace) {
-            val prefix = parts[0]
+            // Autocomplete Command Name
+            val prefix = parts[0].uppercase()
             val matches = CommandRegistry.getAllCommands(gs)
                 .flatMap { listOf(it.name) + it.aliases }
                 .filter { it.startsWith(prefix) }
@@ -669,18 +885,26 @@ class UITerminal {
             if (matches.isNotEmpty()) {
                 autocompleteMatches = matches
                 autocompleteIndex = 0
-                autocompleteBase = ""
                 currentInput = matches[0] + " "
                 lastGeneratedInput = currentInput
             }
-        } else if (parts[0] == "CAT") {
-            val prefix = if (parts.size > 1) parts[1] else ""
-            val matches = files.keys.filter { it.startsWith(prefix) }
+        } else if (command != null && command.isUnlocked(gs)) {
+            // Autocomplete Subcommands/Arguments
+            val subArgs = if (isTrailingSpace) parts.drop(1) + "" else parts.drop(1)
+            val matches = command.getSuggestions(subArgs, gs)
+            
             if (matches.isNotEmpty()) {
                 autocompleteMatches = matches
                 autocompleteIndex = 0
-                autocompleteBase = "CAT "
-                currentInput = "CAT ${matches[0]}"
+                
+                val newParts = parts.toMutableList()
+                if (isTrailingSpace) {
+                    newParts.add(matches[0])
+                } else {
+                    newParts[newParts.size - 1] = matches[0]
+                }
+                
+                currentInput = newParts.joinToString(" ")
                 lastGeneratedInput = currentInput
             }
         }
@@ -757,12 +981,39 @@ class UITerminal {
     }
 
     private fun processCommand(cmd: String, gs: GameState, androidContext: Context, onExit: () -> Unit) {
-        addLines("> $cmd")
+        val promptStr = activeSubSession?.getPrompt() ?: ">"
+        addLines("$promptStr $cmd", OutputMode.INSTANT)
         
+        // Logical splitting: & (and/then)
+        if (cmd.contains(" & ")) {
+            cmd.split(" & ").forEach { processCommand(it.trim(), gs, androidContext, onExit) }
+            return
+        }
+
+        // Sub-session handling
+        val sub = activeSubSession
+        if (sub != null) {
+            val context = CommandContext(
+                gameState = gs,
+                terminalLines = lines,
+                onExit = onExit,
+                files = files,
+                onAddLines = { t, m -> addLines(t, m) },
+                onClear = { clearScreen() },
+                androidContext = androidContext
+            )
+            val result = sub.handleInput(cmd, context)
+            if (result.output != null) addLines(result.output, result.mode)
+            
+            // Sub-session determines persistence. If result.subSession is null, we exit.
+            activeSubSession = result.subSession
+            return
+        }
+
         // 1. Math Calculation Check (Special Fallback)
         val calcResult = tryCalculate(cmd)
         if (calcResult != null) {
-            addLines("= $calcResult")
+            addLines("= $calcResult", OutputMode.INSTANT)
             return
         }
 
@@ -771,6 +1022,11 @@ class UITerminal {
         
         val mainCmdName = parts[0].uppercase()
         val args = if (parts.size > 1) parts.drop(1) else emptyList()
+
+        if (mainCmdName == "EXIT" || mainCmdName == "QUIT") {
+            isPendingExit = true
+            exitCallback = onExit
+        }
         
         val command = CommandRegistry.getCommand(mainCmdName)
         
@@ -781,25 +1037,24 @@ class UITerminal {
                     terminalLines = lines,
                     onExit = onExit,
                     files = files,
-                    onAddLines = { t: String -> addLines(t) },
+                    onAddLines = { t, m -> addLines(t, m) },
+                    onClear = { clearScreen() },
                     androidContext = androidContext
                 )
                 val result = command.execute(args, context)
-                
-                // Sync wrapped lines if list was cleared (e.g. CLEAR command)
-                if (lines.isEmpty()) {
-                    wrappedLines.clear()
-                    scrollOffset = 0
-                }
 
-                if (result != null) {
-                    addLines(result)
+                if (result.output != null) {
+                    addLines(result.output, result.mode)
+                }
+                
+                if (result.subSession != null) {
+                    activeSubSession = result.subSession
                 }
             } else {
-                addLines("ERR: ACCESS DENIED. COMMAND LOCKED.")
+                addLines("ERR: ACCESS DENIED. COMMAND LOCKED.", OutputMode.INSTANT)
             }
         } else {
-            addLines("ERR: UNKNOWN COMMAND '$mainCmdName'")
+            addLines("ERR: UNKNOWN COMMAND '$mainCmdName'", OutputMode.INSTANT)
         }
         
         // Auto-scroll to bottom on command execution

@@ -34,7 +34,6 @@ import com.appsbyalok.echohunter.ui.UIArsenal
 import com.appsbyalok.echohunter.ui.UIDecompiler
 import com.appsbyalok.echohunter.ui.UIHelpMenu
 import com.appsbyalok.echohunter.ui.UIMainMenu
-import com.appsbyalok.echohunter.ui.UIModMenu
 import com.appsbyalok.echohunter.ui.UINanoOS
 import com.appsbyalok.echohunter.ui.UITerminal
 import com.appsbyalok.echohunter.utils.EchoAudioManager
@@ -67,7 +66,6 @@ class GameView(context: Context) : View(context) {
     internal val uiArchives = UIArchives()
     internal val uiTerminal = UITerminal()
     internal val touchController = TouchController(gs)
-    internal val modMenu = UIModMenu()
 
     internal var storyStep = 0
     internal var currentStoryLines = StoryProtocol.storyIntroLines
@@ -84,10 +82,7 @@ class GameView(context: Context) : View(context) {
     internal val onAppClose: () -> Unit = { changeState(menuReturnState) }
     internal val onArchiveSelect: (Int) -> Unit = { lvl -> startGame(0, lvl) }
     internal val onHelpOpen: () -> Unit = { changeState(3) }
-    internal val onModMenuOpen: () -> Unit = {
-        modMenu.isOpen = true
-        EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 100)
-    }
+    internal val onModMenuOpen: () -> Unit = { }
     internal val onHelpClose: () -> Unit = { changeState(0) }
     internal val onDifficultyToggle: () -> Unit = {
         if (SaveManager.isHardModeUnlocked) {
@@ -151,16 +146,6 @@ class GameView(context: Context) : View(context) {
 
         // --- INIT STATE MANAGER ---
         syncStateToManager()
-
-        // Debug / Mod menu bindings
-        modMenu.listener = object : UIModMenu.ModMenuListener {
-            override fun onForceBossSpawn() { triggerBoss(Random.nextInt(0, 5), gameScale) }
-            override fun onTriggerCoreMerge() { handleCoreUnlock(true) }
-            override fun onForceEMP() {
-                gs.activeTraps.add(GameState.ActiveTrap(2, gs.px, gs.py, 8f, 8f))
-                EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 200)
-            }
-        }
     }
 
     fun startGame(mode: Int, level: Int) {
@@ -169,7 +154,7 @@ class GameView(context: Context) : View(context) {
         gs.resetGame()
         
         // Restore Aiming preference from SaveManager
-        gs.controls.activeAttackMode = AttackMode.entries.toTypedArray()[com.appsbyalok.echohunter.data.SaveManager.activeAttackMode]
+        gs.controls.activeAttackMode = AttackMode.entries.toTypedArray()[SaveManager.activeAttackMode]
 
         effectSys.reset()
         enemySys.respawnAll(gs)
@@ -253,6 +238,7 @@ class GameView(context: Context) : View(context) {
         }
 
         gs.hp--
+        gs.tookDamageInLevel = true
         gs.combo = 0
         gs.comboBreakTimer = 1.0f
         gs.overclockMeter -= gs.overclockMeter * 0.25f
@@ -460,8 +446,6 @@ class GameView(context: Context) : View(context) {
         drawTransientOverlays(canvas, dt)
         worldRenderer.drawCRTOverlay(canvas, gs, width.toFloat(), height.toFloat())
 
-        if (modMenu.isOpen) modMenu.draw(canvas, gameScale, width.toFloat(), height.toFloat(), gs)
-
         // Global Overlay Message (Universal Toast - Restored Top Bar Style)
         if (gs.globalMessageTimer > 0f) {
             val alpha = (min(1f, gs.globalMessageTimer * 2f) * 255).toInt().coerceIn(0, 255)
@@ -523,10 +507,6 @@ class GameView(context: Context) : View(context) {
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val x = event.x
         val y = event.y
-
-        if (modMenu.isOpen) {
-            return modMenu.onTouch(x, y, event.action, gameScale, width.toFloat(), height.toFloat(), gs)
-        }
 
         // --- MODULAR TOUCH (TouchController aur menus handle) ---
         return stateManager.onTouch(event, x, y, event.action, gameScale, width.toFloat(), height.toFloat())

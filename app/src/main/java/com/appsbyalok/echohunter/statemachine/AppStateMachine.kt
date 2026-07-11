@@ -165,8 +165,10 @@ class PauseState(private val manager: AppStateManager) : IAppState {
             if (hitOnUp != -1 && hitOnUp == hitOnDown) {
                 when (hitOnUp) {
                     1 -> {
-                        gs.controls.activeAttackMode = if (gs.controls.activeAttackMode == com.appsbyalok.echohunter.input.AttackMode.AUTO_AIM) 
+                        val newMode = if (gs.controls.activeAttackMode == com.appsbyalok.echohunter.input.AttackMode.AUTO_AIM) 
                             com.appsbyalok.echohunter.input.AttackMode.MANUAL_AIM else com.appsbyalok.echohunter.input.AttackMode.AUTO_AIM
+                        gs.controls.activeAttackMode = newMode
+                        SaveManager.setAttackMode(newMode.ordinal)
                         EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100)
                     }
                     2 -> manager.view.disconnectCable()
@@ -222,7 +224,8 @@ class VictoryState(private val manager: AppStateManager) : IAppState {
     }
     override fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {
         if (SaveManager.isAutoNextLevelEnabled && gs.gameMode == 0 && gs.stateTimer > 2.0f) {
-            manager.view.startGame(0, gs.currentLevel + 1)
+            val nextLevel = if (gs.currentLevel == Int.MAX_VALUE) Int.MAX_VALUE else gs.currentLevel + 1
+            manager.view.startGame(0, nextLevel)
         }
     }
     override fun draw(c: Canvas, gs: GameState, width: Float, height: Float, scale: Float, dt: Float) {
@@ -248,7 +251,8 @@ class VictoryState(private val manager: AppStateManager) : IAppState {
             if (hitOnUp != -1 && hitOnUp == hitOnDown) {
                 if (hitOnUp == 1) {
                     EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 150)
-                    manager.view.startGame(0, gs.currentLevel + 1)
+                    val nextLevel = if (gs.currentLevel == Int.MAX_VALUE) Int.MAX_VALUE else gs.currentLevel + 1
+                    manager.view.startGame(0, nextLevel)
                     return true
                 } else {
                     manager.view.returnToArchives()
@@ -339,7 +343,7 @@ class SubMenuState(private val manager: AppStateManager) : IAppState {
             11 -> manager.view.uiArchives.draw(c, width, height, gs, scale)
             13 -> manager.view.uiArsenal.draw(c, width, height, scale, gs)
             14 -> manager.view.uiNanoOS.draw(c, width, height, scale, gs.timeSinceStart)
-            15 -> manager.view.uiTerminal.draw(c, width, height, scale, gs, manager.view.context)
+            15 -> manager.view.uiTerminal.draw(c, width, height, scale)
         }
     }
     override fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean {
@@ -356,7 +360,7 @@ class SubMenuState(private val manager: AppStateManager) : IAppState {
                     3 -> manager.view.changeState(15)
                 }
             }, manager.view.onDisconnect)
-            15 -> manager.view.uiTerminal.onTouch(vx, vy, action, scale, gs, manager.view.context, manager.view.onAppClose)
+            15 -> manager.view.uiTerminal.onTouch(e, scale, gs, manager.view.context, manager.view.onAppClose)
             else -> true
         }
     }

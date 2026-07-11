@@ -20,8 +20,6 @@ class CollisionSystem(
 ) {
 
     fun checkCollisions(
-        width: Float,
-        height: Float,
         scale: Float,
         onDamage: (Float) -> Unit,
         onScoreAdd: (Long) -> Unit,
@@ -121,8 +119,9 @@ class CollisionSystem(
                         // EMP Deals 5 Damage!
                         enemySystem.hp[j] -= 5
                         if (enemySystem.hp[j] <= 0) {
-                            onScoreAdd(5L)
-                            gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
+                            val rewardKB = LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
+                            onScoreAdd((5 * UpgradeSystem.getRewardMultiplier()).toLong())
+                            gs.collectedDataKB += rewardKB
 
                             if (isElimination && enemySystem.type[j] == 3) {
                                 gs.elimTargetsKilled++
@@ -148,7 +147,9 @@ class CollisionSystem(
                             
                             if (node.hp < prevHp) {
                                 if (node.state == SpawnState.DESTROYED) {
-                                    onScoreAdd(15L)
+                                    val rewardKB = LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false) * 3
+                                    onScoreAdd((15 * UpgradeSystem.getRewardMultiplier()).toLong())
+                                    gs.collectedDataKB += rewardKB
                                     StoryProtocol.showIngameMessage("COMPILER FRIED", 1f)
                                 } else {
                                     node.state = SpawnState.DISABLED
@@ -210,7 +211,7 @@ class CollisionSystem(
                                     if (edx * edx + edy * edy < explosionRadiusSq) {
                                         enemySystem.hp[j] -= splashDamage
                                         if (enemySystem.hp[j] <= 0) {
-                                            onScoreAdd(5L)
+                                            onScoreAdd((5 * UpgradeSystem.getRewardMultiplier()).toLong())
                                             gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
                                             enemySystem.killEnemy(j, gs)
                                         }
@@ -233,7 +234,7 @@ class CollisionSystem(
                         EchoAudioManager.playSound(ToneGenerator.TONE_SUP_INTERCEPT, 100)
 
                         gs.combo++
-                        onScoreAdd(10L)
+                        onScoreAdd((10 * UpgradeSystem.getRewardMultiplier()).toLong())
 
                         if (!gs.isOverclocked) {
                             gs.overclockMeter = min(100f, gs.overclockMeter + 5f)
@@ -304,18 +305,18 @@ class CollisionSystem(
                                 // --- ELIMINATION MODE SCORE LOGIC ---
                                 if (isElimination) {
                                     if (enemySystem.type[i] == 3) {
-                                        onScoreAdd((2 + gs.combo).toLong())
-                                        val reward = (LevelEngine.getKillRewardKB(gs.currentLevel, false) * 2 * UpgradeSystem.getRewardMultiplier()).toLong()
+                                        onScoreAdd(((2 + gs.combo) * UpgradeSystem.getRewardMultiplier()).toLong())
+                                        val reward = LevelEngine.getKillRewardKB(gs.currentLevel, false) * 2
                                         gs.collectedDataKB += reward
                                         StoryProtocol.showIngameMessage("TARGET ELIMINATED!", 1.5f)
                                         gs.elimTargetsKilled++
                                     } else {
-                                        val reward = (LevelEngine.getKillRewardKB(gs.currentLevel, false) / 2 * UpgradeSystem.getRewardMultiplier()).toLong()
+                                        val reward = LevelEngine.getKillRewardKB(gs.currentLevel, false) / 2
                                         gs.collectedDataKB += reward
                                     }
                                 } else {
-                                    onScoreAdd((2 + gs.combo).toLong())
-                                    val reward = (LevelEngine.getKillRewardKB(gs.currentLevel, false) * UpgradeSystem.getRewardMultiplier()).toLong()
+                                    onScoreAdd(((2 + gs.combo) * UpgradeSystem.getRewardMultiplier()).toLong())
+                                    val reward = LevelEngine.getKillRewardKB(gs.currentLevel, false)
                                     gs.collectedDataKB += reward
                                 }
                                 
@@ -358,7 +359,7 @@ class CollisionSystem(
                             if (node.hp < prevHp) {
                                 effectSystem.spawnParticles(node.x, node.y, if (isCrit) 3 else 0, scale)
                                 if (node.state == SpawnState.DESTROYED) {
-                                    onScoreAdd(20L)
+                                    onScoreAdd((20 * UpgradeSystem.getRewardMultiplier()).toLong())
                                     gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, false) * 3
                                     StoryProtocol.showIngameMessage("COMPILER BREACHED", 1.5f)
 
@@ -366,7 +367,7 @@ class CollisionSystem(
                                     if (gs.activeObjective is com.appsbyalok.echohunter.modes.CleanSweepObjective) {
                                         gs.overclockTimer = max(gs.overclockTimer, 4.0f) // 4 sec of pure chaos
                                         gs.overclockMeter = 100f
-                                        EchoAudioManager.playSound(android.media.ToneGenerator.TONE_CDMA_ALERT_NETWORK_LITE, 100)
+                                        EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ALERT_NETWORK_LITE, 100)
                                     }
                                 }
                             }
@@ -460,9 +461,9 @@ class CollisionSystem(
                     if (enemySystem.hp[i] <= 0) {
                         val rewardKB = LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
                         if (enemySystem.type[i] == 2 || enemySystem.type[i] == 0) {
-                            onScoreAdd(if(enemySystem.type[i] == 2) 5L else 2L)
+                            onScoreAdd(( (if(enemySystem.type[i] == 2) 5L else 2L) * UpgradeSystem.getRewardMultiplier() ).toLong())
                         } else {
-                            onScoreAdd(5L)
+                            onScoreAdd((5 * UpgradeSystem.getRewardMultiplier()).toLong())
                         }
                         gs.collectedDataKB += rewardKB
 
@@ -470,6 +471,16 @@ class CollisionSystem(
                             gs.elimTargetsKilled++
                             StoryProtocol.showIngameMessage("TARGET ELIMINATED!", 1.5f)
                         }
+                        
+                        // PATCH: HEALTH SIPHON
+                        if (UpgradeSystem.hasHealthSiphonPatch() && kotlin.random.Random.nextFloat() < 0.05f) {
+                            if (gs.hp < gs.maxHp) {
+                                gs.hp++
+                                effectSystem.spawnFloatingText(gs.px, gs.py, 1L, GameColors.HP)
+                                EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 50)
+                            }
+                        }
+
                         enemySystem.killEnemy(i, gs)
                     }
                 } else if (enemySystem.type[i] == 1) {
@@ -480,6 +491,21 @@ class CollisionSystem(
                             gs.playerIframe = 1.0f + UpgradeSystem.getIframeDurationBonus()
                             effectSystem.spawnParticles(enemySystem.ex[i], enemySystem.ey[i], 1, scale)
                             enemySystem.killEnemy(i, gs) // Shield absorbs and kills
+
+                            // PATCH: SHIELD BURST
+                            if (UpgradeSystem.hasShieldBurstPatch()) {
+                                gs.shockwaveActive = true
+                                gs.shockwaveX = gs.px; gs.shockwaveY = gs.py; gs.shockwaveR = 0f
+                                // Disable nearby enemies
+                                val stunRadiusSq = (scale * 0.45f) * (scale * 0.45f)
+                                for (j in 0 until enemySystem.n) {
+                                    val edx = gs.px - enemySystem.ex[j]
+                                    val edy = gs.py - enemySystem.ey[j]
+                                    if (edx * edx + edy * edy < stunRadiusSq) {
+                                        enemySystem.eState[j] = 2 // Stun
+                                    }
+                                }
+                            }
                         } else {
                             effectSystem.spawnParticles(gs.px, gs.py, 1, scale)
                             onDamage(scale)
@@ -489,7 +515,7 @@ class CollisionSystem(
                     }
                 } else if (enemySystem.type[i] == 2) {
                     // --- KAMIKAZE/HACKER ---
-                    onScoreAdd(5L)
+                    onScoreAdd((5 * UpgradeSystem.getRewardMultiplier()).toLong())
                     gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
                     effectSystem.spawnParticles(enemySystem.ex[i], enemySystem.ey[i], 1, scale)
                     if (!playedEnemyHackSound) {
@@ -499,7 +525,7 @@ class CollisionSystem(
                     enemySystem.killEnemy(i, gs)
                 } else if (enemySystem.type[i] == 0) {
                     // --- NORMAL YELLOW (PATROL) ---
-                    onScoreAdd(2L)
+                    onScoreAdd((2 * UpgradeSystem.getRewardMultiplier()).toLong())
                     gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
                     effectSystem.spawnParticles(enemySystem.ex[i], enemySystem.ey[i], 0, scale * 0.5f) // Small pulse effect
                     if (!playedEnemyHackSound) {
@@ -574,14 +600,19 @@ class CollisionSystem(
         }
 
         gs.currentSector++
-        gs.sectorTarget += gs.currentSector * 40
+        gs.sectorTarget += (gs.currentSector * 40 * (1.0f + UpgradeSystem.getRewardBonusPercent())).toInt()
         gs.hp = min(gs.maxHp, gs.hp + 1)
         gs.sectorFlash = 1f; gs.shakeAmount = scale * 0.15f
 
-        onScoreAdd(50L)
+        // FIX: Reset score for next sector in Story Mode to maintain challenge
+        if (gs.gameMode == 1) {
+            gs.score = 0
+        }
+
+        onScoreAdd((50 * UpgradeSystem.getRewardMultiplier()).toLong())
         gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = true)
 
-        effectSystem.spawnFloatingText(gs.bossX, gs.bossY, 50L, GameColors.YELLOW)
+        effectSystem.spawnFloatingText(gs.bossX, gs.bossY, (50 * UpgradeSystem.getRewardMultiplier()).toLong(), GameColors.YELLOW)
         EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 500)
 
         // Reset inverted controls after boss death

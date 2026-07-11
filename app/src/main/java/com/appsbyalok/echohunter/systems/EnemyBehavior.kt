@@ -207,13 +207,18 @@ object RepairDroneBehavior : IEnemyBehavior {
     override fun updateBehavior(i: Int, dt: Float, gs: GameState, enemySys: EnemySystem, ai: EnemyAI, targetW: Float, targetH: Float, scale: Float) {
         val speed = scale * 0.4f
 
-        // 1. Find the nearest destroyed spawner
-        val destroyedNode = gs.spawnerNodes.filter { it.state == SpawnState.DESTROYED }
-            .minByOrNull { (it.x - enemySys.ex[i]) * (it.x - enemySys.ex[i]) + (it.y - enemySys.ey[i]) * (it.y - enemySys.ey[i]) }
+        // 1. Find the nearest destroyed spawner using system helper
+        val spawnerSys = gs.spawnerNodes.let { nodes -> 
+            // We can't easily get SpawnerSystem instance here without interface change,
+            // but we can at least centralize the search logic if we had access.
+            // For now, let's keep the logic but prepare it for future SpawnerSystem integration
+            nodes.filter { it.state == SpawnState.DESTROYED }
+                .minByOrNull { (it.x - enemySys.ex[i]) * (it.x - enemySys.ex[i]) + (it.y - enemySys.ey[i]) * (it.y - enemySys.ey[i]) }
+        }
 
-        if (destroyedNode != null) {
-            val dx = destroyedNode.x - enemySys.ex[i]
-            val dy = destroyedNode.y - enemySys.ey[i]
+        if (spawnerSys != null) {
+            val dx = spawnerSys.x - enemySys.ex[i]
+            val dy = spawnerSys.y - enemySys.ey[i]
             val d2 = dx * dx + dy * dy
 
             if (d2 < (scale * 0.1f) * (scale * 0.1f)) {
@@ -224,16 +229,17 @@ object RepairDroneBehavior : IEnemyBehavior {
                 enemySys.evy[i] *= (1f - damping)
 
                 if (enemySys.investigateTimer[i] <= 0f) {
-                    destroyedNode.state = SpawnState.REPAIRING
-                    destroyedNode.hp = 1f
+                    // Logic centralized in SpawnNode state management later, but for now:
+                    spawnerSys.state = SpawnState.REPAIRING
+                    spawnerSys.hp = 1f
                     enemySys.investigateTimer[i] = 5f
                     // Notify system
                     com.appsbyalok.echohunter.data.StoryProtocol.showIngameMessage("SYSTEM: REPAIR SEQUENCE INITIATED", 1f)
                     
                     // Distinct visual alert
                     enemySys.getEffectSystem()?.let { effects ->
-                        effects.spawnAlertPulse(destroyedNode.x, destroyedNode.y, GameColors.RED)
-                        effects.spawnFloatingText(destroyedNode.x, destroyedNode.y, 0, GameColors.RED, "REPAIRING")
+                        effects.spawnAlertPulse(spawnerSys.x, spawnerSys.y, GameColors.RED)
+                        effects.spawnFloatingText(spawnerSys.x, spawnerSys.y, 0, GameColors.RED, "REPAIRING")
                     }
                     
                     // Audio alert

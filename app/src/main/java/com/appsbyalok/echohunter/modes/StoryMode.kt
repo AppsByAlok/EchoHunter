@@ -108,25 +108,15 @@ class StoryMode : GameModeStrategy {
         // Only format strings when the current sector changes to save CPU cycles
         if (gs.currentSector != lastSector) {
             sectorStr = "MAINFRAME NODE ${gs.currentSector}"
-            targetStr = "DECRYPTION: ${gs.sectorTarget} KB"
             lastSector = gs.currentSector
         }
 
-        val topMargin = scale * 0.06f
-        val centerY = topMargin + scale * 0.02f
+        val topMargin = scale * 0.045f
+        val centerY = topMargin
 
         // Draw Mainframe Node information
         pText.color = GameColors.CLARITY
-        pText.textSize = scale * 0.04f
+        pText.textSize = scale * 0.032f
         c.drawText(sectorStr, width / 2f, centerY, pText)
-
-        // Draw Decryption Target or Guardian Warning
-        pText.textSize = scale * 0.03f
-        pText.color = if (gs.bossActive) GameColors.RED else GameColors.YELLOW
-        val subText = if (gs.bossActive) "ADMIN GUARDIAN ACTIVE" else targetStr
-
-        if (gs.bossActive) pText.setShadowLayer(10f, 0f, 0f, GameColors.RED)
-        c.drawText(subText, width / 2f, centerY + scale * 0.04f, pText)
-        pText.clearShadowLayer()
     }
 }

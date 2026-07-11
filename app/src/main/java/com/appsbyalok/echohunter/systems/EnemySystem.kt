@@ -4,6 +4,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Typeface
+import com.appsbyalok.echohunter.data.UpgradeSystem
 import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.utils.GameColors
 import com.appsbyalok.echohunter.utils.SpawnValidator
@@ -177,7 +178,7 @@ class EnemySystem {
 
         maxHp[i] = when (nodeType) {
             1 -> 1 // Swarmers are very weak, 1 hit kill
-            2 -> baseHp * 2 // HVTs or Guards have higher HP
+            2 -> (baseHp * 2.5f * (1.0f + UpgradeSystem.getRewardBonusPercent())).toInt() // HVTs or Guards have higher HP
             else -> baseHp
         }
         hp[i] = maxHp[i]

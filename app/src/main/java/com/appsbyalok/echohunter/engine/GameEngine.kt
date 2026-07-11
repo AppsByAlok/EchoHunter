@@ -130,7 +130,33 @@ class GameEngine(
 
             gs.collectedDataKB += finalReward
             SaveManager.addData(finalReward)
-            SaveManager.updateCampaignProgress(gs.currentLevel)
+            
+            if (gs.currentLevel == Int.MAX_VALUE) {
+                gs.showGlobalMessage("LIMIT REACHED: \"YOU HAVE EXHAUSTED THE MULTIVERSE.\"\nADMIN: \"REST IN BITS, LEGEND.\"", 10f)
+            } else {
+                SaveManager.updateCampaignProgress(gs.currentLevel)
+            }
+            
+            // Calculate Stars based on specific achievements
+            // * - just finish game
+            // ** - finish without taking damage
+            // *** - finish in time
+            // **** - hard mode finish
+            // ***** - hard mode no damage or on time
+            
+            val duration = gs.timeSinceStart - gs.levelStartTime
+            val isHard = gs.difficulty == 1
+            val noDamage = !gs.tookDamageInLevel
+            
+            val stars = when {
+                isHard && (noDamage || duration < 120f) -> 5
+                isHard -> 4
+                duration < 90f -> 3
+                noDamage -> 2
+                else -> 1
+            }
+
+            SaveManager.saveLevelStats(gs.currentLevel, duration, stars)
 
             EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 500)
             onChangeState?.invoke(12)
@@ -156,7 +182,7 @@ class GameEngine(
             enemySys.updateBoss(simDt, gs, effectSys, scale)
             enemySys.updatePowerups(simDt, gs, effectSys, viewportW, viewportH)
 
-            collisionSys.checkCollisions(viewportW, viewportH, scale, onDamage!!, onScore!!, onCoreUnlock!!)
+            collisionSys.checkCollisions(scale, onDamage!!, onScore!!, onCoreUnlock!!)
             
             // Boss Spawns & Sector Story triggers only in main gameplay
             if (gs.state == 1) gs.modeStrategy.checkProgression(context, gs, scale, onBossTrigger!!, onStoryState!!)
@@ -221,13 +247,15 @@ class GameEngine(
         spawnerSys.generateNodes(gs, gs.mapWidth, gs.mapHeight, scale)
 
         // NAYA: Physically spawn enemies immediately so the map isn't empty
-        val preSpawnCount = if (gs.difficulty == 1) 10 else 7
-        for (i in 0 until preSpawnCount) {
-            val node = gs.spawnerNodes.random()
-            for (j in 0 until enemySys.n) {
-                if (enemySys.ex[j] < -1000f) {
-                    enemySys.spawnAt(j, node.x, node.y, gs, scale, node.type)
-                    break
+        if (gs.spawnerNodes.isNotEmpty()) {
+            val preSpawnCount = if (gs.difficulty == 1) 10 else 7
+            for (i in 0 until preSpawnCount) {
+                val node = gs.spawnerNodes.random()
+                for (j in 0 until enemySys.n) {
+                    if (enemySys.ex[j] < -1000f) {
+                        enemySys.spawnAt(j, node.x, node.y, gs, scale, node.type)
+                        break
+                    }
                 }
             }
         }

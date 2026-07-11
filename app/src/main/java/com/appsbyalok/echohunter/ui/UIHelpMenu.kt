@@ -362,13 +362,35 @@ class UIHelpMenu(private val context: Context) {
         )
         sy += lh * 0.2f
         drawLine(
+            "LOGIC BOMB: Plant and defend the payload until detonation.",
+            GameColors.TEXT,
+            featureIcon = LevelFeature.BOMB
+        )
+        sy += lh * 0.2f
+        drawLine(
+            "DARKNESS: Visual sensors compromised. Use Sonar to navigate.",
+            GameColors.TEXT,
+            featureIcon = LevelFeature.DARKNESS
+        )
+        sy += lh * 0.2f
+        drawLine(
             "CLEAN SWEEP: Destroy all security compilers to clear.",
             GameColors.TEXT,
             featureIcon = LevelFeature.CLEAN_SWEEP
         )
         sy += lh * 0.5f
 
-        drawLine("3. DECOMPILER (Upgrades)", GameColors.COOLANT, true)
+        drawLine("3. RANKING SYSTEM", GameColors.YELLOW, true)
+        drawLine("- Performance is rated 1-5 STARS [★].", GameColors.TEXT); sy += lh * 0.2f
+        drawLine("  * Finish Level", GameColors.TEXT); sy += lh * 0.15f
+        drawLine("  ** Finish without taking Damage", GameColors.TEXT); sy += lh * 0.15f
+        drawLine("  *** Finish within time limit (<90s)", GameColors.TEXT); sy += lh * 0.15f
+        drawLine("  **** Finish in HARD MODE", GameColors.TEXT); sy += lh * 0.15f
+        drawLine("  ***** HARD MODE + (No Damage or <120s)", GameColors.TEXT); sy += lh * 0.2f
+        drawLine("- Total cleared levels and stats are logged in the ARCHIVES.", GameColors.TEXT)
+        sy += lh * 0.5f
+
+        drawLine("4. DECOMPILER (Upgrades)", GameColors.COOLANT, true)
         drawLine(
             "- Use stolen KB to patch your Firmware in the OS.", GameColors.TEXT
         ); sy += lh * 0.2f

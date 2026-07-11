@@ -142,7 +142,7 @@ class HUDRenderer(private val context: Context) {
     }
 
     private fun drawTopStatus(c: Canvas, scale: Float, gs: GameState, targetW: Float) {
-        var currentY = scale * 0.14f // Compact shift for center text
+        var currentY = scale * 0.08f // Start higher up
         pText.textAlign = Paint.Align.CENTER
 
         if (gs.isAutoPilotActive) {
@@ -151,20 +151,62 @@ class HUDRenderer(private val context: Context) {
             currentY += scale * 0.03f
         }
 
+        // --- FIRMWARE PATCH INDICATORS ---
+        val patchIconSize = scale * 0.035f
+        val patchGap = scale * 0.01f
+        var activePatches = 0
+        if (com.appsbyalok.echohunter.data.UpgradeSystem.hasHealthSiphonPatch()) activePatches++
+        if (com.appsbyalok.echohunter.data.UpgradeSystem.hasShieldBurstPatch()) activePatches++
+        if (com.appsbyalok.echohunter.data.UpgradeSystem.hasOverclockRegenPatch()) activePatches++
+
+        if (activePatches > 0) {
+            val totalPatchesW = activePatches * patchIconSize + (activePatches - 1) * patchGap
+            var startX = targetW / 2f - totalPatchesW / 2f
+            val patchY = currentY
+
+            if (com.appsbyalok.echohunter.data.UpgradeSystem.hasHealthSiphonPatch()) {
+                p.style = Paint.Style.FILL; p.color = GameColors.HP
+                rectPopup.set(startX, patchY, startX + patchIconSize, patchY + patchIconSize)
+                c.drawRoundRect(rectPopup, scale * 0.005f, scale * 0.005f, p)
+                pText.textSize = scale * 0.02f; pText.color = 0xFFFFFFFF.toInt()
+                c.drawText("H", rectPopup.centerX(), rectPopup.centerY() + scale * 0.007f, pText)
+                startX += patchIconSize + patchGap
+            }
+            if (com.appsbyalok.echohunter.data.UpgradeSystem.hasShieldBurstPatch()) {
+                p.style = Paint.Style.FILL; p.color = GameColors.SHIELD
+                rectPopup.set(startX, patchY, startX + patchIconSize, patchY + patchIconSize)
+                c.drawRoundRect(rectPopup, scale * 0.005f, scale * 0.005f, p)
+                pText.textSize = scale * 0.02f; pText.color = 0xFFFFFFFF.toInt()
+                c.drawText("S", rectPopup.centerX(), rectPopup.centerY() + scale * 0.007f, pText)
+                startX += patchIconSize + patchGap
+            }
+            if (com.appsbyalok.echohunter.data.UpgradeSystem.hasOverclockRegenPatch()) {
+                p.style = Paint.Style.FILL; p.color = GameColors.OVERCLOCK
+                rectPopup.set(startX, patchY, startX + patchIconSize, patchY + patchIconSize)
+                c.drawRoundRect(rectPopup, scale * 0.005f, scale * 0.005f, p)
+                pText.textSize = scale * 0.02f; pText.color = 0xFFFFFFFF.toInt()
+                c.drawText("O", rectPopup.centerX(), rectPopup.centerY() + scale * 0.007f, pText)
+            }
+            currentY += patchIconSize + scale * 0.025f
+        } else {
+            currentY += scale * 0.02f
+        }
+
         // BOSS UI replaces Objective Bar when active
         if (gs.bossActive && gs.bossHp > 0) {
             drawBossUI(c, scale, gs, targetW, currentY)
         } else if (gs.objectiveLabel.isNotEmpty()) {
-            pText.color = GameColors.YELLOW; pText.textSize = scale * 0.025f
+            // Priority: Draw Objective Text and Progress
+            pText.color = GameColors.YELLOW; pText.textSize = scale * 0.028f
             c.drawText(gs.objectiveLabel, targetW / 2f, currentY, pText)
-            currentY += scale * 0.025f
+            currentY += scale * 0.02f
 
-            val barW = scale * 0.45f 
-            val barH = scale * 0.015f
+            val barW = scale * 0.5f 
+            val barH = scale * 0.012f
             val barX = targetW / 2f - barW / 2f
 
-            // Priority 1: Draw Objective Progress Bar
-            p.style = Paint.Style.STROKE; p.strokeWidth = scale * 0.003f; p.color = GameColors.YELLOW
+            // Objective Progress Bar
+            p.style = Paint.Style.STROKE; p.strokeWidth = scale * 0.002f; p.color = 0x88FFCC00.toInt()
             c.drawRect(barX, currentY, barX + barW, currentY + barH, p)
             p.style = Paint.Style.FILL; p.color = GameColors.YELLOW
             c.drawRect(barX, currentY, barX + barW * gs.objectiveProgress, currentY + barH, p)

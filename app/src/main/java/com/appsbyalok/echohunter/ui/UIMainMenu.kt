@@ -144,6 +144,12 @@ class UIMainMenu(private val context: Context) {
         pText.color = GameColors.CLARITY
         c.drawText("DATA: ${SaveManager.formatDataString(SaveManager.dataCoinsKB)}", scale * 0.05f, scale * 0.13f, pText)
 
+        // Add Progress Summary
+        val stats = SaveManager.getGlobalStats()
+        pText.textSize = scale * 0.025f
+        pText.color = GameColors.TEXT
+        c.drawText("NODES: ${stats.first} | STARS: ${stats.second}", scale * 0.05f, scale * 0.17f, pText)
+
         if (SaveManager.isHardModeUnlocked) {
             pText.color = if (gs.difficulty == 0) GameColors.TEXT else GameColors.RED
             pText.textAlign = Paint.Align.LEFT; pText.textSize = scale * 0.045f
@@ -165,7 +171,6 @@ class UIMainMenu(private val context: Context) {
 
         val helpW = pText.measureText(helpText)
         helpBtnRect.set(targetW - scale * 0.05f - helpW, 0f, targetW - scale * 0.05f, scale * 0.12f)
-        modMenuBtnRect.set(targetW - scale * 0.15f, 0f, targetW, scale * 0.15f)
 
         pText.textAlign = Paint.Align.CENTER; pText.letterSpacing = 0.05f
         if (StoryProtocol.isGlitchActive) {
@@ -451,8 +456,6 @@ class UIMainMenu(private val context: Context) {
                 if (hitSwitch || hitPlug) {
                     isDraggingPlug = true
                     wasSwitchHitOnDown = hitSwitch
-                } else if (modMenuBtnRect.contains(vx, vy)) {
-                    hitButtonOnDown = 3
                 } else if (helpBtnRect.contains(vx, vy)) {
                     hitButtonOnDown = 1
                 } else if (hardModeBtnRect.contains(vx, vy)) {
@@ -519,7 +522,6 @@ class UIMainMenu(private val context: Context) {
                     when (hitButtonOnDown) {
                         1 -> if (helpBtnRect.contains(vx, vy)) onHelpOpen()
                         2 -> if (hardModeBtnRect.contains(vx, vy)) onDifficultyToggle()
-                        3 -> if (modMenuBtnRect.contains(vx, vy)) onModMenuOpen()
                     }
                     hitButtonOnDown = -1
                     return true

@@ -68,9 +68,19 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
         }
 
         // 2. Second priority: If we don't have enough nodes, procedurally generate the rest
-        val baseNodes = if (gs.difficulty == 1) 5f else 4f
+        val config = LevelEngine.getLevelConfig(gs.currentLevel)
+        val isHard = gs.difficulty == 1
+        
+        // Use original base nodes but allow feature-based expansion
+        val baseNodes = if (isHard) 5f else 4f
         val bonus = if (gs.gameMode == 1) 4f else 0f
-        val targetCount = LevelEngine.getSaturatedValue(gs.currentLevel, baseNodes + bonus, 11f, 150f).toInt()
+        
+        // Scale max addition based on level features for more density at higher levels
+        var maxAdd = if (isHard) 30f else 18f
+        if (config.features.contains(LevelFeature.CLEAN_SWEEP)) maxAdd += 45f
+        if (config.features.contains(LevelFeature.ELIMINATION)) maxAdd += 25f
+
+        val targetCount = LevelEngine.getSaturatedValue(gs.currentLevel, baseNodes + bonus, maxAdd, 400f).toInt()
         
         if (gs.spawnerNodes.size < targetCount) {
             val remaining = targetCount - gs.spawnerNodes.size
@@ -84,24 +94,38 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
                     var attempts = 0
                     var found = false
 
-                    while (attempts < 100) {
+                    val maxAttempts = 300
+                    while (attempts < maxAttempts) {
                         val col = Random.nextInt(1, gridW - 1)
                         val row = Random.nextInt(1, gridH - 1)
                         val tx = col * ts + (ts / 2f)
                         val ty = row * ts + (ts / 2f)
 
-                        // VALIDATION: Must be a valid spot, far from player, AND far from other nodes
-                        val isValidSpot = SpawnValidator.isValid(tx, ty, ts / 2f, gs, minPlayerDist = 400f * scale)
-                        val isFarEnough = SpawnValidator.isFarFromNodes(tx, ty, gs, ts * 4f)
+                        // --- PROGRESSIVE RELAXATION ---
+                        // 0-100: Original Strict Constraints
+                        // 101-200: Moderate Relaxation
+                        // 201-300: Emergency Relaxation
+                        val distRelaxation = when {
+                            attempts > 200 -> 0.3f
+                            attempts > 100 -> 0.6f
+                            else -> 1.0f
+                        }
                         
-                        // NEW: In Defense mode, keep compilers away from the Core
-                        val isDefense = LevelEngine.getLevelConfig(gs.currentLevel).features.contains(LevelFeature.DEFENSE)
+                        // VALIDATION: Far from player, AND far from other nodes
+                        val pDist = (400f * scale) * distRelaxation
+                        val nDist = (ts * 4f) * distRelaxation
+                        
+                        val isValidSpot = SpawnValidator.isValid(tx, ty, ts / 2f, gs, minPlayerDist = pDist)
+                        val isFarEnough = SpawnValidator.isFarFromNodes(tx, ty, gs, nDist)
+                        
+                        // RESTORED: Core safety distance (ts * 6f)
+                        val isDefense = config.features.contains(LevelFeature.DEFENSE)
                         val distToCoreSq = if (isDefense) {
                             val dx = tx - gs.coreX
                             val dy = ty - gs.coreY
                             dx * dx + dy * dy
                         } else Float.MAX_VALUE
-                        val isSafeFromCore = distToCoreSq > (ts * 6f) * (ts * 6f)
+                        val isSafeFromCore = distToCoreSq > (ts * 6f * distRelaxation) * (ts * 6f * distRelaxation)
 
                         if (isValidSpot && isFarEnough && isSafeFromCore) {
                             nx = tx
@@ -113,17 +137,14 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
                     }
                     if (!found) continue 
                 } else {
-                    // Fallback for null grid: just check distance from other nodes
                     if (!SpawnValidator.isFarFromNodes(nx, ny, gs, scale * 0.5f)) continue
                 }
 
-                val config = LevelEngine.getLevelConfig(gs.currentLevel)
                 val type = when {
                     config.features.contains(LevelFeature.ELIMINATION) -> {
                         if (i < 3) 2 else Random.nextInt(0, 2)
                     }
                     config.features.contains(LevelFeature.CLEAN_SWEEP) -> {
-                        // In Clean Sweep, inject a few Type 4 hubs to guarantee some repair drones
                         if (i % 4 == 0) 4 else Random.nextInt(0, 2)
                     }
                     i == 0 -> 0 
@@ -141,10 +162,52 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
                 ))
             }
         }
+        
+        // 3. EMERGENCY SAFETY NET: Guaranteed minimums
+        // If we still have very few spawners, force some in safe spots (walkable floor)
+        val floorCount = if (gs.difficulty == 1) 10 else 7
+        val minTarget = kotlin.math.max(floorCount, targetCount / 2)
+        
+        if (gs.spawnerNodes.size < minTarget && grid != null) {
+            val gridW = grid.size
+            val gridH = grid[0].size
+            val needed = minTarget - gs.spawnerNodes.size
+            
+            var foundCount = 0
+            outer@for (c in 1 until gridW - 1) {
+                for (r in 1 until gridH - 1) {
+                    if (grid[c][r] == 0) {
+                        val tx = c * ts + (ts / 2f)
+                        val ty = r * ts + (ts / 2f)
+                        
+                        // Even in emergency, stay away from player and core if possible
+                        val distToPlayerSq = (tx - gs.px) * (tx - gs.px) + (ty - gs.py) * (ty - gs.py)
+                        if (distToPlayerSq < (250f * scale) * (250f * scale)) continue
+                        
+                        if (config.features.contains(LevelFeature.DEFENSE)) {
+                            val distToCoreSq = (tx - gs.coreX) * (tx - gs.coreX) + (ty - gs.coreY) * (ty - gs.coreY)
+                            if (distToCoreSq < (ts * 4f) * (ts * 4f)) continue
+                        }
 
-        // 3. EMERGENCY SAFETY NET
-        if (gs.spawnerNodes.isEmpty() && grid != null) {
-            // ... (existing code) ...
+                        if (SpawnValidator.isFarFromNodes(tx, ty, gs, ts * 2f)) {
+                            val type = when {
+                                config.features.contains(LevelFeature.ELIMINATION) -> 2
+                                config.features.contains(LevelFeature.CLEAN_SWEEP) && foundCount % 4 == 0 -> 4
+                                else -> Random.nextInt(0, 3)
+                            }
+                            val stats = getNodeStats(type)
+                            gs.spawnerNodes.add(SpawnNode(
+                                tx, ty, type,
+                                maxCooldown = stats.first,
+                                hp = stats.second,
+                                maxHp = stats.second
+                            ))
+                            foundCount++
+                            if (foundCount >= needed) break@outer
+                        }
+                    }
+                }
+            }
         }
 
         // 4. CLEAN SWEEP: Generate Network Links (The Puzzle)
@@ -369,10 +432,10 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
         effectSys.spawnParticles(node.x, node.y, 1, scale * 3f)
 
         // Reward for EACH node destroyed
-        gs.collectedDataKB += 50
-        gs.score += 100
+        gs.collectedDataKB += (50 * (1.0f + com.appsbyalok.echohunter.data.UpgradeSystem.getRewardBonusPercent())).toLong()
+        gs.score += (100 * com.appsbyalok.echohunter.data.UpgradeSystem.getRewardMultiplier()).toLong()
         gs.overclockMeter = kotlin.math.min(100f, gs.overclockMeter + 15f)
-        effectSys.spawnFloatingText(node.x, node.y, 0, com.appsbyalok.echohunter.utils.GameColors.CLARITY, "+50 KB")
+        effectSys.spawnFloatingText(node.x, node.y, 0, com.appsbyalok.echohunter.utils.GameColors.CLARITY, "+${(50 * (1.0f + com.appsbyalok.echohunter.data.UpgradeSystem.getRewardBonusPercent())).toLong()} KB")
 
         // CHAIN REACTION: If Clean Sweep mode, trigger cascading destruction
         // Instead of immediate recursion, we use SpawnState.SELF_DESTROYING with a delay
@@ -477,7 +540,7 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
             com.appsbyalok.echohunter.data.StoryProtocol.showTypewriterMessage(msg, 4f)
             
             // Massive rewards for the purge
-            gs.collectedDataKB += 250 
+            gs.collectedDataKB += (250 * (1.0f + com.appsbyalok.echohunter.data.UpgradeSystem.getRewardBonusPercent())).toLong()
             gs.overclockTimer = 8f
         }
     }
@@ -488,18 +551,17 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
         node.cooldownTimer = duration
     }
 
-    fun triggerRepair(gs: GameState) {
-        val destroyed = gs.spawnerNodes.filter { it.state == SpawnState.DESTROYED }
-        if (destroyed.isNotEmpty()) {
-            val target = destroyed.random()
-            target.state = SpawnState.REPAIRING
-            target.hp = 1f 
+    fun triggerRepair(gs: GameState, target: SpawnNode? = null) {
+        val nodeToRepair = target ?: gs.spawnerNodes.filter { it.state == SpawnState.DESTROYED }.randomOrNull()
+        nodeToRepair?.let {
+            it.state = SpawnState.REPAIRING
+            it.hp = 1f 
         }
     }
 
-    fun findNearestNode(x: Float, y: Float, gs: GameState): SpawnNode? {
+    fun findNearestNode(x: Float, y: Float, gs: GameState, onlyDestroyed: Boolean = false): SpawnNode? {
         return gs.spawnerNodes
-            .filter { it.state != SpawnState.DESTROYED }
+            .filter { if (onlyDestroyed) it.state == SpawnState.DESTROYED else it.state != SpawnState.DESTROYED }
             .minByOrNull { (it.x - x) * (it.x - x) + (it.y - y) * (it.y - y) }
     }
 
@@ -507,7 +569,9 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
         return gs.spawnerNodes.sumOf { it.queue }
     }
 
-    fun getActiveNodesCount(gs: GameState): Int {
-        return gs.spawnerNodes.count { it.state != SpawnState.DESTROYED && it.state != SpawnState.INACTIVE }
+    fun getActiveNodesCount(gs: GameState, includeInactive: Boolean = false): Int {
+        return gs.spawnerNodes.count { 
+            it.state != SpawnState.DESTROYED && (includeInactive || it.state != SpawnState.INACTIVE) 
+        }
     }
 }

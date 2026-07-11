@@ -32,7 +32,12 @@ enum class UpgradeType {
     SONAR_RANGE,        // NEW: Increased Pulse Radius
     SILENT_SONAR,       // NEW: Reduced Enemy Alert Range
     SONAR_DUR,           // NEW: Enemies stay visible longer
-    RESONANCE_CHAMBER   // NEW: Clean Sweep Chain Radius
+    RESONANCE_CHAMBER,   // NEW: Clean Sweep Chain Radius
+    
+    // --- FIRMWARE PATCHES (MARKET EXCLUSIVES) ---
+    PATCH_OVERCLOCK_REGEN, // +25% Overclock charge rate
+    PATCH_HEALTH_SIPHON,   // 5% chance to heal 1 HP on enemy kill
+    PATCH_SHIELD_BURST     // EMP Shockwave on shield depletion
 }
 
 data class UpgradeConfig(
@@ -196,6 +201,26 @@ object UpgradeSystem {
             "Increases the range of cascading compiler destructions.",
             "Vibrations in the network. One fall, they all fall.",
             5, 1500L, 2.0f
+        ),
+        
+        // --- FIRMWARE PATCHES ---
+        UpgradeType.PATCH_OVERCLOCK_REGEN to UpgradeConfig(
+            UpgradeType.PATCH_OVERCLOCK_REGEN, "PATCH_OV_GEN.FW", "Overclock Charge Rate +25%.",
+            "Significantly reduces downtime between Overclock activations.",
+            "A customized firmware patch that optimizes energy routing to the core.",
+            1, 2500000L, 1.0f // 2.5 GB
+        ),
+        UpgradeType.PATCH_HEALTH_SIPHON to UpgradeConfig(
+            UpgradeType.PATCH_HEALTH_SIPHON, "PATCH_SIPHON.FW", "5% Heal Chance on Kill.",
+            "Adds a lifesteal-like capability to your attack modules.",
+            "Experimental code that repurposes enemy data fragments for repairs.",
+            1, 5000000L, 1.0f // 5 GB
+        ),
+        UpgradeType.PATCH_SHIELD_BURST to UpgradeConfig(
+            UpgradeType.PATCH_SHIELD_BURST, "PATCH_BURST.FW", "Shield Break Shockwave.",
+            "Releases a localized EMP burst when your shield is depleted.",
+            "Weaponizing failure. If the shield drops, everyone else goes with it.",
+            1, 3500000L, 1.0f // 3.5 GB
         )
     )
 
@@ -273,4 +298,9 @@ object UpgradeSystem {
 
     fun getRewardBonusPercent(): Float = getLevel(UpgradeType.DATA_SYNDICATE) * 4.0f
     fun getCritDamageMultiplier(): Int = if (getLevel(UpgradeType.KINETIC_OVERLOAD) > 0) 3 else 2
+
+    // FIRMWARE ACCESSORS
+    fun hasOverclockRegenPatch(): Boolean = getLevel(UpgradeType.PATCH_OVERCLOCK_REGEN) > 0
+    fun hasHealthSiphonPatch(): Boolean = getLevel(UpgradeType.PATCH_HEALTH_SIPHON) > 0
+    fun hasShieldBurstPatch(): Boolean = getLevel(UpgradeType.PATCH_SHIELD_BURST) > 0
 }

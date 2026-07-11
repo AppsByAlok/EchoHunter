@@ -28,6 +28,23 @@ object SaveManager {
     var isEffectsEnabled: Boolean = true
         private set
 
+    // --- TERMINAL SETTINGS ---
+    var terminalTheme: String = "DARK"
+        set(value) {
+            field = value
+            prefs.edit().putString("terminalTheme", value).apply()
+        }
+    var typewriterSpeed: Int = 3
+        set(value) {
+            field = value
+            prefs.edit().putInt("typewriterSpeed", value).apply()
+        }
+    var fontSize: String = "NORMAL"
+        set(value) {
+            field = value
+            prefs.edit().putString("fontSize", value).apply()
+        }
+
     var activeAttackMode: Int = 1 // Default to AUTO_AIM (index 1)
         private set
 
@@ -91,6 +108,11 @@ object SaveManager {
         isSoundEnabled = prefs.getBoolean("isSoundEnabled", true)
         isVibrationEnabled = prefs.getBoolean("isVibrationEnabled", true)
         isEffectsEnabled = prefs.getBoolean("isEffectsEnabled", true)
+        
+        terminalTheme = prefs.getString("terminalTheme", "DARK") ?: "DARK"
+        typewriterSpeed = prefs.getInt("typewriterSpeed", 3)
+        fontSize = prefs.getString("fontSize", "NORMAL") ?: "NORMAL"
+
         activeAttackMode = prefs.getInt("attackMode", 1) // Default to AUTO_AIM
 
         // Load Streaks
@@ -151,9 +173,54 @@ object SaveManager {
 
     fun updateCampaignProgress(levelCleared: Int) {
         if (levelCleared >= maxCampaignLevel) {
-            maxCampaignLevel = max(maxCampaignLevel, levelCleared + 1)
+            maxCampaignLevel = if (levelCleared < Int.MAX_VALUE) levelCleared + 1 else Int.MAX_VALUE
             prefs.edit().putInt("maxCampaignLevel", maxCampaignLevel).apply()
         }
+    }
+
+    fun saveLevelStats(level: Int, timeSeconds: Float, stars: Int) {
+        val existingStars = prefs.getInt("lvl_${level}_stars", 0)
+        val existingTime = prefs.getFloat("lvl_${level}_time", Float.MAX_VALUE)
+
+        val editor = prefs.edit()
+        if (stars > existingStars) {
+            editor.putInt("lvl_${level}_stars", stars)
+        }
+        if (timeSeconds < existingTime) {
+            editor.putFloat("lvl_${level}_time", timeSeconds)
+        }
+        editor.apply()
+    }
+
+    fun getLevelStars(level: Int): Int = prefs.getInt("lvl_${level}_stars", 0)
+    fun isLevelFinished(level: Int): Boolean = getLevelStars(level) > 0
+    fun getLevelTime(level: Int): Float = prefs.getFloat("lvl_${level}_time", 0f)
+
+    fun getFinishedLevelIds(): List<Int> {
+        val ids = mutableListOf<Int>()
+        prefs.all.forEach { (key, value) ->
+            if (key.startsWith("lvl_") && key.endsWith("_stars") && value is Int) {
+                if (value > 0) {
+                    val idStr = key.substring(4, key.length - 6)
+                    idStr.toIntOrNull()?.let { ids.add(it) }
+                }
+            }
+        }
+        return ids
+    }
+
+    fun getGlobalStats(): Pair<Int, Int> {
+        var totalStars = 0
+        var levelsCleared = 0
+        prefs.all.forEach { (key, value) ->
+            if (key.startsWith("lvl_") && key.endsWith("_stars") && value is Int) {
+                if (value > 0) {
+                    levelsCleared++
+                    totalStars += value
+                }
+            }
+        }
+        return Pair(levelsCleared, totalStars)
     }
 
     // --- STREAK PROGRESSION LOGIC ---
@@ -223,7 +290,7 @@ object SaveManager {
     }
 
     fun debugUnlockAll() {
-        maxCampaignLevel = 200
+        maxCampaignLevel = Int.MAX_VALUE
         unlockedStoryStreak = 3
         unlockedHardStreak = 3
         dataCoinsKB = 999_999_999_999L // ~1 PB (Petabyte)

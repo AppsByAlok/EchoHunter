@@ -17,7 +17,9 @@ interface IGameObjective {
     fun checkWinCondition(gs: GameState): Boolean
     fun isBossTriggerReady(gs: GameState): Boolean
 
-    // NEW: Shared verification to ensure all level features are satisfied
+    fun getContextPrefix(gs: GameState): String = if (gs.modeStrategy.modeId == 1) "NODE ${gs.currentSector}" else "RING ${gs.currentLevel}"
+
+    // Shared verification to ensure all level features are satisfied
     fun areSecondaryFeaturesMet(gs: GameState): Boolean {
         val config = LevelEngine.getLevelConfig(gs.currentLevel)
         // 1. Elimination Check
@@ -25,7 +27,6 @@ interface IGameObjective {
         
         // 2. Boss Check (Boss must be dead if it exists)
         if (config.features.contains(LevelFeature.BOSS)) {
-            // Boss is dead if bossActive is false AND it was either killed or sector incremented
             val bossDead = !gs.bossActive && (gs.bossDeathTimer > 0.1f || gs.currentSector > 1)
             if (!bossDead) return false
         }
@@ -57,33 +58,44 @@ class StandardObjective : IGameObjective {
         gs.coreY = -9999f
         gs.coreRadius = 0f
     }
+
     override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
         val config = LevelEngine.getLevelConfig(gs.currentLevel)
-        gs.objectiveLabel = "SYSTEM PENETRATION"
-        gs.objectiveProgress = (gs.score.toFloat() / config.targetScore).coerceIn(0f, 1f)
+        
+        // --- DYNAMIC OBJECTIVE LABEL ---
+        val prefix = getContextPrefix(gs)
+        gs.objectiveLabel = when {
+            gs.bossActive -> "NEUTRALIZE ADMIN SECURITY"
+            gs.escapeGateActive -> "REACH EXIT PORTAL"
+            config.features.contains(LevelFeature.ELIMINATION) && gs.elimTargetsKilled < gs.elimTargetsRequired -> 
+                "$prefix | ELIMINATION: ${gs.elimTargetsKilled} / ${gs.elimTargetsRequired}"
+            config.features.contains(LevelFeature.BOMB) -> "$prefix | DEFUSE LOGIC BOMB"
+            config.features.contains(LevelFeature.DEFENSE) -> "$prefix | DEFEND CORE UPLINK"
+            else -> "$prefix | UPLINK: ${gs.score} / ${config.targetScore} KB"
+        }
+        
+        gs.objectiveProgress = if (config.features.contains(LevelFeature.ELIMINATION) && gs.elimTargetsRequired > 0) {
+            (gs.elimTargetsKilled.toFloat() / gs.elimTargetsRequired).coerceIn(0f, 1f)
+        } else {
+            (gs.score.toFloat() / config.targetScore).coerceIn(0f, 1f)
+        }
 
         trickleTimer -= dt
         if (trickleTimer <= 0f) {
             var activeCount = 0
             for (i in 0 until enemySys.n) if (enemySys.ex[i] > -1000f) activeCount++
-            
             val baseLimit = if (gs.difficulty == 1) 18f else 14f
             val limit = LevelEngine.getSaturatedValue(gs.currentLevel, baseLimit, 40f - baseLimit, 100f).toInt()
             val queued = spawnerSys.getTotalQueue(gs)
-            
             if (activeCount + queued < limit) {
                 spawnerSys.queueSpawns(limit - (activeCount + queued), gs)
             }
             trickleTimer = 1f
         }
     }
-    override fun checkWinCondition(gs: GameState): Boolean {
-        return areSecondaryFeaturesMet(gs)
-    }
-    override fun isBossTriggerReady(gs: GameState): Boolean {
-        val config = LevelEngine.getLevelConfig(gs.currentLevel)
-        return gs.score >= config.targetScore
-    }
+
+    override fun checkWinCondition(gs: GameState): Boolean = areSecondaryFeaturesMet(gs)
+    override fun isBossTriggerReady(gs: GameState): Boolean = gs.score >= LevelEngine.getLevelConfig(gs.currentLevel).targetScore
 }
 
 // 2. DEFENSE OBJECTIVE (Wave based, Protect Core)
@@ -114,7 +126,7 @@ class DefenseObjective : IGameObjective {
                     if (grid[x][y] == 2) { // 2 is DEST_NODE
                         val tx = x * ts + (ts / 2f)
                         val ty = y * ts + (ts / 2f)
-                        
+
                         // Verify core isn't inside a wall (DEST_NODE shouldn't be, but just in case)
                         if (!com.appsbyalok.echohunter.utils.SpawnValidator.isValid(tx, ty, ts * 0.4f, gs)) {
                             continue
@@ -128,7 +140,7 @@ class DefenseObjective : IGameObjective {
                 }
             }
         }
-        
+
         // Fallback: Find any safe path tile near center
         if (grid != null) {
             val cx = grid.size / 2
@@ -149,6 +161,24 @@ class DefenseObjective : IGameObjective {
     }
 
     override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
+        val prefix = getContextPrefix(gs)
+        if (gs.bossActive) {
+            gs.objectiveLabel = "NEUTRALIZE ADMIN SECURITY"
+        } else if (gs.defWaveCurrent <= gs.defWaveMax) {
+            gs.objectiveLabel = "$prefix | WAVE ${gs.defWaveCurrent} / ${gs.defWaveMax}"
+        } else {
+            gs.objectiveLabel = "UPLINK SECURED - PURGING..."
+        }
+
+        val waveTotal = 2f * (if (gs.difficulty == 1) 1.5f else 1.0f)
+        val expectedTotal = LevelEngine.getSaturatedValue(gs.currentLevel, waveTotal, 40f - waveTotal, 80f).toInt()
+        val currentRemaining = gs.defEnemiesToSpawn + gs.defEnemiesAlive
+        gs.objectiveProgress = if (expectedTotal > 0 && gs.defWaveState == 1) {
+            (1f - (currentRemaining.toFloat() / expectedTotal)).coerceIn(0f, 1f)
+        } else if (gs.defWaveState == 0 || gs.defWaveState == 2) {
+            1f - (gs.defWaveTimer / 7f).coerceIn(0f, 1f)
+        } else 1f
+
         // --- ESCAPE HYBRID TRICKLE ---
         val config = LevelEngine.getLevelConfig(gs.currentLevel)
         if (config.features.contains(LevelFeature.ESCAPE)) {
@@ -174,12 +204,12 @@ class DefenseObjective : IGameObjective {
                     val diffMult = if (gs.difficulty == 1) 1.5f else 1.0f
                     val hardCap = if (gs.difficulty == 1) 40f else 25f
                     val baseCount = 2f * diffMult
-                    
+
                     gs.defEnemiesToSpawn = LevelEngine.getSaturatedValue(gs.currentLevel, baseCount, hardCap - baseCount, 80f).toInt()
                     gs.defEnemiesAlive = 0
-                    
+
                     spawnerSys.queueSpawns(gs.defEnemiesToSpawn, gs)
-                    
+
                     StoryProtocol.showIngameMessage("WAVE ${gs.defWaveCurrent} / ${gs.defWaveMax} INCOMING!", 2f)
                     EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 200)
                 }
@@ -222,7 +252,7 @@ class EscapeObjective : IGameObjective {
     override fun setupObjective(gs: GameState, targetW: Float, targetH: Float, scale: Float) {
         gs.escapeGateActive = false
         coreReached = false
-        
+
         val grid = gs.gridMap
         if (grid != null) {
             // 1. Locate Exit Portal (2) and store it
@@ -264,7 +294,7 @@ class EscapeObjective : IGameObjective {
             gs.coreX = gs.px + (if (Math.random() > 0.5) 1f else -1f) * targetW * 0.8f
             gs.coreY = gs.py + (if (Math.random() > 0.5) 1f else -1f) * targetH * 0.8f
         }
-        
+
         gs.coreRadius = scale * 0.12f
 
         // --- DEFENSE HYBRID SETUP ---
@@ -282,47 +312,32 @@ class EscapeObjective : IGameObjective {
             gs.coreHp = gs.coreMaxHp
         }
     }
-    override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
-        trickleTimer -= dt
-        if (trickleTimer <= 0f) {
-            // SUPPRESS TRICKLE DURING ACTIVE WAVES to keep slots for wave enemies
-            val waveActive = gs.defWaveState == 1
-            
-            var activeCount = 0
-            for (i in 0 until enemySys.n) if (enemySys.ex[i] > -1000f) activeCount++
-            val baseLimit = if (gs.difficulty == 1) 16f else 12f
-            val limit = LevelEngine.getSaturatedValue(gs.currentLevel, baseLimit, 35f - baseLimit, 120f).toInt()
-            val queued = spawnerSys.getTotalQueue(gs)
-            
-            if (!waveActive && activeCount + queued < limit) {
-                spawnerSys.queueSpawns(limit - (activeCount + queued), gs)
-            }
-            trickleTimer = 1f
-        }
 
+    override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
+        val prefix = getContextPrefix(gs)
         val config = LevelEngine.getLevelConfig(gs.currentLevel)
         val hasDefense = config.features.contains(LevelFeature.DEFENSE)
 
         // UI Label Logic
         if (!gs.escapeGateActive) {
             if (hasDefense && !coreReached) {
-                gs.objectiveLabel = "LOCATE CORE UPLINK"
+                gs.objectiveLabel = "$prefix | LOCATE UPLINK"
                 val dx = gs.px - gs.coreX
                 val dy = gs.py - gs.coreY
                 val dist = sqrt(dx * dx + dy * dy)
                 gs.objectiveProgress = (1f - (dist / (gs.mapWidth * 0.5f))).coerceIn(0f, 0.95f)
             } else if (hasDefense && gs.defWaveCurrent <= gs.defWaveMax) {
-                gs.objectiveLabel = "DEFEND CORE - WAVE ${gs.defWaveCurrent}/${gs.defWaveMax}"
+                gs.objectiveLabel = "$prefix | WAVE ${gs.defWaveCurrent}/${gs.defWaveMax}"
                 // PROGRESS: Ratio of enemies killed in current wave
                 val waveTotal = 6f * (if (gs.difficulty == 1) 1.5f else 1.0f)
                 val expectedTotal = LevelEngine.getSaturatedValue(gs.currentLevel, waveTotal, 22f, 100f).toInt()
-                
+
                 val currentRemaining = gs.defEnemiesToSpawn + gs.defEnemiesAlive
                 gs.objectiveProgress = if (expectedTotal > 0) {
                    (1f - (currentRemaining.toFloat() / expectedTotal)).coerceIn(0f, 1f)
                 } else 1f
             } else {
-                gs.objectiveLabel = "BYPASSING SECURITY..."
+                gs.objectiveLabel = "$prefix | BYPASSING SECURITY..."
                 // Progress based on secondary features
                 var progress = 0f
                 if (config.features.contains(LevelFeature.ELIMINATION)) progress = (gs.elimTargetsKilled.toFloat() / gs.elimTargetsRequired)
@@ -333,16 +348,33 @@ class EscapeObjective : IGameObjective {
             gs.objectiveProgress = 1f
         }
 
+        trickleTimer -= dt
+        if (trickleTimer <= 0f) {
+            // SUPPRESS TRICKLE DURING ACTIVE WAVES to keep slots for wave enemies
+            val waveActive = gs.defWaveState == 1
+
+            var activeCount = 0
+            for (i in 0 until enemySys.n) if (enemySys.ex[i] > -1000f) activeCount++
+            val baseLimit = if (gs.difficulty == 1) 16f else 12f
+            val limit = LevelEngine.getSaturatedValue(gs.currentLevel, baseLimit, 35f - baseLimit, 120f).toInt()
+            val queued = spawnerSys.getTotalQueue(gs)
+
+            if (!waveActive && activeCount + queued < limit) {
+                spawnerSys.queueSpawns(limit - (activeCount + queued), gs)
+            }
+            trickleTimer = 1f
+        }
+
         // Hybrid check: Gate activates ONLY when all other features are met
         if (areSecondaryFeaturesMet(gs) && !gs.escapeGateActive) {
             gs.escapeGateActive = true
-            
+
             // NEW: Relocate core marker to the actual Exit Portal
             if (exitX > 0) {
                 gs.coreX = exitX
                 gs.coreY = exitY
             }
-            
+
             StoryProtocol.showIngameMessage("SYSTEM BREACHED! EXIT PORTAL OPEN!", 4f)
             EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 300)
         }
@@ -358,23 +390,23 @@ class EscapeObjective : IGameObjective {
                     gs.defWaveTimer = 3f
                     StoryProtocol.showIngameMessage("CORE LOCATED! DEFENSE SYSTEMS ONLINE!", 3f)
                     EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 200)
-                    
+
                     // Force all spawners to relocate near the core area (7x7 room)
                     val grid = gs.gridMap
                     if (grid != null) {
                         val ts = gs.tileSize
-                        
+
                         for (i in gs.spawnerNodes.indices) {
                             val node = gs.spawnerNodes[i]
-                            node.queue = 0 
+                            node.queue = 0
                             node.cooldownTimer = 0.5f + (i * 0.2f)
-                            
+
                             // Core ke charo taraf circle mein spawners set karo (5.5 tiles door)
                             val angle = (i.toFloat() / gs.spawnerNodes.size) * 6.283f
                             val dist = 5.5f * ts
                             val targetX = gs.coreX + kotlin.math.cos(angle) * dist
                             val targetY = gs.coreY + kotlin.math.sin(angle) * dist
-                            
+
                             // Use SpawnValidator to find a safe spot near the ideal circular placement
                             val safeSpot = com.appsbyalok.echohunter.utils.SpawnValidator.findValidNear(
                                 targetX, targetY, ts * 0.4f, gs, 20, ts * 2f
@@ -418,7 +450,7 @@ class EscapeObjective : IGameObjective {
                     val diffMult = if (gs.difficulty == 1) 1.5f else 1.0f
                     val baseCount = 6f * diffMult
                     val count = LevelEngine.getSaturatedValue(gs.currentLevel, baseCount, 22f, 100f).toInt()
-                    
+
                     gs.defEnemiesToSpawn = count
                     gs.defEnemiesAlive = 0
                     spawnerSys.queueSpawns(count, gs)
@@ -458,19 +490,19 @@ class StoryObjective : IGameObjective {
     private var trickleTimer = 2f
     override fun setupObjective(gs: GameState, targetW: Float, targetH: Float, scale: Float) {
         gs.coreRadius = 0f 
-        
+
         // STORY MODE CORE: Set central core position for the "Merge" sequence
         val grid = gs.gridMap
         if (grid != null) {
             val ts = gs.tileSize
             val cx = grid.size / 2
             val cy = grid[0].size / 2
-            
+
             // Look for a safe spot near center
             val safeCenter = com.appsbyalok.echohunter.utils.SpawnValidator.findValidNear(
                 cx * ts, cy * ts, ts * 0.5f, gs, 100, ts * 10f
             )
-            
+
             if (safeCenter != null) {
                 gs.coreX = safeCenter.first
                 gs.coreY = safeCenter.second
@@ -480,7 +512,15 @@ class StoryObjective : IGameObjective {
             }
         }
     }
+
     override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
+        val prefix = getContextPrefix(gs)
+        gs.objectiveLabel = when {
+            gs.bossActive -> "NEUTRALIZE ADMIN SECURITY"
+            else -> "$prefix | UPLINK: ${gs.score} / ${gs.sectorTarget} KB"
+        }
+        gs.objectiveProgress = if (gs.sectorTarget > 0) (gs.score.toFloat() / gs.sectorTarget).coerceIn(0f, 1f) else 1f
+
         trickleTimer -= dt
         if (trickleTimer <= 0f) {
             var activeCount = 0
@@ -493,10 +533,29 @@ class StoryObjective : IGameObjective {
             }
             trickleTimer = 1f
         }
+        
+        // Final Boss Kill logic in Story Mode: If boss was active and now dead
+        // And we are past the final sector, activate the central core (State 8)
+        if (gs.currentSector > 5 && gs.state == 1) {
+            gs.state = 8
+            gs.coreRadius = 100f
+            StoryProtocol.showIngameMessage("MAINFRAME COMPROMISED. ACCESSING CENTRAL CORE...", 5f)
+            EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_HIGH_L, 1000)
+        }
+
         if (gs.state == 8 && gs.coreRadius == 0f) gs.coreRadius = 100f
     }
-    override fun checkWinCondition(gs: GameState): Boolean = false
-    override fun isBossTriggerReady(gs: GameState): Boolean = false
+    
+    override fun checkWinCondition(gs: GameState): Boolean {
+        // In Story mode, "Winning" a level means clearing the final sector (Sector 5)
+        // Intermediate sectors are handled by StoryMode logic. 
+        // Level is cleared only when final boss is dead.
+        return gs.currentSector >= 5 && !gs.bossActive && gs.bossHp <= 0 && areSecondaryFeaturesMet(gs)
+    }
+    
+    override fun isBossTriggerReady(gs: GameState): Boolean {
+        return gs.score >= gs.sectorTarget
+    }
 }
 
 // 5. ELIMINATION OBJECTIVE (Kill High Value Targets)
@@ -512,6 +571,13 @@ class EliminationObjective : IGameObjective {
     }
 
     override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
+        val prefix = getContextPrefix(gs)
+        gs.objectiveLabel = when {
+            gs.bossActive -> "NEUTRALIZE ADMIN SECURITY"
+            else -> "$prefix | ELIMINATION: ${gs.elimTargetsKilled} / ${gs.elimTargetsRequired}"
+        }
+        gs.objectiveProgress = if (gs.elimTargetsRequired > 0) (gs.elimTargetsKilled.toFloat() / gs.elimTargetsRequired).coerceIn(0f, 1f) else 1f
+
         trickleTimer -= dt
         if (trickleTimer <= 0f) {
             var activeCount = 0
@@ -541,7 +607,7 @@ class BombObjective : IGameObjective {
     private var bombPlanted = false
     private var plantTimer = 3f 
     private var defuseTimer = 45f 
-    private var detonationTimer = 0f 
+    private var detonationTimer = 0f
 
     override fun setupObjective(gs: GameState, targetW: Float, targetH: Float, scale: Float) {
         gs.coreX = -9999f
@@ -560,7 +626,7 @@ class BombObjective : IGameObjective {
                     if (grid[x][y] == 0) paths.add(Pair(x, y))
                 }
             }
-            val targetNode = paths.filter { 
+            val targetNode = paths.filter {
                 val dx = it.first * gs.tileSize - gs.px
                 val dy = it.second * gs.tileSize - gs.py
                 (dx*dx + dy*dy) > (targetW * targetW * 0.5f)
@@ -575,29 +641,18 @@ class BombObjective : IGameObjective {
     }
 
     override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
-        trickleTimer -= dt
-        if (trickleTimer <= 0f) {
-            var activeCount = 0
-            for (i in 0 until enemySys.n) if (enemySys.ex[i] > -1000f) activeCount++
-            val baseLimit = if (gs.difficulty == 1) 20f else 15f
-            val limit = LevelEngine.getSaturatedValue(gs.currentLevel, baseLimit, 45f - baseLimit, 100f).toInt()
-            val queued = spawnerSys.getTotalQueue(gs)
-            if (activeCount + queued < limit) {
-                spawnerSys.queueSpawns(limit - (activeCount + queued), gs)
-            }
-            trickleTimer = 1f
-        }
+        val prefix = getContextPrefix(gs)
 
         if (!bombPlanted) {
             val dx = gs.px - gs.bombTargetX
             val dy = gs.py - gs.bombTargetY
             val dist = sqrt(dx * dx + dy * dy)
-            gs.objectiveLabel = "LOCATE PLANT SITE"
+            gs.objectiveLabel = "$prefix | LOCATE PLANT SITE"
             gs.objectiveProgress = (1.0f - (dist / 1000f)).coerceIn(0f, 0.9f)
             if (dist < 150f) {
-                plantTimer -= dt
                 gs.objectiveLabel = "PLANTING LOGIC BOMB..."
                 gs.objectiveProgress = 1.0f - (plantTimer / 3f)
+                plantTimer -= dt
                 if (plantTimer <= 0f) {
                     bombPlanted = true
                     StoryProtocol.showIngameMessage("LOGIC BOMB PLANTED! DEFEND THE UPLINK!", 3f)
@@ -629,6 +684,19 @@ class BombObjective : IGameObjective {
                 EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_HIGH_L, 1000)
             }
         }
+
+        trickleTimer -= dt
+        if (trickleTimer <= 0f) {
+            var activeCount = 0
+            for (i in 0 until enemySys.n) if (enemySys.ex[i] > -1000f) activeCount++
+            val baseLimit = if (gs.difficulty == 1) 20f else 15f
+            val limit = LevelEngine.getSaturatedValue(gs.currentLevel, baseLimit, 45f - baseLimit, 100f).toInt()
+            val queued = spawnerSys.getTotalQueue(gs)
+            if (activeCount + queued < limit) {
+                spawnerSys.queueSpawns(limit - (activeCount + queued), gs)
+            }
+            trickleTimer = 1f
+        }
     }
 
     override fun checkWinCondition(gs: GameState): Boolean {
@@ -653,6 +721,14 @@ class CleanSweepObjective : IGameObjective {
     }
 
     override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
+        val prefix = getContextPrefix(gs)
+        val total = gs.spawnerNodes.size
+        val activeNodes = spawnerSys.getActiveNodesCount(gs, includeInactive = true)
+        val destroyed = total - activeNodes
+        val remaining = activeNodes
+
+        gs.objectiveProgress = if (total > 0) destroyed.toFloat() / total else 1f
+
         trickleTimer -= dt
         if (trickleTimer <= 0f) {
             var activeCount = 0
@@ -665,15 +741,9 @@ class CleanSweepObjective : IGameObjective {
             }
 
             // CLEAN SWEEP: If a lot of compilers are destroyed, speed up spawns for remaining ones
-            val total = gs.spawnerNodes.size
-            val destroyed = gs.spawnerNodes.count { it.state == com.appsbyalok.echohunter.systems.SpawnState.DESTROYED }
             val destroyRatio = if (total > 0) destroyed.toFloat() / total else 0f
             trickleTimer = if (destroyRatio > 0.5f) 0.5f else 1f
         }
-
-        val total = gs.spawnerNodes.size
-        val destroyed = gs.spawnerNodes.count { it.state == com.appsbyalok.echohunter.systems.SpawnState.DESTROYED }
-        val remaining = total - destroyed
 
         // NETWORK REVEAL: If only 2 compilers are left, reveal them permanently
         if (remaining in 1..2) {
@@ -688,10 +758,8 @@ class CleanSweepObjective : IGameObjective {
                 gs.objectiveLabel = "PURGE REMAINING SECURITY"
             }
         } else {
-            gs.objectiveLabel = "PURGE SECURITY COMPILERS"
+            gs.objectiveLabel = "$prefix | PURGE COMPILERS"
         }
-
-        gs.objectiveProgress = if (total > 0) destroyed.toFloat() / total else 1f
 
         // Hybrid Feature Support: Handle Darkness ambient reveal in Clean Sweep
         if (gs.isDarknessLevel) {
@@ -714,7 +782,8 @@ class CleanSweepObjective : IGameObjective {
     override fun isBossTriggerReady(gs: GameState): Boolean {
         // Boss triggers when 70% of nodes are destroyed
         val total = gs.spawnerNodes.size
-        val destroyed = gs.spawnerNodes.count { it.state == com.appsbyalok.echohunter.systems.SpawnState.DESTROYED }
+        val activeNodes = (total - gs.spawnerNodes.count { it.state == com.appsbyalok.echohunter.systems.SpawnState.DESTROYED })
+        val destroyed = total - activeNodes
         return if (total > 0) (destroyed.toFloat() / total) >= 0.7f else false
     }
 }

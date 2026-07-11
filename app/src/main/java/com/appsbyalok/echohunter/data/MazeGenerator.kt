@@ -40,8 +40,11 @@ object MazeGenerator {
         }
 
         val maxGrid = if (difficulty == 1) 251 else 151
-        var w = min(maxGrid, 21 + (level * 2))
-        var h = min(maxGrid, 21 + (level * 2))
+        
+        // --- FIX: Use Long for calculation to prevent overflow before min() ---
+        val calculatedSize = 21L + (level.toLong() * 2L)
+        var w = min(maxGrid.toLong(), calculatedSize).toInt()
+        var h = min(maxGrid.toLong(), calculatedSize).toInt()
 
         if (gameMode == 1) {
             val baseSize = if (difficulty == 1) 151 else 101
@@ -50,8 +53,9 @@ object MazeGenerator {
             w = min(maxGrid, actSize)
             h = min(maxGrid, actSize)
         } else if (type == MazeType.QUARANTINE) {
-            w = min(41, 21 + level) // Keep defense maps intense, defense zones should be compact
-            h = min(41, 21 + level)
+            val qSize = min(41L, 21L + level.toLong()).toInt()
+            w = qSize
+            h = qSize
         }
 
         // Ensure dimension scales are odd for perfect alignment calculations

@@ -14,6 +14,7 @@ object GameColors {
     const val OVERCLOCK = 0xFFFF5500.toInt()
     const val BOSS = 0xFFFF00FF.toInt()
     const val COOLANT = 0xFF00AAFF.toInt()
+    const val DARKNESS = 0xFF050508.toInt()
 
     // High-performance Manual ARGB Blend Logic via Bitwise Masks
     fun mixColors(colorA: Int, colorB: Int, ratio: Float): Int {

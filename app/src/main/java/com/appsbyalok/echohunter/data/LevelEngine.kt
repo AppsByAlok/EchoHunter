@@ -32,51 +32,52 @@ object LevelEngine {
      * Formula: Base + (MaxAdd * Level) / (Level + K)
      */
     fun getSaturatedValue(level: Int, base: Float, maxAdd: Float, curveConstant: Float): Float {
-        return base + (maxAdd * level) / (level + curveConstant)
+        val l = level.toFloat()
+        return base + (maxAdd * l) / (l + curveConstant)
+    }
+
+    /**
+     * Algorithmic Generation using Prime (Objectives) and Even (Modifiers) Matrix.
+     * Returns a bitmask of LevelFeature ordinals.
+     */
+    fun getFeaturesMask(level: Int): Int {
+        if (level % 100 == 0) return (1 shl LevelFeature.ADMIN_BONUS.ordinal) or (1 shl LevelFeature.BOSS.ordinal)
+        if (level == 1) return (1 shl LevelFeature.CLASSIC.ordinal)
+
+        var mask = 0
+        if (level % 5 == 0)  mask = mask or (1 shl LevelFeature.BOSS.ordinal)
+        if (level % 7 == 0)  mask = mask or (1 shl LevelFeature.ELIMINATION.ordinal)
+        if (level % 11 == 0) mask = mask or (1 shl LevelFeature.ESCAPE.ordinal)
+        if (level % 13 == 0) mask = mask or (1 shl LevelFeature.DEFENSE.ordinal)
+        if (level % 17 == 0) mask = mask or (1 shl LevelFeature.BOMB.ordinal)
+        if (level % 19 == 0) mask = mask or (1 shl LevelFeature.CLEAN_SWEEP.ordinal)
+
+        if (level % 6 == 0) mask = mask or (1 shl LevelFeature.MAZE.ordinal)
+        if (level % 8 == 0) mask = mask or (1 shl LevelFeature.DARKNESS.ordinal)
+
+        val primaryMask = (1 shl LevelFeature.BOSS.ordinal) or
+                (1 shl LevelFeature.ELIMINATION.ordinal) or
+                (1 shl LevelFeature.ESCAPE.ordinal) or
+                (1 shl LevelFeature.DEFENSE.ordinal) or
+                (1 shl LevelFeature.BOMB.ordinal) or
+                (1 shl LevelFeature.CLEAN_SWEEP.ordinal)
+
+        if ((mask and primaryMask) == 0) {
+            mask = mask or (1 shl LevelFeature.CLASSIC.ordinal)
+        }
+        return mask
     }
 
     /**
      * Algorithmic Generation using Prime (Objectives) and Even (Modifiers) Matrix.
      */
-    private fun determineLevelFeatures(level: Int): Set<LevelFeature> {
-        // Core Easter Egg
-        if (level % 100 == 0) return setOf(LevelFeature.ADMIN_BONUS, LevelFeature.BOSS)
-
-        // Level 1 is always a safe tutorial infiltration
-        if (level == 1) return setOf(LevelFeature.CLASSIC)
-
-        val activeFeatures = mutableSetOf<LevelFeature>()
-
-        // --- 1. THE PRIME PROTOCOL (Primary Objectives) ---
-        if (level % 5 == 0)  activeFeatures.add(LevelFeature.BOSS)
-        if (level % 7 == 0)  activeFeatures.add(LevelFeature.ELIMINATION)
-        if (level % 11 == 0) activeFeatures.add(LevelFeature.ESCAPE)
-        if (level % 13 == 0) activeFeatures.add(LevelFeature.DEFENSE)
-        if (level % 17 == 0) activeFeatures.add(LevelFeature.BOMB)
-        if (level % 19 == 0) activeFeatures.add(LevelFeature.CLEAN_SWEEP)
-
-        // --- 2. THE EVEN PROTOCOL (Environmental Modifiers) ---
-        if (level % 6 == 0) activeFeatures.add(LevelFeature.MAZE)
-        if (level % 8 == 0) activeFeatures.add(LevelFeature.DARKNESS)
-
-        // --- 3. LOGIC RESOLUTION ---
-        // Boss in a Maze is now ALLOWED! No manual removals.
-
-        // Check if the level has any Main Objective
-        val hasPrimaryObjective = activeFeatures.contains(LevelFeature.BOSS) ||
-                activeFeatures.contains(LevelFeature.ELIMINATION) ||
-                activeFeatures.contains(LevelFeature.ESCAPE) ||
-                activeFeatures.contains(LevelFeature.DEFENSE) ||
-                activeFeatures.contains(LevelFeature.BOMB) ||
-                activeFeatures.contains(LevelFeature.CLEAN_SWEEP)
-
-        // If no primary objective exists, the base mode defaults to CLASSIC
-        // This ensures levels like 6 (Maze only) become Classic + Maze
-        if (!hasPrimaryObjective) {
-            activeFeatures.add(LevelFeature.CLASSIC)
+    fun determineLevelFeatures(level: Int): Set<LevelFeature> {
+        val mask = getFeaturesMask(level)
+        val features = mutableSetOf<LevelFeature>()
+        LevelFeature.entries.forEach { 
+            if ((mask and (1 shl it.ordinal)) != 0) features.add(it)
         }
-
-        return activeFeatures
+        return features
     }
 
     fun getLevelConfig(level: Int, difficulty: Int = 0): LevelConfig {
@@ -102,7 +103,7 @@ object LevelEngine {
         val aiMax = if (isHard) 0.9f else 0.5f
         val aiIntel = getSaturatedValue(level, 0.15f, aiMax, if (isHard) 80f else 250f)
 
-        val targetScore = getSaturatedValue(level, 50f, 1950f, 400f).toLong() // Max 2000 score
+        val targetScore = (getSaturatedValue(level, 50f, 1950f, 400f) * (1.0f + UpgradeSystem.getRewardBonusPercent())).toLong()
 
         // --- NAYA: SMOOTH REWARD SCALING (Prevents Long Overflow) ---
         val baseClear = 100f

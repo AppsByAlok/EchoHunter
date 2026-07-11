@@ -73,38 +73,18 @@ class CampaignMode : GameModeStrategy {
     }
 
     override fun drawModeSpecificHUD(context: Context, c: Canvas, gs: GameState, width: Float, height: Float, scale: Float, pText: Paint) {
-        val config = LevelEngine.getLevelConfig(gs.currentLevel)
-
         // Level text logic
         if (gs.currentLevel != lastLevel) {
             levelStr = "SECURITY RING ${gs.currentLevel}"
             lastLevel = gs.currentLevel
         }
 
-        val topMargin = scale * 0.06f
+        val topMargin = scale * 0.05f
         val centerY = topMargin + scale * 0.02f
 
-        // Top Header
+        // Top Header (Static Ring Level)
         pText.color = GameColors.CLARITY
-        pText.textSize = scale * 0.04f
-        c.drawText(levelStr, width / 2f, centerY, pText)
-
-        // --- NAYA: DYNAMIC SUB-HEADER (TARGETS) ---
-        pText.textSize = scale * 0.03f
-        pText.color = if (gs.bossActive) GameColors.RED else GameColors.YELLOW
-
-        val subText = when {
-            gs.bossActive -> "ADMIN SECURITY ACTIVE"
-            gs.escapeGateActive -> "EXIT PORTAL ACTIVE"
-            config.features.contains(LevelFeature.ELIMINATION) && gs.elimTargetsKilled < gs.elimTargetsRequired -> 
-                "TARGETS: ${gs.elimTargetsKilled} / ${gs.elimTargetsRequired}"
-            config.features.contains(LevelFeature.BOMB) -> "LOGIC BOMB SEQUENCE"
-            config.features.contains(LevelFeature.DEFENSE) -> "DEFENSE PROTOCOL"
-            else -> "TARGET: ${config.targetScore} KB"
-        }
-
-        if (gs.bossActive) pText.setShadowLayer(10f, 0f, 0f, GameColors.RED)
-        c.drawText(subText, width / 2f, centerY + scale * 0.04f, pText)
-        pText.clearShadowLayer()
+        pText.textSize = scale * 0.032f
+        c.drawText(levelStr,scale * 0.25f, centerY, pText)
     }
 }

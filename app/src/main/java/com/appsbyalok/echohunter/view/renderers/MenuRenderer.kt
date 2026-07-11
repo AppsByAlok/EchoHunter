@@ -246,6 +246,27 @@ class MenuRenderer(private val context: Context) {
         pText.color = GameColors.CLARITY
         c.drawText(subStr, targetW / 2f, targetH * 0.45f, pText)
 
+        // Time and Rank Info
+        val levelTime = if (gs.levelClearTime > 0f) gs.levelClearTime else (gs.timeSinceStart - gs.levelStartTime)
+        val timeStr = String.format(java.util.Locale.US, "CLEAR TIME: %.2fs", levelTime)
+        pText.textSize = scale * 0.03f
+        pText.color = GameColors.TEXT
+        c.drawText(timeStr, targetW / 2f, targetH * 0.5f, pText)
+
+        // Performance Badges
+        val noDamage = !gs.tookDamageInLevel
+        val isHard = gs.difficulty == 1
+        val badges = mutableListOf<String>()
+        if (noDamage) badges.add("NO-DAMAGE")
+        if (isHard) badges.add("ELITE-CLEAR")
+        if (levelTime < 60f) badges.add("BLITZ")
+
+        if (badges.isNotEmpty()) {
+            pText.textSize = scale * 0.022f
+            pText.color = GameColors.HP
+            c.drawText("PERFORMANCE: ${badges.joinToString(" | ")}", targetW / 2f, targetH * 0.54f, pText)
+        }
+
         // --- RESPONSIVE VICTORY BUTTONS ---
         val btnW = if (isPortrait) targetW * 0.75f else targetW * 0.4f
         val btnH = scale * 0.12f
@@ -254,10 +275,18 @@ class MenuRenderer(private val context: Context) {
         val btnX = targetW / 2f - btnW / 2f
         var btnY = targetH * 0.58f
 
-        // 1. NEXT LEVEL BUTTON
+        // 1. NEXT LEVEL BUTTON / FINAL VICTORY
         victoryNextRect.set(btnX, btnY, btnX + btnW, btnY + btnH)
-        val btnTextNext = if (SaveManager.isAutoNextLevelEnabled) "AUTO-PROCEEDING..." else "NEXT LEVEL"
-        drawButton(c, victoryNextRect, btnTextNext, GameColors.HP, scale)
+        
+        val isFinalLevel = gs.currentLevel >= Int.MAX_VALUE
+        val btnTextNext = when {
+            isFinalLevel -> "VOID REACHED - LEGENDARY"
+            SaveManager.isAutoNextLevelEnabled -> "AUTO-PROCEEDING..."
+            else -> "NEXT LEVEL"
+        }
+        
+        val nextBtnColor = if (isFinalLevel) GameColors.OVERCLOCK else GameColors.HP
+        drawButton(c, victoryNextRect, btnTextNext, nextBtnColor, scale)
 
         btnY += btnH + gap
 
@@ -321,6 +350,7 @@ class MenuRenderer(private val context: Context) {
         c.drawText("[ SYSTEM LOG: SECURE CONNECTION ESTABLISHED ]", leftMargin, y - scale * 0.05f, pText)
         pText.alpha = 255
         pText.textSize = scale * 0.042f
+        y += scale * 0.05f
 
         for (i in lines.indices) {
             val fullText = getCachedString(lines[i])

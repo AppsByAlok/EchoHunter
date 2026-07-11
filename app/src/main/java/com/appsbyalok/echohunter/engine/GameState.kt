@@ -32,6 +32,7 @@ class GameState {
         }
 
     var levelStartTime = 0f // Timestamp of when the current level started
+    var levelClearTime = 0f // Captured time when level was successfully cleared
 
     var state = 5 // Current engine state (0: Menu, 1: Playing, 2: Pause, 3: Help, 4: GameOver Story, 5: Intro Story, 6: Ending Story, 7: Mid-story, 8: Core Merge, 9: Perfect End Zoom, 10: Decompiler, 11: Archives, 12: Victory, 13: Arsenal, 14: Nano-OS)
     var difficulty = 0 // Selected difficulty level (0: Normal/Recruit, 1: Hard/Elite)
@@ -123,9 +124,6 @@ class GameState {
     val isDecoyActive: Boolean get() = activeTraps.any { it.type == 1 || it.type == 4 }
     val decoyX: Float get() = activeTraps.firstOrNull { it.type == 1 || it.type == 4 }?.x ?: 0f
     val decoyY: Float get() = activeTraps.firstOrNull { it.type == 1 || it.type == 4 }?.y ?: 0f
-    val empMineActive: Boolean get() = activeTraps.any { it.type == 2 }
-    val empMineX: Float get() = activeTraps.firstOrNull { it.type == 2 }?.x ?: 0f
-    val empMineY: Float get() = activeTraps.firstOrNull { it.type == 2 }?.y ?: 0f
 
     var hp = 3 // Current health points of the player
     val maxHp: Int get() = 3 + UpgradeSystem.getBonusMaxHp() // Derived maximum health including upgrades
@@ -138,7 +136,7 @@ class GameState {
 
     // --- DARKNESS LOGIC ---
     val isDarknessLevel: Boolean get() {
-        if (gameMode == 1) return false // Story mode me abhi full visibility rahegi
+        if (gameMode == 1) return false // in Story mode full visibility also
         val config = LevelEngine.getLevelConfig(currentLevel)
         return config.features.contains(LevelFeature.DARKNESS)
     }
@@ -163,7 +161,8 @@ class GameState {
     var isLevelCleared = false // Flag indicating if the level objective is complete
         set(value) {
             if (value && !field) {
-                val totalDurationSeconds = timeSinceStart - levelStartTime
+                levelClearTime = timeSinceStart - levelStartTime
+                val totalDurationSeconds = levelClearTime
                 val minutes = (totalDurationSeconds / 60).toInt()
                 val seconds = (totalDurationSeconds % 60).toInt()
 
@@ -230,6 +229,7 @@ class GameState {
     var hitStopTimer = 0f // Duration to freeze the game momentarily for impact feedback
 
     var isPerfectEnd = false // Flag if the level was completed without taking damage
+    var tookDamageInLevel = false // Track if any damage was taken in the current level
     var coreX = 0f // Target X position for the end-level core sequence
     var coreY = 0f // Target Y position for the end-level core sequence
     var coreRadius = 0f // Visual radius of the end-level core
@@ -345,6 +345,7 @@ class GameState {
     fun resetGame() {
         score = 0; combo = 0; wave = 1
         hp = maxHp
+        tookDamageInLevel = false
         collectedDataKB = 0L
         isLevelCleared = false
 
@@ -435,6 +436,7 @@ class GameState {
         spawnerNodes.clear()
 
         levelStartTime = timeSinceStart
+        levelClearTime = 0f
     }
 
     fun updateTimers(dt: Float, scale: Float) {
@@ -496,7 +498,8 @@ class GameState {
             if (overclockTimer <= 0f) EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 100)
         } else if (overclockMeter > 0f && overclockMeter < 100f) {
             val drainSpeed = if (difficulty == 0) 5f else 10f
-            overclockMeter = max(0f, overclockMeter - drainSpeed * dt)
+            val patchMult = if (UpgradeSystem.hasOverclockRegenPatch()) 1.25f else 1.0f
+            overclockMeter = max(0f, overclockMeter - drainSpeed * dt * patchMult)
         }
     }
 
