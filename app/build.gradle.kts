@@ -19,7 +19,15 @@ android {
 
     }
 
+    buildFeatures {
+        resValues = true
+    }
     buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-DEBUG"
+            resValue("string", "app_name", "EchoHunterDebug")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
