@@ -95,6 +95,7 @@ class UIArchives {
     private val finishedBoxRect = RectF()
     private val sortBoxRect = RectF()
     private val filterModeRect = RectF()
+    private val clearFiltersBoxRect = RectF()
     private val featureRects = mutableMapOf<LevelFeature, RectF>()
     private val featureRectPool = mutableListOf<RectF>()
 
@@ -105,9 +106,37 @@ class UIArchives {
     private var totalStars = 0
     private var levelsCleared = 0
 
+    private data class ArchiveGridLayout(
+        val startY: Float,
+        val boxSize: Float,
+        val gap: Float,
+        val columns: Int,
+        val startX: Float
+    )
+
+    private data class ArchiveGridCursor(var col: Int = 0, var row: Int = 0)
+
+    private data class ArchiveLayoutMetrics(
+        val isLandscape: Boolean,
+        val isTablet: Boolean,
+        val panelWidth: Float,
+        val headerButtonTop: Float,
+        val headerButtonHeight: Float,
+        val filterToggleTop: Float,
+        val filterToggleHeight: Float,
+        val controlGap: Float,
+        val expandedFilterTop: Float,
+        val expandedFilterHeight: Float,
+        val chipColumns: Int,
+        val gridColumns: Int,
+        val gridBoxSize: Float,
+        val gridGap: Float,
+        val footerHeight: Float
+    )
+
     private fun generateNodeList(append: Boolean = false) {
         val currentMax = SaveManager.maxCampaignLevel
-        
+
         if (!append) {
             scanFuture?.cancel(true)
             cachedList.clear()
@@ -125,7 +154,7 @@ class UIArchives {
             levelsCleared = stats.first
             totalStars = stats.second
         } else {
-            if (isScanning) return 
+            if (isScanning) return
 
             val isDone = if (filterFinishedOnly) {
                 val list = sortedFinishedIds
@@ -188,7 +217,7 @@ class UIArchives {
                             totalMatches++
                             chunkMatches++
                         }
-                        
+
                         // Adaptive breather: only sleep if we are finding matches too fast
                         if (chunkMatches % 10 == 0) Thread.sleep(1)
                     }
@@ -222,7 +251,7 @@ class UIArchives {
 
                         lvl += step
                         lastScannedLevel = lvl
-                        
+
                         if (totalScanned % 500 == 0) {
                             Thread.yield()
                             Thread.sleep(1) // Periodical breather instead of every level
@@ -237,10 +266,9 @@ class UIArchives {
         }
     }
 
-    fun draw(c: Canvas, width: Float, height: Float, gs: GameState, scale: Float) {
+    private fun drawBackground(c: Canvas, width: Float, height: Float, scale: Float) {
         c.drawColor(0xEE050508.toInt()) // Dark cyber hacking base background
 
-        // --- SCANLINE EFFECT ---
         p.style = Paint.Style.STROKE
         p.strokeWidth = scale * 0.002f
         p.color = 0x0AFFFFFF
@@ -249,7 +277,9 @@ class UIArchives {
             c.drawLine(0f, slY, width, slY, p)
             slY += scale * 0.012f
         }
+    }
 
+    private fun updateScrollMomentum() {
         if (!isDragging && abs(scrollVelocity) > 0.5f) {
             scrollY += scrollVelocity
             scrollVelocity *= 0.96f
@@ -262,21 +292,100 @@ class UIArchives {
                 scrollVelocity = 0f
             }
         }
+    }
 
-        // --- Dynamic Header Height ---
-        listTop = if (isFilterExpanded) scale * 0.76f else scale * 0.36f
-        listBottom = height - scale * 0.13f
+    private fun buildLayoutMetrics(width: Float, height: Float, scale: Float): ArchiveLayoutMetrics {
+        val isLandscape = width > height
+        val minSide = minOf(width, height)
+        val aspect = minSide / max(width, height)
+        val isTablet = minSide >= 760f && aspect >= 0.60f
+        val panelWidth = minOf(width - scale * 0.04f, when {
+            isTablet && isLandscape -> scale * 1.38f
+            isTablet -> scale * 0.88f
+            isLandscape -> scale * 1.05f
+            else -> scale * 0.80f
+        })
+        val headerButtonHeight = (if (isLandscape) scale * 0.065f else scale * 0.082f).coerceAtLeast(44f)
+        val filterToggleHeight = (if (isLandscape) scale * 0.055f else scale * 0.068f).coerceAtLeast(40f)
+        val controlGap = (scale * if (isLandscape) 0.012f else 0.016f).coerceAtLeast(8f)
+        val headerButtonTop = if (isLandscape) scale * 0.145f else scale * 0.16f
+        val filterToggleTop = headerButtonTop + headerButtonHeight + controlGap
+        val expandedFilterTop = filterToggleTop + filterToggleHeight + controlGap
+        val expandedFilterHeight = if (isLandscape) scale * 0.062f else scale * 0.074f
+        val chipColumns = when {
+            isTablet && isLandscape -> 8
+            isLandscape -> 7
+            isTablet -> 6
+            else -> 5
+        }
+        val gridGap = scale * if (isTablet) 0.03f else 0.035f
+        val availableGridWidth = width - scale * 0.08f
+        val idealGridBoxSize = scale * if (isTablet) 0.145f else 0.16f
+        val gridColumns = (((availableGridWidth + gridGap) / (idealGridBoxSize + gridGap)).toInt()).coerceIn(
+            minimumValue = if (isLandscape) 6 else 3,
+            maximumValue = when {
+                isTablet && isLandscape -> 12
+                isLandscape -> 10
+                isTablet -> 6
+                else -> 4
+            }
+        )
+        val gridBoxSize = minOf(idealGridBoxSize, (availableGridWidth - (gridColumns - 1) * gridGap) / gridColumns)
+        val footerHeight = (if (isLandscape) scale * 0.105f else scale * 0.13f).coerceAtLeast(64f)
+
+        return ArchiveLayoutMetrics(
+            isLandscape = isLandscape,
+            isTablet = isTablet,
+            panelWidth = panelWidth,
+            headerButtonTop = headerButtonTop,
+            headerButtonHeight = headerButtonHeight,
+            filterToggleTop = filterToggleTop,
+            filterToggleHeight = filterToggleHeight,
+            controlGap = controlGap,
+            expandedFilterTop = expandedFilterTop,
+            expandedFilterHeight = expandedFilterHeight,
+            chipColumns = chipColumns,
+            gridColumns = gridColumns,
+            gridBoxSize = gridBoxSize,
+            gridGap = gridGap,
+            footerHeight = footerHeight
+        )
+    }
+
+    private fun updateArchiveData(height: Float, scale: Float, metrics: ArchiveLayoutMetrics) {
+        val chipRows = ((featureEnumValues.size + metrics.chipColumns - 1) / metrics.chipColumns).coerceAtLeast(1)
+        val expandedBottom = metrics.expandedFilterTop + metrics.expandedFilterHeight + metrics.controlGap + chipRows * (scale * 0.052f + metrics.controlGap)
+        val collapsedTop = metrics.filterToggleTop + metrics.filterToggleHeight + metrics.controlGap
+        val targetListTop = if (isFilterExpanded) expandedBottom else collapsedTop
+        val maxAllowedTop = height - metrics.footerHeight - scale * 0.24f
+        listTop = targetListTop.coerceAtMost(maxAllowedTop).coerceAtLeast(scale * if (metrics.isLandscape) 0.27f else 0.32f)
+        listBottom = height - metrics.footerHeight
+        clearFiltersBoxRect.setEmpty()
 
         if (SaveManager.maxCampaignLevel != lastMaxLevel || (cachedList.isEmpty() && resultQueue.isEmpty() && lastScannedLevel == -1 && !isScanning)) generateNodeList(false)
 
-        // Consume items from result queue (max 50 per frame to keep UI smooth)
         var consumed = 0
         while (resultQueue.isNotEmpty() && consumed < 50) {
             cachedList.add(resultQueue.poll()!!)
             consumed++
         }
+    }
 
-        // Header Render with improved Glow
+    private fun hasActiveFilters(): Boolean {
+        return filterUniqueOnly || filterFinishedOnly || featureFilterMode != FeatureFilterMode.ANY || selectedFeatures.isNotEmpty()
+    }
+
+    private fun clearAllFilters() {
+        filterUniqueOnly = false
+        filterFinishedOnly = false
+        featureFilterMode = FeatureFilterMode.ANY
+        selectedFeatures.clear()
+        scrollY = 0f
+        scrollVelocity = 0f
+        generateNodeList(false)
+    }
+
+    private fun drawHeader(c: Canvas, width: Float, scale: Float, metrics: ArchiveLayoutMetrics) {
         val headerParams = "H:$listTop"
         if (headerGradient == null || lastGradientParams != headerParams) {
             headerGradient = android.graphics.LinearGradient(0f, 0f, 0f, listTop, 0xDD001A1A.toInt(), 0x00000000, android.graphics.Shader.TileMode.CLAMP)
@@ -286,43 +395,45 @@ class UIArchives {
         c.drawRect(0f, 0f, width, listTop, p)
         p.shader = null
 
-        pText.textSize = scale * 0.07f
+        pText.textSize = scale * if (metrics.isLandscape) 0.058f else 0.07f
         pText.color = GameColors.PULSE
         pText.setShadowLayer(15f, 0f, 0f, GameColors.PULSE) // Glow effect
-        c.drawText("SYSTEM ARCHIVES", width / 2f, scale * 0.11f, pText)
+        c.drawText("SYSTEM ARCHIVES", width / 2f, scale * if (metrics.isLandscape) 0.085f else 0.11f, pText)
         pText.clearShadowLayer()
 
-        // Stats Summary
-        pText.textSize = scale * 0.025f
+        pText.textSize = scale * if (metrics.isLandscape) 0.021f else 0.025f
         pText.color = GameColors.CLARITY
         val statsStr = String.format(Locale.ENGLISH, "CLEARED: %d  |  STARS: %d", levelsCleared, totalStars)
-        c.drawText(statsStr, width / 2f, scale * 0.145f, pText)
+        c.drawText(statsStr, width / 2f, scale * if (metrics.isLandscape) 0.116f else 0.145f, pText)
+    }
 
-        val boxWidth = if (width > height) scale * 0.35f else scale * 0.38f
+    private fun drawHeaderButtons(c: Canvas, width: Float, gs: GameState, scale: Float, metrics: ArchiveLayoutMetrics): Float {
+        val boxWidth = metrics.panelWidth / 2f
 
-        // Auto-Next Checkbox Button Layout
-        autoNextBoxRect.set(width / 2f - boxWidth, scale * 0.16f, width / 2f - scale * 0.015f, scale * 0.25f)
+        autoNextBoxRect.set(width / 2f - boxWidth, metrics.headerButtonTop, width / 2f - metrics.controlGap / 2f, metrics.headerButtonTop + metrics.headerButtonHeight)
         val autoNextColor = if (SaveManager.isAutoNextLevelEnabled) GameColors.HP else GameColors.RED
         p.style = Paint.Style.FILL; p.color = if (hitOnDown == -3) GameColors.mixColors(autoNextColor, 0, 0.4f) else 0x1A000000
         c.drawRoundRect(autoNextBoxRect, scale * 0.01f, scale * 0.01f, p)
         p.style = Paint.Style.STROKE; p.color = autoNextColor; p.strokeWidth = scale * 0.004f
         c.drawRoundRect(autoNextBoxRect, scale * 0.01f, scale * 0.01f, p)
-        pText.textSize = scale * 0.032f; pText.color = autoNextColor
+        pText.textSize = scale * if (metrics.isLandscape) 0.026f else 0.032f; pText.color = autoNextColor
         c.drawText(if (SaveManager.isAutoNextLevelEnabled) "AUTO-NEXT: ON" else "AUTO-NEXT: OFF", autoNextBoxRect.centerX(), autoNextBoxRect.centerY() + scale * 0.011f, pText)
 
-        // Autopilot Checkbox Button Layout
-        autoPilotBoxRect.set(width / 2f + scale * 0.015f, scale * 0.16f, width / 2f + boxWidth, scale * 0.25f)
+        autoPilotBoxRect.set(width / 2f + metrics.controlGap / 2f, metrics.headerButtonTop, width / 2f + boxWidth, metrics.headerButtonTop + metrics.headerButtonHeight)
         val autoPilotColor = if (gs.isAutoPilotActive) GameColors.HP else GameColors.RED
         p.style = Paint.Style.FILL; p.color = if (hitOnDown == -4) GameColors.mixColors(autoPilotColor, 0, 0.4f) else 0x1A000000
         c.drawRoundRect(autoPilotBoxRect, scale * 0.01f, scale * 0.01f, p)
         p.style = Paint.Style.STROKE; p.color = autoPilotColor; p.strokeWidth = scale * 0.004f
         c.drawRoundRect(autoPilotBoxRect, scale * 0.01f, scale * 0.01f, p)
-        pText.textSize = scale * 0.032f; pText.color = autoPilotColor
+        pText.textSize = scale * if (metrics.isLandscape) 0.026f else 0.032f; pText.color = autoPilotColor
         c.drawText(if (gs.isAutoPilotActive) "AUTOPILOT: ON" else "AUTOPILOT: OFF", autoPilotBoxRect.centerX(), autoPilotBoxRect.centerY() + scale * 0.011f, pText)
 
-        // --- FILTER TOGGLE BUTTON ---
-        val filterRow2Y = scale * 0.27f
-        val filterRow2H = scale * 0.07f
+        return boxWidth
+    }
+
+    private fun drawFilters(c: Canvas, width: Float, boxWidth: Float, scale: Float, metrics: ArchiveLayoutMetrics) {
+        val filterRow2Y = metrics.filterToggleTop
+        val filterRow2H = metrics.filterToggleHeight
         filterToggleBtnRect.set(width / 2f - boxWidth, filterRow2Y, width / 2f + boxWidth, filterRow2Y + filterRow2H)
 
         p.style = Paint.Style.FILL; p.color = if (isFilterExpanded) 0x4400AAFF else 0x1A000000
@@ -330,106 +441,137 @@ class UIArchives {
         p.style = Paint.Style.STROKE; p.color = if (isFilterExpanded) GameColors.COOLANT else 0xFF888888.toInt()
         p.strokeWidth = scale * 0.003f
         c.drawRoundRect(filterToggleBtnRect, scale * 0.01f, scale * 0.01f, p)
-        pText.textSize = scale * 0.028f; pText.color = if (isFilterExpanded) GameColors.COOLANT else 0xFFFFFFFF.toInt()
+        pText.textSize = scale * if (metrics.isLandscape) 0.023f else 0.028f; pText.color = if (isFilterExpanded) GameColors.COOLANT else 0xFFFFFFFF.toInt()
         val filterLabel = if (isFilterExpanded) "CLOSE FILTERS ▲" else "OPEN ARCHIVE FILTERS ▼"
         c.drawText(filterLabel, filterToggleBtnRect.centerX(), filterToggleBtnRect.centerY() + scale * 0.01f, pText)
 
         if (isFilterExpanded) {
-            // --- FILTERS ROW 3 ---
-            val row3Y = filterRow2Y + filterRow2H + scale * 0.02f
-            val row3H = scale * 0.08f
-            val gap = scale * 0.015f
-            val quadW = (boxWidth * 2f - 3 * gap) / 4f
-
-            uniqueBoxRect.set(width / 2f - boxWidth, row3Y, width / 2f - boxWidth + quadW, row3Y + row3H)
-            finishedBoxRect.set(uniqueBoxRect.right + gap, row3Y, uniqueBoxRect.right + gap + quadW, row3Y + row3H)
-            sortBoxRect.set(finishedBoxRect.right + gap, row3Y, finishedBoxRect.right + gap + quadW, row3Y + row3H)
-            filterModeRect.set(sortBoxRect.right + gap, row3Y, width / 2f + boxWidth, row3Y + row3H)
-
-            // Unique Button
-            p.style = Paint.Style.FILL; p.color = if (filterUniqueOnly) 0x4400FF00 else 0x1A000000
-            c.drawRoundRect(uniqueBoxRect, scale * 0.01f, scale * 0.01f, p)
-            p.style = Paint.Style.STROKE; p.color = if (filterUniqueOnly) GameColors.HP else 0xFF888888.toInt()
-            c.drawRoundRect(uniqueBoxRect, scale * 0.01f, scale * 0.01f, p)
-            pText.textSize = scale * 0.022f; pText.color = if (filterUniqueOnly) GameColors.HP else 0xFFFFFFFF.toInt()
-            c.drawText("UNIQUE", uniqueBoxRect.centerX(), uniqueBoxRect.centerY() + scale * 0.008f, pText)
-
-            // Finished Button
-            p.style = Paint.Style.FILL; p.color = if (filterFinishedOnly) 0x4400FF00 else 0x1A000000
-            c.drawRoundRect(finishedBoxRect, scale * 0.01f, scale * 0.01f, p)
-            p.style = Paint.Style.STROKE; p.color = if (filterFinishedOnly) GameColors.HP else 0xFF888888.toInt()
-            c.drawRoundRect(finishedBoxRect, scale * 0.01f, scale * 0.01f, p)
-            c.drawText("CLEARED", finishedBoxRect.centerX(), finishedBoxRect.centerY() + scale * 0.008f, pText)
-
-            // Sort Button
-            p.style = Paint.Style.FILL; p.color = 0x1A000000
-            c.drawRoundRect(sortBoxRect, scale * 0.01f, scale * 0.01f, p)
-            p.style = Paint.Style.STROKE; p.color = GameColors.PULSE
-            c.drawRoundRect(sortBoxRect, scale * 0.01f, scale * 0.01f, p)
-            pText.color = GameColors.PULSE
-            c.drawText(if (sortDescending) "DESC" else "ASC", sortBoxRect.centerX(), sortBoxRect.centerY() + scale * 0.008f, pText)
-
-            // Filter Mode Cycle Button
-            p.style = Paint.Style.FILL; p.color = 0x1A000000
-            c.drawRoundRect(filterModeRect, scale * 0.01f, scale * 0.01f, p)
-            p.style = Paint.Style.STROKE; p.color = GameColors.COOLANT
-            c.drawRoundRect(filterModeRect, scale * 0.01f, scale * 0.01f, p)
-            pText.color = GameColors.COOLANT
-            c.drawText(featureFilterMode.label, filterModeRect.centerX(), filterModeRect.centerY() + scale * 0.008f, pText)
-
-            // --- FEATURE CHIPS ROW 4 & 5 ---
-            val chipStartY = row3Y + row3H + scale * 0.02f
-            val totalFilterWidth = boxWidth * 2f + scale * 0.03f
-            val chipGap = scale * 0.012f
-            val chipW = (totalFilterWidth - 5 * chipGap) / 6f
-            val chipH = scale * 0.055f
-
-            featureEnumValues.forEachIndexed { index, feat ->
-                val r = index / 6
-                val colInRow = index % 6
-                val cx = width / 2f - boxWidth + colInRow * (chipW + chipGap)
-                val cy = chipStartY + r * (chipH + chipGap)
-                
-                val rect = featureRects.getOrPut(feat) { RectF() }
-                rect.set(cx, cy, cx + chipW, cy + chipH)
-
-                val isSelected = selectedFeatures.contains(feat)
-                p.style = Paint.Style.FILL; p.color = if (isSelected) 0x6600AAFF else 0x1A000000
-                c.drawRoundRect(rect, scale * 0.005f, scale * 0.005f, p)
-                p.style = Paint.Style.STROKE; p.color = if (isSelected) GameColors.COOLANT else 0x44FFFFFF
-                c.drawRoundRect(rect, scale * 0.005f, scale * 0.005f, p)
-
-                pText.textSize = scale * 0.018f; pText.color = if (isSelected) GameColors.COOLANT else 0xFFCCCCCC.toInt()
-                val shortName = if (feat.name.length > 7) feat.name.take(5) + ".." else feat.name
-                c.drawText(shortName, rect.centerX(), rect.centerY() + scale * 0.007f, pText)
-            }
+            drawExpandedFilters(c, width, boxWidth, scale, metrics)
         } else {
-            if (featureRects.isNotEmpty()) {
-                featureRectPool.addAll(featureRects.values)
-                featureRects.clear()
-            }
-            uniqueBoxRect.setEmpty()
-            finishedBoxRect.setEmpty()
-            sortBoxRect.setEmpty()
-            filterModeRect.setEmpty()
+            clearFilterRects()
+        }
+    }
+
+    private fun drawExpandedFilters(c: Canvas, width: Float, boxWidth: Float, scale: Float, metrics: ArchiveLayoutMetrics) {
+        val row3Y = metrics.expandedFilterTop
+        val row3H = metrics.expandedFilterHeight
+        val gap = metrics.controlGap
+        val activeFilters = hasActiveFilters()
+        val controlCount = if (activeFilters) 5 else 4
+        val controlW = (boxWidth * 2f - (controlCount - 1) * gap) / controlCount
+
+        uniqueBoxRect.set(width / 2f - boxWidth, row3Y, width / 2f - boxWidth + controlW, row3Y + row3H)
+        finishedBoxRect.set(uniqueBoxRect.right + gap, row3Y, uniqueBoxRect.right + gap + controlW, row3Y + row3H)
+        sortBoxRect.set(finishedBoxRect.right + gap, row3Y, finishedBoxRect.right + gap + controlW, row3Y + row3H)
+        filterModeRect.set(sortBoxRect.right + gap, row3Y, width / 2f + boxWidth, row3Y + row3H)
+        if (activeFilters) {
+            filterModeRect.set(sortBoxRect.right + gap, row3Y, sortBoxRect.right + gap + controlW, row3Y + row3H)
+            clearFiltersBoxRect.set(filterModeRect.right + gap, row3Y, width / 2f + boxWidth, row3Y + row3H)
+        } else {
+            clearFiltersBoxRect.setEmpty()
         }
 
-        // Dynamic Row Generation Layout Config
-        val startY = listTop + scale * 0.02f + scrollY
-        val boxSize = scale * 0.16f
-        val gap = scale * 0.035f
-        val columns = if (width > height) 6 else 4
+        p.style = Paint.Style.FILL; p.color = if (filterUniqueOnly) 0x4400FF00 else 0x1A000000
+        c.drawRoundRect(uniqueBoxRect, scale * 0.01f, scale * 0.01f, p)
+        p.style = Paint.Style.STROKE; p.color = if (filterUniqueOnly) GameColors.HP else 0xFF888888.toInt()
+        c.drawRoundRect(uniqueBoxRect, scale * 0.01f, scale * 0.01f, p)
+        pText.textSize = scale * if (metrics.isLandscape) 0.018f else 0.022f; pText.color = if (filterUniqueOnly) GameColors.HP else 0xFFFFFFFF.toInt()
+        c.drawText("UNIQUE", uniqueBoxRect.centerX(), uniqueBoxRect.centerY() + scale * 0.008f, pText)
+
+        p.style = Paint.Style.FILL; p.color = if (filterFinishedOnly) 0x4400FF00 else 0x1A000000
+        c.drawRoundRect(finishedBoxRect, scale * 0.01f, scale * 0.01f, p)
+        p.style = Paint.Style.STROKE; p.color = if (filterFinishedOnly) GameColors.HP else 0xFF888888.toInt()
+        c.drawRoundRect(finishedBoxRect, scale * 0.01f, scale * 0.01f, p)
+        c.drawText("CLEARED", finishedBoxRect.centerX(), finishedBoxRect.centerY() + scale * 0.008f, pText)
+
+        p.style = Paint.Style.FILL; p.color = 0x1A000000
+        c.drawRoundRect(sortBoxRect, scale * 0.01f, scale * 0.01f, p)
+        p.style = Paint.Style.STROKE; p.color = GameColors.PULSE
+        c.drawRoundRect(sortBoxRect, scale * 0.01f, scale * 0.01f, p)
+        pText.color = GameColors.PULSE
+        c.drawText(if (sortDescending) "DESC" else "ASC", sortBoxRect.centerX(), sortBoxRect.centerY() + scale * 0.008f, pText)
+
+        p.style = Paint.Style.FILL; p.color = 0x1A000000
+        c.drawRoundRect(filterModeRect, scale * 0.01f, scale * 0.01f, p)
+        p.style = Paint.Style.STROKE; p.color = GameColors.COOLANT
+        c.drawRoundRect(filterModeRect, scale * 0.01f, scale * 0.01f, p)
+        pText.color = GameColors.COOLANT
+        c.drawText(featureFilterMode.label, filterModeRect.centerX(), filterModeRect.centerY() + scale * 0.008f, pText)
+
+        if (activeFilters) {
+            p.style = Paint.Style.FILL; p.color = if (hitOnDown == -12) 0x66330000 else 0x1A000000
+            c.drawRoundRect(clearFiltersBoxRect, scale * 0.01f, scale * 0.01f, p)
+            p.style = Paint.Style.STROKE; p.color = GameColors.RED
+            c.drawRoundRect(clearFiltersBoxRect, scale * 0.01f, scale * 0.01f, p)
+            pText.color = GameColors.RED
+            c.drawText("CLEAR", clearFiltersBoxRect.centerX(), clearFiltersBoxRect.centerY() + scale * 0.008f, pText)
+        }
+
+        drawFeatureChips(c, width, boxWidth, row3Y, row3H, scale, metrics)
+    }
+
+    private fun drawFeatureChips(c: Canvas, width: Float, boxWidth: Float, row3Y: Float, row3H: Float, scale: Float, metrics: ArchiveLayoutMetrics) {
+        val chipStartY = row3Y + row3H + metrics.controlGap
+        val totalFilterWidth = boxWidth * 2f + scale * 0.03f
+        val chipGap = metrics.controlGap * 0.75f
+        val chipColumns = metrics.chipColumns
+        val chipW = (totalFilterWidth - (chipColumns - 1) * chipGap) / chipColumns
+        val chipH = scale * if (metrics.isLandscape) 0.047f else 0.055f
+
+        featureEnumValues.forEachIndexed { index, feat ->
+            val r = index / chipColumns
+            val colInRow = index % chipColumns
+            val cx = width / 2f - boxWidth + colInRow * (chipW + chipGap)
+            val cy = chipStartY + r * (chipH + chipGap)
+
+            val rect = featureRects.getOrPut(feat) { RectF() }
+            rect.set(cx, cy, cx + chipW, cy + chipH)
+
+            val isSelected = selectedFeatures.contains(feat)
+            p.style = Paint.Style.FILL; p.color = if (isSelected) 0x6600AAFF else 0x1A000000
+            c.drawRoundRect(rect, scale * 0.005f, scale * 0.005f, p)
+            p.style = Paint.Style.STROKE; p.color = if (isSelected) GameColors.COOLANT else 0x44FFFFFF
+            c.drawRoundRect(rect, scale * 0.005f, scale * 0.005f, p)
+
+            pText.textSize = scale * if (metrics.isLandscape) 0.015f else 0.018f; pText.color = if (isSelected) GameColors.COOLANT else 0xFFCCCCCC.toInt()
+            val maxNameLength = if (metrics.isLandscape) 6 else 7
+            val shortName = if (feat.name.length > maxNameLength) feat.name.take(maxNameLength - 2) + ".." else feat.name
+            c.drawText(shortName, rect.centerX(), rect.centerY() + scale * 0.007f, pText)
+        }
+    }
+
+    private fun clearFilterRects() {
+        if (featureRects.isNotEmpty()) {
+            featureRectPool.addAll(featureRects.values)
+            featureRects.clear()
+        }
+        uniqueBoxRect.setEmpty()
+        finishedBoxRect.setEmpty()
+        sortBoxRect.setEmpty()
+        filterModeRect.setEmpty()
+        clearFiltersBoxRect.setEmpty()
+    }
+
+    private fun createGridLayout(width: Float, metrics: ArchiveLayoutMetrics): ArchiveGridLayout {
+        val boxSize = metrics.gridBoxSize
+        val gap = metrics.gridGap
+        val columns = metrics.gridColumns
         val totalW = columns * boxSize + (columns - 1) * gap
         val startX = (width - totalW) / 2f
+        return ArchiveGridLayout(
+            startY = listTop + gap * 0.65f + scrollY,
+            boxSize = boxSize,
+            gap = gap,
+            columns = columns,
+            startX = startX
+        )
+    }
 
-        // Double-buffering level buttons to prevent race conditions during touch
-        val oldLevelButtons = HashMap(levelButtons)
-        levelButtons.clear()
-
+    private fun drawEmptyState(c: Canvas, width: Float, scale: Float) {
         if (cachedList.isEmpty() && (isScanning || resultQueue.isNotEmpty())) {
             pText.textSize = scale * 0.032f; pText.color = GameColors.COOLANT
             c.drawText("PENETRATING ARCHIVES...", width / 2f, listTop + (listBottom - listTop) / 2f, pText)
-            
+
             pText.textSize = scale * 0.022f; pText.color = 0xAAFFFFFF.toInt()
             val totalScannedStr = String.format(Locale.ENGLISH, "%,d", totalScanned)
             c.drawText("SCANNED: $totalScannedStr", width / 2f, listTop + (listBottom - listTop) / 2f + scale * 0.05f, pText)
@@ -437,153 +579,155 @@ class UIArchives {
             pText.textSize = scale * 0.032f; pText.color = GameColors.RED
             c.drawText("NO MATCHING PROTOCOLS FOUND", width / 2f, listTop + (listBottom - listTop) / 2f, pText)
         }
+    }
 
-        var col = 0
-        var row = 0
+    private fun drawScrollableContent(c: Canvas, width: Float, layout: ArchiveGridLayout, scale: Float): Int {
+        val oldLevelButtons = HashMap(levelButtons)
+        levelButtons.clear()
+
+        val cursor = ArchiveGridCursor()
 
         c.save()
         c.clipRect(0f, listTop, width, listBottom)
+        drawGrid(c, layout, oldLevelButtons, cursor, scale)
 
-        for (lvl in cachedList) {
-            val cx = startX + col * (boxSize + gap)
-            val cy = startY + row * (boxSize + gap)
-
-            reusableRect.set(cx, cy, cx + boxSize, cy + boxSize)
-
-            if (reusableRect.bottom >= listTop && reusableRect.top <= listBottom) {
-                // Reuse rect from old map or pool
-                val rect = oldLevelButtons.remove(lvl) ?: if (buttonPool.isNotEmpty()) buttonPool.removeAt(buttonPool.size - 1) else RectF()
-                rect.set(reusableRect)
-                levelButtons[lvl] = rect
-
-                val mask = LevelEngine.getFeaturesMask(lvl)
-                val isNextNode = (lvl == SaveManager.maxCampaignLevel)
-
-                // --- 1. DYNAMIC ACCENT TONE BLENDING ENGINE ---
-                var mixedColor = GameColors.GRID
-                var colorCount = 0
-
-                for (f in featureEnumValues) {
-                    if ((mask and (1 shl f.ordinal)) != 0) {
-                        val featureColor = when (f) {
-                            LevelFeature.CLASSIC -> GameColors.PULSE
-                            LevelFeature.MAZE -> GameColors.TEXT
-                            LevelFeature.DARKNESS -> GameColors.DARKNESS
-                            LevelFeature.BOSS -> GameColors.BOSS
-                            LevelFeature.ESCAPE -> GameColors.YELLOW
-                            LevelFeature.ELIMINATION -> GameColors.RED
-                            LevelFeature.DEFENSE -> GameColors.SHIELD
-                            LevelFeature.SPECIAL -> GameColors.OVERCLOCK
-                            LevelFeature.ADMIN_BONUS -> GameColors.HP
-                            LevelFeature.BOMB -> 0xFFFF0000.toInt()
-                            LevelFeature.CLEAN_SWEEP -> GameColors.COOLANT
-                        }
-                        mixedColor = if (colorCount == 0) featureColor else GameColors.mixColors(mixedColor, featureColor, 0.5f)
-                        colorCount++
-                    }
-                }
-
-                val baseBgTone = when {
-                    isNextNode -> 0xFF052510.toInt()
-                    hitOnDown == lvl -> 0xFF222222.toInt()
-                    else -> GameColors.BG
-                }
-                val finalBgColor = GameColors.mixColors(baseBgTone, mixedColor, 0.25f)
-
-                // Background Matrix Render
-                p.style = Paint.Style.FILL; p.color = finalBgColor
-                c.drawRoundRect(reusableRect, scale * 0.015f, scale * 0.015f, p)
-
-                // Circuit Board Framing Borders
-                p.style = Paint.Style.STROKE
-                p.strokeWidth = if (hitOnDown == lvl) scale * 0.006f else scale * 0.003f
-                p.color = when {
-                    isNextNode -> GameColors.HP
-                    hitOnDown == lvl -> GameColors.CLARITY
-                    else -> GameColors.mixColors(0x22FFFFFF, mixedColor, 0.4f)
-                }
-                c.drawRoundRect(rect, scale * 0.015f, scale * 0.015f, p)
-
-                // --- 2. MICRO-CHIP ICONS ROW LAYOUT ---
-                if (colorCount > 0) {
-                    var badgeSize = boxSize * 0.22f
-                    var badgeGap = boxSize * 0.04f
-                    var totalBadgesW = (colorCount * badgeSize) + ((colorCount - 1) * badgeGap)
-
-                    // Auto-scaling for many features to prevent overflow
-                    val maxAllowedW = boxSize * 0.88f
-                    if (totalBadgesW > maxAllowedW) {
-                        val shrinkFactor = maxAllowedW / totalBadgesW
-                        badgeSize *= shrinkFactor
-                        badgeGap *= shrinkFactor
-                        totalBadgesW = (colorCount * badgeSize) + ((colorCount - 1) * badgeGap)
-                    }
-
-                    var currentBadgeX = rect.centerX() - (totalBadgesW / 2f)
-                    // Push icons slightly lower if there's more room, or higher if text is big
-                    val badgeY = rect.bottom - badgeSize - (boxSize * 0.08f)
-
-                    for (f in featureEnumValues) {
-                        if ((mask and (1 shl f.ordinal)) != 0) {
-                            p.color = when (f) {
-                                LevelFeature.CLASSIC -> GameColors.PULSE
-                                LevelFeature.MAZE -> GameColors.TEXT
-                                LevelFeature.DARKNESS -> GameColors.DARKNESS
-                                LevelFeature.BOSS -> GameColors.BOSS
-                                LevelFeature.ESCAPE -> GameColors.YELLOW
-                                LevelFeature.ELIMINATION -> GameColors.RED
-                                LevelFeature.DEFENSE -> GameColors.SHIELD
-                                LevelFeature.SPECIAL -> GameColors.OVERCLOCK
-                                LevelFeature.ADMIN_BONUS -> GameColors.HP
-                                LevelFeature.BOMB -> 0xFFFF0000.toInt()
-                                LevelFeature.CLEAN_SWEEP -> GameColors.COOLANT
-                            }
-
-                            badgeRect.set(currentBadgeX, badgeY, currentBadgeX + badgeSize, badgeY + badgeSize)
-                            com.appsbyalok.echohunter.utils.LevelIcons.drawMicroIcon(c, f, badgeRect, p, finalBgColor)
-
-                            currentBadgeX += badgeSize + badgeGap
-                        }
-                    }
-                }
-
-                // --- 3. HARDWARE SIGNAL TEXT LAYER ---
-                pText.color = GameColors.CLARITY
-                val lvlStr = lvl.toString()
-
-                // Dynamic sizing based on string length and measured width
-                val maxTextWidth = boxSize * 0.82f
-                pText.textSize = scale * 0.045f
-                val measured = pText.measureText(lvlStr)
-                if (measured > maxTextWidth) {
-                    pText.textSize *= (maxTextWidth / measured)
-                }
-
-                // Adjust vertical position based on feature count to avoid overlap
-                val textYOffset = if (colorCount > 5) boxSize * 0.14f else boxSize * 0.05f
-                c.drawText(lvlStr, rect.centerX(), rect.centerY() - textYOffset, pText)
-
-                // Stars display
-                val stars = SaveManager.getLevelStars(lvl)
-                if (stars > 0) {
-                    pText.color = GameColors.YELLOW
-                    pText.textSize = scale * 0.025f
-                    val starText = "★".repeat(stars)
-                    c.drawText(starText, rect.centerX(), rect.centerY() + boxSize * 0.15f, pText)
-                }
-            }
-
-            col++
-            if (col >= columns) { col = 0; row++ }
-        }
-        
-        // Return remaining old rects to pool
         buttonPool.addAll(oldLevelButtons.values)
         oldLevelButtons.clear()
 
-        // --- LOAD MORE / SCANNING STATUS ---
+        drawLoadMore(c, width, layout, cursor, scale)
+        c.restore()
+
+        return cursor.row
+    }
+
+    private fun drawGrid(c: Canvas, layout: ArchiveGridLayout, oldLevelButtons: MutableMap<Int, RectF>, cursor: ArchiveGridCursor, scale: Float) {
+        for (lvl in cachedList) {
+            val cx = layout.startX + cursor.col * (layout.boxSize + layout.gap)
+            val cy = layout.startY + cursor.row * (layout.boxSize + layout.gap)
+
+            reusableRect.set(cx, cy, cx + layout.boxSize, cy + layout.boxSize)
+
+            if (reusableRect.bottom >= listTop && reusableRect.top <= listBottom) {
+                drawLevelCard(c, lvl, oldLevelButtons, layout.boxSize, scale)
+            }
+
+            cursor.col++
+            if (cursor.col >= layout.columns) {
+                cursor.col = 0
+                cursor.row++
+            }
+        }
+    }
+
+    private fun drawLevelCard(c: Canvas, lvl: Int, oldLevelButtons: MutableMap<Int, RectF>, boxSize: Float, scale: Float) {
+        val rect = oldLevelButtons.remove(lvl) ?: if (buttonPool.isNotEmpty()) buttonPool.removeAt(buttonPool.size - 1) else RectF()
+        rect.set(reusableRect)
+        levelButtons[lvl] = rect
+
+        val mask = LevelEngine.getFeaturesMask(lvl)
+        val isNextNode = (lvl == SaveManager.maxCampaignLevel)
+        var mixedColor = GameColors.GRID
+        var colorCount = 0
+
+        for (f in featureEnumValues) {
+            if ((mask and (1 shl f.ordinal)) != 0) {
+                val featureColor = getFeatureColor(f)
+                mixedColor = if (colorCount == 0) featureColor else GameColors.mixColors(mixedColor, featureColor, 0.5f)
+                colorCount++
+            }
+        }
+
+        val baseBgTone = when {
+            isNextNode -> 0xFF052510.toInt()
+            hitOnDown == lvl -> 0xFF222222.toInt()
+            else -> GameColors.BG
+        }
+        val finalBgColor = GameColors.mixColors(baseBgTone, mixedColor, 0.25f)
+
+        p.style = Paint.Style.FILL; p.color = finalBgColor
+        c.drawRoundRect(reusableRect, scale * 0.015f, scale * 0.015f, p)
+
+        p.style = Paint.Style.STROKE
+        p.strokeWidth = if (hitOnDown == lvl) scale * 0.006f else scale * 0.003f
+        p.color = when {
+            isNextNode -> GameColors.HP
+            hitOnDown == lvl -> GameColors.CLARITY
+            else -> GameColors.mixColors(0x22FFFFFF, mixedColor, 0.4f)
+        }
+        c.drawRoundRect(rect, scale * 0.015f, scale * 0.015f, p)
+
+        drawLevelFeatureBadges(c, mask, colorCount, rect, boxSize, finalBgColor)
+        drawLevelText(c, lvl, colorCount, rect, boxSize, scale)
+    }
+
+    private fun getFeatureColor(feature: LevelFeature): Int {
+        return when (feature) {
+            LevelFeature.CLASSIC -> GameColors.PULSE
+            LevelFeature.MAZE -> GameColors.TEXT
+            LevelFeature.DARKNESS -> GameColors.DARKNESS
+            LevelFeature.BOSS -> GameColors.BOSS
+            LevelFeature.ESCAPE -> GameColors.YELLOW
+            LevelFeature.ELIMINATION -> GameColors.RED
+            LevelFeature.DEFENSE -> GameColors.SHIELD
+            LevelFeature.SPECIAL -> GameColors.OVERCLOCK
+            LevelFeature.ADMIN_BONUS -> GameColors.HP
+            LevelFeature.BOMB -> 0xFFFF0000.toInt()
+            LevelFeature.CLEAN_SWEEP -> GameColors.COOLANT
+        }
+    }
+
+    private fun drawLevelFeatureBadges(c: Canvas, mask: Int, colorCount: Int, rect: RectF, boxSize: Float, finalBgColor: Int) {
+        if (colorCount <= 0) return
+
+        var badgeSize = boxSize * 0.22f
+        var badgeGap = boxSize * 0.04f
+        var totalBadgesW = (colorCount * badgeSize) + ((colorCount - 1) * badgeGap)
+        val maxAllowedW = boxSize * 0.88f
+        if (totalBadgesW > maxAllowedW) {
+            val shrinkFactor = maxAllowedW / totalBadgesW
+            badgeSize *= shrinkFactor
+            badgeGap *= shrinkFactor
+            totalBadgesW = (colorCount * badgeSize) + ((colorCount - 1) * badgeGap)
+        }
+
+        var currentBadgeX = rect.centerX() - (totalBadgesW / 2f)
+        val badgeY = rect.bottom - badgeSize - (boxSize * 0.08f)
+
+        for (f in featureEnumValues) {
+            if ((mask and (1 shl f.ordinal)) != 0) {
+                p.color = getFeatureColor(f)
+                badgeRect.set(currentBadgeX, badgeY, currentBadgeX + badgeSize, badgeY + badgeSize)
+                com.appsbyalok.echohunter.utils.LevelIcons.drawMicroIcon(c, f, badgeRect, p, finalBgColor)
+                currentBadgeX += badgeSize + badgeGap
+            }
+        }
+    }
+
+    private fun drawLevelText(c: Canvas, lvl: Int, colorCount: Int, rect: RectF, boxSize: Float, scale: Float) {
+        pText.color = GameColors.CLARITY
+        val lvlStr = lvl.toString()
+        val maxTextWidth = boxSize * 0.82f
+        pText.textSize = scale * 0.045f
+        val measured = pText.measureText(lvlStr)
+        if (measured > maxTextWidth) {
+            pText.textSize *= (maxTextWidth / measured)
+        }
+
+        val textYOffset = if (colorCount > 5) boxSize * 0.14f else boxSize * 0.05f
+        c.drawText(lvlStr, rect.centerX(), rect.centerY() - textYOffset, pText)
+
+        val stars = SaveManager.getLevelStars(lvl)
+        if (stars > 0) {
+            pText.color = GameColors.YELLOW
+            pText.textSize = scale * 0.025f
+            val starText = "★".repeat(stars)
+            c.drawText(starText, rect.centerX(), rect.centerY() + boxSize * 0.15f, pText)
+        }
+    }
+
+    private fun drawLoadMore(c: Canvas, width: Float, layout: ArchiveGridLayout, cursor: ArchiveGridCursor, scale: Float) {
         loadMoreRect.setEmpty()
-        
+
         val isDone = if (filterFinishedOnly) {
             val list = sortedFinishedIds
             list != null && lastFinishedIndex >= list.size - 1
@@ -596,9 +740,9 @@ class UIArchives {
         }
 
         if (!isDone || isScanning || resultQueue.isNotEmpty()) {
-            val cx = startX + col * (boxSize + gap)
-            val cy = startY + row * (boxSize + gap)
-            loadMoreRect.set(cx, cy, cx + boxSize, cy + boxSize)
+            val cx = layout.startX + cursor.col * (layout.boxSize + layout.gap)
+            val cy = layout.startY + cursor.row * (layout.boxSize + layout.gap)
+            loadMoreRect.set(cx, cy, cx + layout.boxSize, cy + layout.boxSize)
 
             if (loadMoreRect.bottom >= listTop && loadMoreRect.top <= listBottom) {
                 if (!isScanning && resultQueue.isEmpty()) {
@@ -611,39 +755,40 @@ class UIArchives {
                     c.drawText("FETCH", loadMoreRect.centerX(), loadMoreRect.centerY() - scale * 0.01f, pText)
                     c.drawText("NEXT", loadMoreRect.centerX(), loadMoreRect.centerY() + scale * 0.02f, pText)
                 } else {
-                    // Just show a scanning card
                     p.style = Paint.Style.STROKE; p.color = 0x44FFFFFF; p.strokeWidth = scale * 0.002f
                     c.drawRoundRect(loadMoreRect, scale * 0.015f, scale * 0.015f, p)
                     pText.color = 0x88FFFFFF.toInt(); pText.textSize = scale * 0.02f
                     c.drawText("DECODING...", loadMoreRect.centerX(), loadMoreRect.centerY() + scale * 0.007f, pText)
                 }
             }
-            row++
+            cursor.row++
         } else if (cachedList.isNotEmpty()) {
-            // End of Archives message
-            val cy = startY + (row + 0.5f) * (boxSize + gap)
+            if (cursor.col > 0) {
+                cursor.row++
+            }
+            cursor.row++
+
+            val cy = layout.startY + (cursor.row + 0.5f) * (layout.boxSize + layout.gap)
             pText.color = 0x44FFFFFF; pText.textSize = scale * 0.025f
             c.drawText("── END OF ARCHIVES ──", width / 2f, cy, pText)
-            row++
+            cursor.row++
         }
-        c.restore()
+    }
 
-        // --- SCANNING PROGRESS BAR ---
+    private fun drawProgress(c: Canvas, width: Float, scale: Float) {
         if (isScanning || resultQueue.isNotEmpty()) {
             p.style = Paint.Style.FILL
             val barH = scale * 0.008f
             val maxLvl = SaveManager.maxCampaignLevel
             val totalToScan = if (filterFinishedOnly) (sortedFinishedIds?.size ?: maxLvl) else maxLvl
             val scanProgress = if (totalToScan > 0) totalScanned.toFloat() / totalToScan else 0f
-            
-            // YouTube-style red progress bar
+
             p.color = 0x44FF0000
             c.drawRect(0f, listTop, width, listTop + barH, p)
-            
+
             p.color = 0xFFFF0000.toInt()
             c.drawRect(0f, listTop, width * scanProgress, listTop + barH, p)
-            
-            // Glowing tip
+
             val progParams = "P:${width * scanProgress}:$listTop"
             if (progressGradient == null || lastGradientParams != progParams) {
                 progressGradient = android.graphics.RadialGradient(
@@ -658,18 +803,20 @@ class UIArchives {
             p.shader = null
             lastGradientParams = progParams
 
-            // Textual feedback
             pText.textSize = scale * 0.018f; pText.color = 0xAAFFFFFF.toInt(); pText.textAlign = Paint.Align.RIGHT
             val sectorText = if (currentSector > 0) "SECTOR $currentSector | " else ""
             val totalScannedStr = String.format(Locale.ENGLISH, "%,d", totalScanned)
             c.drawText("${sectorText}MATCHES: $totalMatches  |  SCANNED: $totalScannedStr", width - scale * 0.02f, listTop - scale * 0.01f, pText)
             pText.textAlign = Paint.Align.CENTER
         }
+    }
 
-        val totalHeight = (row + 1) * (boxSize + gap)
+    private fun updateMaxScroll(row: Int, layout: ArchiveGridLayout, scale: Float) {
+        val totalHeight = (row + 1) * (layout.boxSize + layout.gap)
         maxScroll = max(0f, totalHeight - (listBottom - listTop) + scale * 0.1f)
+    }
 
-        // Footer Background Glow
+    private fun drawFooter(c: Canvas, width: Float, height: Float, scale: Float) {
         val footerParams = "F:$listBottom:$height"
         if (footerGradient == null || lastGradientParams != footerParams) {
             footerGradient = android.graphics.LinearGradient(0f, listBottom, 0f, height, 0x00000000, 0xCC1A0000.toInt(), android.graphics.Shader.TileMode.CLAMP)
@@ -680,7 +827,6 @@ class UIArchives {
         p.shader = null
         lastGradientParams = footerParams
 
-        // Micro-console Terminate Core System Button
         closeBtnRect.set(width / 2f - scale * 0.16f, height - scale * 0.10f, width / 2f + scale * 0.16f, height - scale * 0.03f)
         p.style = Paint.Style.FILL; p.color = if (hitOnDown == -2) 0xFF660A0A.toInt() else 0xFF220505.toInt()
         c.drawRoundRect(closeBtnRect, scale * 0.01f, scale * 0.01f, p)
@@ -691,6 +837,24 @@ class UIArchives {
         if (hitOnDown == -2) pText.setShadowLayer(10f, 0f, 0f, GameColors.RED)
         c.drawText("DISCONNECT", closeBtnRect.centerX(), closeBtnRect.centerY() + scale * 0.012f, pText)
         pText.clearShadowLayer()
+    }
+
+    fun draw(c: Canvas, width: Float, height: Float, gs: GameState, scale: Float) {
+        val metrics = buildLayoutMetrics(width, height, scale)
+        drawBackground(c, width, height, scale)
+        updateScrollMomentum()
+        updateArchiveData(height, scale, metrics)
+
+        drawHeader(c, width, scale, metrics)
+        val boxWidth = drawHeaderButtons(c, width, gs, scale, metrics)
+        drawFilters(c, width, boxWidth, scale, metrics)
+
+        val layout = createGridLayout(width, metrics)
+        drawEmptyState(c, width, scale)
+        val row = drawScrollableContent(c, width, layout, scale)
+        drawProgress(c, width, scale)
+        updateMaxScroll(row, layout, scale)
+        drawFooter(c, width, height, scale)
     }
 
     private var touchDownX = 0f
@@ -708,6 +872,7 @@ class UIArchives {
             if (finishedBoxRect.contains(x, y)) return -6
             if (sortBoxRect.contains(x, y)) return -7
             if (filterModeRect.contains(x, y)) return -11
+            if (clearFiltersBoxRect.contains(x, y)) return -12
 
             for ((feat, rect) in featureRects) {
                 if (rect.contains(x, y)) return -20 - feat.ordinal
@@ -833,6 +998,10 @@ class UIArchives {
                                 val values = FeatureFilterMode.entries
                                 featureFilterMode = values[(featureFilterMode.ordinal + 1) % values.size]
                                 generateNodeList(false)
+                                EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 50)
+                            }
+                            -12 -> {
+                                clearAllFilters()
                                 EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 50)
                             }
                             else -> {
