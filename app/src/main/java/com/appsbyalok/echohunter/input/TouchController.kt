@@ -89,8 +89,9 @@ class TouchController(private val gs: GameState) {
                         gs.controls.attackTouchX = vx
                         gs.controls.attackTouchY = vy
                         
-                        // FIX: Only trigger manual aim IF we are already in Manual Mode
-                        if (gs.controls.activeAttackMode == AttackMode.MANUAL_AIM) {
+                        // FIX: Trigger manual aim for both MANUAL and DIRECTIONAL modes
+                        if (gs.controls.activeAttackMode == AttackMode.MANUAL_AIM || 
+                            gs.controls.activeAttackMode == AttackMode.DIRECTIONAL) {
                             gs.touch.manualAimTouchId = pointerId
                             gs.controls.manualAimActive = true
                             gs.touch.manualAimBaseX = atkX
@@ -101,8 +102,9 @@ class TouchController(private val gs: GameState) {
                         return true
                     }
 
-                    // 2. Fallback to Manual Aim Joystick (if in manual mode AND NOT hitting another button)
-                    if (gs.controls.activeAttackMode == AttackMode.MANUAL_AIM &&
+                    // 2. Fallback to Manual Aim Joystick
+                    if ((gs.controls.activeAttackMode == AttackMode.MANUAL_AIM ||
+                         gs.controls.activeAttackMode == AttackMode.DIRECTIONAL) &&
                         gs.hudLayout.manualAimRect.contains(vx, vy)) {
 
                         // Extra safety: Don't steal if we are already touching something else here

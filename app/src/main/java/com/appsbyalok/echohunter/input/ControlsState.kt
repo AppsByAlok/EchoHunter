@@ -1,9 +1,9 @@
 package com.appsbyalok.echohunter.input
 
 enum class AttackMode {
-    DEFAULT,    // Forward facing (Classic)
-    AUTO_AIM,   // Nearest enemy
-    MANUAL_AIM  // Joystick / Directional
+    DIRECTIONAL, // Manual: Face direction (Classic)
+    AUTO_AIM,    // Nearest enemy
+    MANUAL_AIM   // Joystick / Free Aim
 }
 
 class ControlsState {
@@ -12,7 +12,7 @@ class ControlsState {
     var moveDirY = 0f
 
     // --- ATTACK SYSTEM ---
-    var activeAttackMode = AttackMode.AUTO_AIM // Default to AUTO_AIM now
+    var activeAttackMode = AttackMode.DIRECTIONAL // Default to DIRECTIONAL now
 
     // Raw Input (Filled by TouchController)
     var isAttackTouching = false
@@ -27,10 +27,7 @@ class ControlsState {
     
     // Touchpad Manual Aim
     var manualAimActive = false
-    var manualAimTouchX = 0f
-    var manualAimTouchY = 0f
-    var manualAimDeltaX = 0f
-    var manualAimDeltaY = 0f
+
 
     var isWeaponMenuOpen = false
     var isTrapMenuOpen = false

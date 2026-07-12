@@ -178,9 +178,10 @@ object SaveManager {
         }
     }
 
-    fun saveLevelStats(level: Int, timeSeconds: Float, stars: Int) {
+    fun saveLevelStats(level: Int, timeSeconds: Float, stars: Int, recordsMask: Int = 0, isHard: Boolean = false) {
         val existingStars = prefs.getInt("lvl_${level}_stars", 0)
         val existingTime = prefs.getFloat("lvl_${level}_time", Float.MAX_VALUE)
+        val existingRecords = prefs.getInt("lvl_${level}_records", 0)
 
         val editor = prefs.edit()
         if (stars > existingStars) {
@@ -189,12 +190,46 @@ object SaveManager {
         if (timeSeconds < existingTime) {
             editor.putFloat("lvl_${level}_time", timeSeconds)
         }
+        
+        // Merge records (logical OR) so once a record is achieved, it's permanent
+        editor.putInt("lvl_${level}_records", existingRecords or recordsMask)
+
+        // Save mode-specific stats for "Compare Stats" feature
+        val modeKey = if (isHard) "hard" else "norm"
+        val modeStars = prefs.getInt("lvl_${level}_stars_$modeKey", 0)
+        val modeTime = prefs.getFloat("lvl_${level}_time_$modeKey", Float.MAX_VALUE)
+        
+        if (stars > modeStars) editor.putInt("lvl_${level}_stars_$modeKey", stars)
+        if (timeSeconds < modeTime) editor.putFloat("lvl_${level}_time_$modeKey", timeSeconds)
+        
         editor.apply()
     }
 
-    fun getLevelStars(level: Int): Int = prefs.getInt("lvl_${level}_stars", 0)
-    fun isLevelFinished(level: Int): Boolean = getLevelStars(level) > 0
-    fun getLevelTime(level: Int): Float = prefs.getFloat("lvl_${level}_time", 0f)
+    fun getLevelStars(level: Int, isHard: Boolean? = null): Int {
+        return if (isHard == null) prefs.getInt("lvl_${level}_stars", 0)
+        else prefs.getInt("lvl_${level}_stars_${if (isHard) "hard" else "norm"}", 0)
+    }
+
+    fun getLevelTime(level: Int, isHard: Boolean? = null): Float {
+        return if (isHard == null) prefs.getFloat("lvl_${level}_time", 0f)
+        else prefs.getFloat("lvl_${level}_time_${if (isHard) "hard" else "norm"}", 0f)
+    }
+
+    fun getLevelRecords(level: Int): Int = prefs.getInt("lvl_${level}_records", 0)
+    fun getLevelAttempts(level: Int): Int = prefs.getInt("lvl_${level}_attempts", 0)
+
+    fun incrementLevelAttempts(level: Int, isHard: Boolean = false) {
+        val attempts = getLevelAttempts(level)
+        val modeKey = if (isHard) "hard" else "norm"
+        val modeAttempts = prefs.getInt("lvl_${level}_attempts_$modeKey", 0)
+        
+        prefs.edit()
+            .putInt("lvl_${level}_attempts", attempts + 1)
+            .putInt("lvl_${level}_attempts_$modeKey", modeAttempts + 1)
+            .apply()
+    }
+
+    fun getLevelAttempts(level: Int, isHard: Boolean): Int = prefs.getInt("lvl_${level}_attempts_${if (isHard) "hard" else "norm"}", 0)
 
     fun getFinishedLevelIds(): List<Int> {
         val ids = mutableListOf<Int>()

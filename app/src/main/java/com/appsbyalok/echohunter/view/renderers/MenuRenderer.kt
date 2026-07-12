@@ -194,7 +194,7 @@ class MenuRenderer(private val context: Context) {
 
         // 3. AIM MODE BUTTON
         pauseAimRect.set(btnStartX, btnStartY, btnStartX + btnW, btnStartY + btnH)
-        val aimText = "> AIM: ${if (gs.controls.activeAttackMode == com.appsbyalok.echohunter.input.AttackMode.AUTO_AIM) "AUTO" else "MANUAL"} <"
+        val aimText = "> AIM: ${gs.controls.activeAttackMode.name} <"
         drawButton(c, pauseAimRect, aimText, GameColors.PULSE, scale)
         btnStartY += btnH + btnGap
 

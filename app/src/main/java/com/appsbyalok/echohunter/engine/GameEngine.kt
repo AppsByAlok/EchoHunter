@@ -136,27 +136,41 @@ class GameEngine(
             } else {
                 SaveManager.updateCampaignProgress(gs.currentLevel)
             }
-            
+
             // Calculate Stars based on specific achievements
             // * - just finish game
             // ** - finish without taking damage
             // *** - finish in time
             // **** - hard mode finish
             // ***** - hard mode no damage or on time
-            
+
             val duration = gs.timeSinceStart - gs.levelStartTime
             val isHard = gs.difficulty == 1
             val noDamage = !gs.tookDamageInLevel
+            val underPar = duration <= config.parTime
+            
+            // Record achievements (masks)
+            var recordsMask = 0
+            if (noDamage) recordsMask = recordsMask or 1 // NO DAMAGE
+            if (noDamage && underPar) recordsMask = recordsMask or 2 // PERFECT CLEAR
+            if (gs.sonarTimer == 0f && !gs.pulse) recordsMask = recordsMask or 8 // NO SONAR
+            
+            // MANUAL AIM logic: Award if NOT using AUTO_AIM
+            if (gs.controls.activeAttackMode != com.appsbyalok.echohunter.input.AttackMode.AUTO_AIM) {
+                recordsMask = recordsMask or 16 
+            }
+            
+            if (!gs.isAutoPilotActive) recordsMask = recordsMask or 64 // NO AUTOPILOT
             
             val stars = when {
-                isHard && (noDamage || duration < 120f) -> 5
+                isHard && noDamage && underPar -> 5
                 isHard -> 4
-                duration < 90f -> 3
+                underPar -> 3
                 noDamage -> 2
                 else -> 1
             }
 
-            SaveManager.saveLevelStats(gs.currentLevel, duration, stars)
+            SaveManager.saveLevelStats(gs.currentLevel, duration, stars, recordsMask, isHard)
 
             EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 500)
             onChangeState?.invoke(12)

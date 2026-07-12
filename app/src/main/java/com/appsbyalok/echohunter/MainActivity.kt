@@ -5,6 +5,7 @@ import android.app.Activity
 import android.os.Build
 import android.os.Bundle
 import android.view.View
+import android.view.WindowInsets
 import android.window.OnBackInvokedDispatcher
 import com.appsbyalok.echohunter.data.SaveManager
 import com.appsbyalok.echohunter.data.UpgradeSystem
@@ -22,6 +23,21 @@ class MainActivity : Activity() {
         gameView = GameView(this)
         setContentView(gameView)
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        // Notch / Safe Area Insets Handling
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            gameView.setOnApplyWindowInsetsListener { _, insets ->
+                val bars = insets.getInsets(WindowInsets.Type.systemBars())
+                val displayCutout = insets.getInsets(WindowInsets.Type.displayCutout())
+                
+                gameView.gs.hudLayout.safeInsetTop = maxOf(bars.top, displayCutout.top).toFloat()
+                gameView.gs.hudLayout.safeInsetBottom = maxOf(bars.bottom, displayCutout.bottom).toFloat()
+                gameView.gs.hudLayout.safeInsetLeft = maxOf(bars.left, displayCutout.left).toFloat()
+                gameView.gs.hudLayout.safeInsetRight = maxOf(bars.right, displayCutout.right).toFloat()
+                
+                insets
+            }
+        }
 
         savedInstanceState?.let { gameView.restoreState(it) }
 

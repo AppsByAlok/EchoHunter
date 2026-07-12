@@ -405,13 +405,15 @@ class GameState {
         bombTargetX = -9999f
         bombTargetY = -9999f
 
-        // RESET INPUT STATE
+        // --- RESET INPUT & TOUCH STATE (Thorough) ---
         controls.isMoveJoyActive = false
         controls.moveDirX = 0f
         controls.moveDirY = 0f
         
         touch.moveBaseX = 0f
         touch.moveBaseY = 0f
+        touch.moveCurrentX = 0f
+        touch.moveCurrentY = 0f
         touch.moveKnobX = 0f
         touch.moveKnobY = 0f
         touch.moveTouchId = -1
@@ -419,18 +421,47 @@ class GameState {
         controls.isAttackTouching = false
         controls.attackRequested = false
         controls.attackPullDist = 0f
+        controls.manualAimActive = false
         touch.attackTouchId = -1
-        touch.attackKnobX = 0f
-        touch.attackKnobY = 0f
+        touch.manualAimTouchId = -1
+        touch.manualAimBaseX = 0f
+        touch.manualAimBaseY = 0f
+        touch.manualAimCurrentX = 0f
+        touch.manualAimCurrentY = 0f
+        touch.manualAimKnobX = 0f
+        touch.manualAimKnobY = 0f
 
         controls.isTrapPressed = false
+        controls.trapRequested = false
         controls.isOverclockPressed = false
         controls.isSonarPressed = false
         controls.isAutoSonarLocked = false
+        touch.trapTouchId = -1
+        touch.sonarTouchId = -1
 
+        // Reset Menu States
+        controls.isWeaponMenuOpen = false
+        controls.isTrapMenuOpen = false
+        controls.isSonarMenuOpen = false
+        controls.selectedWeaponIdx = -1
+        controls.selectedTrapIdx = -1
+        controls.selectedSonarIdx = -1
+
+        // Reset UI & Internal Timers
+        showOverclockTextTimer = 0f
+        globalMessage = ""
+        globalMessageTimer = 0f
+        bossLockTimer = 0f
         defEnemiesToSpawn = 0
         defEnemiesAlive = 0
         elimTargetsKilled = 0
+
+        // Reset Pulse & Visuals
+        pulse = false
+        pulseR = 0f
+        lastFacingX = 1f
+        lastFacingY = 0f
+        isAutoPilotActive = false
 
         StoryProtocol.isBlackoutActive = false
         spawnerNodes.clear()

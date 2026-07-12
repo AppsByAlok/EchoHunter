@@ -382,6 +382,7 @@ class DebugCommand : TerminalCommand {
             }
             "resetall" -> {
                 SaveManager.clearAllData()
+                gs.difficulty = 0 // Force return to Normal Mode
                 "SYSTEM PURGED. ALL DATA AND PROGRESS WIPED."
             }
             else -> "ERR: UNKNOWN DEBUG PARAMETER '$sub'"

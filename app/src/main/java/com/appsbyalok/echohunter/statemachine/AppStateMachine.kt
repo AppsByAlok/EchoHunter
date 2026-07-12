@@ -6,6 +6,7 @@ import android.view.MotionEvent
 import com.appsbyalok.echohunter.data.SaveManager
 import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.engine.GameState
+import com.appsbyalok.echohunter.input.AttackMode
 import com.appsbyalok.echohunter.utils.EchoAudioManager
 import com.appsbyalok.echohunter.view.GameView
 
@@ -165,8 +166,10 @@ class PauseState(private val manager: AppStateManager) : IAppState {
             if (hitOnUp != -1 && hitOnUp == hitOnDown) {
                 when (hitOnUp) {
                     1 -> {
-                        val newMode = if (gs.controls.activeAttackMode == com.appsbyalok.echohunter.input.AttackMode.AUTO_AIM) 
-                            com.appsbyalok.echohunter.input.AttackMode.MANUAL_AIM else com.appsbyalok.echohunter.input.AttackMode.AUTO_AIM
+                        val modes = AttackMode.entries.toTypedArray()
+                        val currentIdx = gs.controls.activeAttackMode.ordinal
+                        val newMode = modes[(currentIdx + 1) % modes.size]
+
                         gs.controls.activeAttackMode = newMode
                         SaveManager.setAttackMode(newMode.ordinal)
                         EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100)

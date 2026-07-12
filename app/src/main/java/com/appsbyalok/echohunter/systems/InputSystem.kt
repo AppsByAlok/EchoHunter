@@ -8,7 +8,7 @@ import kotlin.math.sqrt
 class InputSystem(private val gs: GameState) {
 
     fun update(dt: Float, scale: Float, enemySys: EnemySystem?) {
-        val menuThreshold = scale * 0.18f // Increased to prevent accidental triggers
+        val menuThreshold = scale * 0.22f // Increased to prevent accidental triggers
 
         // --- ATTACK / WEAPON MENU ---
         if (gs.controls.isAttackTouching) {
@@ -16,8 +16,9 @@ class InputSystem(private val gs: GameState) {
             val ady = gs.controls.attackTouchY - gs.hudLayout.atkY
             val aDist = sqrt(adx * adx + ady * ady)
 
-            // FIX: Large threshold in manual mode to avoid conflicting with aiming swipes
-            val dynamicThreshold = if (gs.controls.activeAttackMode == AttackMode.MANUAL_AIM) scale * 0.35f else menuThreshold
+            // FIX: Very large threshold in manual/directional modes to prevent accidental weapon menu triggers during aiming swipes
+            val dynamicThreshold = if (gs.controls.activeAttackMode == AttackMode.MANUAL_AIM || 
+                                       gs.controls.activeAttackMode == AttackMode.DIRECTIONAL) scale * 0.60f else menuThreshold
 
             if (aDist > dynamicThreshold) {
                 gs.controls.isWeaponMenuOpen = true
@@ -99,20 +100,26 @@ class InputSystem(private val gs: GameState) {
             } else {
                 gs.touch.moveKnobX = gs.touch.moveCurrentX
                 gs.touch.moveKnobY = gs.touch.moveCurrentY
-                gs.controls.moveDirX = if (dist > 0) dx / joyMaxRadius else 0f
-                gs.controls.moveDirY = if (dist > 0) dy / joyMaxRadius else 0f
+                gs.controls.moveDirX = if (dist > 0.001f) dx / joyMaxRadius else 0f
+                gs.controls.moveDirY = if (dist > 0.001f) dy / joyMaxRadius else 0f
             }
 
-            gs.lastFacingX = gs.controls.moveDirX
-            gs.lastFacingY = gs.controls.moveDirY
+            // Always update facing if there's any intentional movement tilt
+            val movementDist = sqrt(gs.controls.moveDirX * gs.controls.moveDirX + gs.controls.moveDirY * gs.controls.moveDirY)
+            if (movementDist > 0.05f) {
+                gs.lastFacingX = gs.controls.moveDirX / movementDist
+                gs.lastFacingY = gs.controls.moveDirY / movementDist
+            }
         } else {
             gs.touch.moveKnobX = gs.touch.moveBaseX
             gs.touch.moveKnobY = gs.touch.moveBaseY
+            gs.controls.moveDirX = 0f
+            gs.controls.moveDirY = 0f
         }
 
         // 2. ATTACK LOGIC STRATEGY
         when (gs.controls.activeAttackMode) {
-            AttackMode.DEFAULT -> handleDefaultAttack()
+            AttackMode.DIRECTIONAL -> handleDirectionalAttack(scale)
             AttackMode.AUTO_AIM -> handleAutoAim(enemySys)
             AttackMode.MANUAL_AIM -> handleManualAim(scale)
         }
@@ -138,10 +145,51 @@ class InputSystem(private val gs: GameState) {
         return idx
     }
 
-    private fun handleDefaultAttack() {
+    private fun handleDirectionalAttack(scale: Float) {
         gs.controls.attackRequested = gs.controls.isAttackTouching && !gs.controls.isWeaponMenuOpen
-        gs.controls.aimDirX = if (gs.lastFacingX == 0f && gs.lastFacingY == 0f) 1f else gs.lastFacingX
-        gs.controls.aimDirY = gs.lastFacingY
+        
+        val dx = gs.touch.manualAimCurrentX - gs.touch.manualAimBaseX
+        val dy = gs.touch.manualAimCurrentY - gs.touch.manualAimBaseY
+        val dist = sqrt(dx * dx + dy * dy)
+        val joyMaxRadius = scale * 0.15f
+        // Manual override threshold: 25% of button radius
+        val overrideThreshold = gs.hudLayout.btnRadius * 0.25f
+
+        if (gs.controls.manualAimActive && dist > overrideThreshold) {
+            // Manual Joystick Override
+            val ratio = if (dist > joyMaxRadius) joyMaxRadius / dist else 1f
+            gs.touch.manualAimKnobX = gs.touch.manualAimBaseX + dx * ratio
+            gs.touch.manualAimKnobY = gs.touch.manualAimBaseY + dy * ratio
+
+            gs.controls.aimDirX = dx / dist
+            gs.controls.aimDirY = dy / dist
+            
+            // Sync facing for character sprite
+            gs.lastFacingX = gs.controls.aimDirX
+            gs.lastFacingY = gs.controls.aimDirY
+        } else {
+            // Default: Look where moving, OR last faced direction
+            // We give priority to active movement for the firing direction
+            val moveDist = sqrt(gs.controls.moveDirX * gs.controls.moveDirX + gs.controls.moveDirY * gs.controls.moveDirY)
+            if (moveDist > 0.1f) {
+                gs.controls.aimDirX = gs.controls.moveDirX / moveDist
+                gs.controls.aimDirY = gs.controls.moveDirY / moveDist
+            } else {
+                gs.controls.aimDirX = if (gs.lastFacingX == 0f && gs.lastFacingY == 0f) 1f else gs.lastFacingX
+                gs.controls.aimDirY = gs.lastFacingY
+            }
+            
+            // Visuals for the attack button knob
+            if (gs.controls.manualAimActive) {
+                val clampDist = if (dist > joyMaxRadius) joyMaxRadius else dist
+                val ratio = if (dist > 0.001f) clampDist / dist else 0f
+                gs.touch.manualAimKnobX = gs.touch.manualAimBaseX + dx * ratio
+                gs.touch.manualAimKnobY = gs.touch.manualAimBaseY + dy * ratio
+            } else {
+                gs.touch.manualAimKnobX = gs.touch.manualAimBaseX
+                gs.touch.manualAimKnobY = gs.touch.manualAimBaseY
+            }
+        }
         gs.controls.attackPullDist = 0f
     }
 
@@ -268,18 +316,14 @@ class InputSystem(private val gs: GameState) {
     }
 
     private fun handleManualAim(scale: Float) {
-        if (!gs.controls.isManualAimUnlocked) {
-            gs.controls.attackRequested = gs.controls.isAttackTouching && !gs.controls.isWeaponMenuOpen
-            return
-        }
+        val dx = gs.touch.manualAimCurrentX - gs.touch.manualAimBaseX
+        val dy = gs.touch.manualAimCurrentY - gs.touch.manualAimBaseY
+        val dist = sqrt(dx * dx + dy * dy)
+        val joyMaxRadius = scale * 0.15f
 
         if (gs.controls.manualAimActive) {
-            val dx = gs.touch.manualAimCurrentX - gs.touch.manualAimBaseX
-            val dy = gs.touch.manualAimCurrentY - gs.touch.manualAimBaseY
-            val dist = sqrt(dx * dx + dy * dy)
-            val joyMaxRadius = scale * 0.15f
-
-            if (dist > 0.005f) {
+            // Lower deadzone for manual mode
+            if (dist > 0.01f * scale) {
                 val ratio = if (dist > joyMaxRadius) joyMaxRadius / dist else 1f
                 gs.touch.manualAimKnobX = gs.touch.manualAimBaseX + dx * ratio
                 gs.touch.manualAimKnobY = gs.touch.manualAimBaseY + dy * ratio
@@ -288,21 +332,30 @@ class InputSystem(private val gs: GameState) {
                 gs.controls.aimDirY = dy / dist
                 gs.controls.attackPullDist = (dist / joyMaxRadius).coerceIn(0f, 1f)
                 
-                // Lower fire deadzone (8% instead of 20%)
-                gs.controls.attackRequested = dist > (joyMaxRadius * 0.08f)
+                // Fire when pulled past 15%
+                gs.controls.attackRequested = dist > (joyMaxRadius * 0.15f)
+                
+                // Update facing
+                gs.lastFacingX = gs.controls.aimDirX
+                gs.lastFacingY = gs.controls.aimDirY
             } else {
                 gs.touch.manualAimKnobX = gs.touch.manualAimBaseX
                 gs.touch.manualAimKnobY = gs.touch.manualAimBaseY
                 gs.controls.attackRequested = false
+                
+                // Fallback to movement-based facing when not aiming
+                gs.controls.aimDirX = gs.lastFacingX
+                gs.controls.aimDirY = gs.lastFacingY
             }
-            
-            gs.lastFacingX = gs.controls.aimDirX
-            gs.lastFacingY = gs.controls.aimDirY
         } else {
             gs.touch.manualAimKnobX = gs.touch.manualAimBaseX
             gs.touch.manualAimKnobY = gs.touch.manualAimBaseY
             gs.controls.attackRequested = false
             gs.controls.attackPullDist = 0f
+            
+            // Always sync aimDir with lastFacing when idle
+            gs.controls.aimDirX = gs.lastFacingX
+            gs.controls.aimDirY = gs.lastFacingY
         }
     }
 }

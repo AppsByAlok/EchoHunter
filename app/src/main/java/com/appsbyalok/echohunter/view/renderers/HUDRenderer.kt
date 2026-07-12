@@ -42,7 +42,8 @@ class HUDRenderer(private val context: Context) {
         }
 
         // --- 3. MANUAL AIM TOUCHPAD (Visual Boundary) ---
-        if (gs.controls.activeAttackMode == AttackMode.MANUAL_AIM) {
+        if (gs.controls.activeAttackMode == AttackMode.MANUAL_AIM || 
+            gs.controls.activeAttackMode == AttackMode.DIRECTIONAL) {
             p.style = Paint.Style.STROKE; p.strokeWidth = scale * 0.001f; p.color = 0x11FF0000
             c.drawRect(gs.hudLayout.manualAimRect, p)
         }
@@ -220,17 +221,48 @@ class HUDRenderer(private val context: Context) {
         val mode = gs.controls.activeAttackMode
 
         when (mode) {
-            AttackMode.DEFAULT -> {
+            AttackMode.DIRECTIONAL -> {
                 val color = if (gs.controls.attackRequested) GameColors.TEXT else GameColors.RED
-                drawActionButton(c, atkX, atkY, radius, "", color, false)
-                // Technical Fire Icon (Triangle)
-                p.style = Paint.Style.STROKE; p.strokeWidth = radius * 0.08f; p.color = color
-                val path = android.graphics.Path()
-                path.moveTo(atkX - radius * 0.2f, atkY - radius * 0.3f)
-                path.lineTo(atkX + radius * 0.35f, atkY)
-                path.lineTo(atkX - radius * 0.2f, atkY + radius * 0.3f)
-                path.close()
-                c.drawPath(path, p)
+                // 1. Added "ATK" label so it looks like a standard attack button
+                drawActionButton(c, atkX, atkY, radius, "ATK", color, false)
+
+                // 2. Decorative directional arrows (subtle, around the button)
+                p.style = Paint.Style.STROKE; p.strokeWidth = radius * 0.04f; p.color = color; p.alpha = 150
+                val off = radius * 0.55f
+                val tip = radius * 0.08f
+                c.drawLine(atkX, atkY - off, atkX - tip, atkY - off + tip, p) // Up
+                c.drawLine(atkX, atkY - off, atkX + tip, atkY - off + tip, p)
+                c.drawLine(atkX, atkY + off, atkX - tip, atkY + off - tip, p) // Down
+                c.drawLine(atkX, atkY + off, atkX + tip, atkY + off - tip, p)
+                c.drawLine(atkX - off, atkY, atkX - off + tip, atkY - tip, p) // Left
+                c.drawLine(atkX - off, atkY, atkX - off + tip, atkY + tip, p)
+                c.drawLine(atkX + off, atkY, atkX + off - tip, atkY - tip, p) // Right
+                c.drawLine(atkX + off, atkY, atkX + off - tip, atkY + tip, p)
+                p.alpha = 255
+
+                // 3. Hide joystick visuals unless the user pulls far enough (Override threshold)
+                // This prevents the "joystick confusion" during simple taps
+                val pullX = gs.touch.manualAimCurrentX - gs.touch.manualAimBaseX
+                val pullY = gs.touch.manualAimCurrentY - gs.touch.manualAimBaseY
+                val pullDist = kotlin.math.sqrt(pullX * pullX + pullY * pullY)
+                
+                if (gs.controls.manualAimActive && pullDist > radius * 0.25f) {
+                    // Draw joystick base (Subtle ring)
+                    p.style = Paint.Style.STROKE; p.strokeWidth = scale * 0.006f
+                    p.color = (0x44 shl 24) or (color and 0xFFFFFF)
+                    c.drawCircle(gs.touch.manualAimBaseX, gs.touch.manualAimBaseY, scale * 0.15f, p)
+                    
+                    // Draw joystick knob
+                    val knobRadius = radius * 0.5f
+                    p.style = Paint.Style.FILL; p.color = (0x88 shl 24) or (color and 0xFFFFFF)
+                    c.drawCircle(gs.touch.manualAimKnobX, gs.touch.manualAimKnobY, knobRadius, p)
+                    p.style = Paint.Style.STROKE; p.color = color; p.strokeWidth = scale * 0.004f
+                    c.drawCircle(gs.touch.manualAimKnobX, gs.touch.manualAimKnobY, knobRadius, p)
+                    
+                    // Knob center dot
+                    p.style = Paint.Style.FILL; p.color = GameColors.HP
+                    c.drawCircle(gs.touch.manualAimKnobX, gs.touch.manualAimKnobY, knobRadius * 0.25f, p)
+                }
             }
             AttackMode.AUTO_AIM -> {
                 val color = if (gs.controls.attackRequested) GameColors.OVERCLOCK else GameColors.SHIELD

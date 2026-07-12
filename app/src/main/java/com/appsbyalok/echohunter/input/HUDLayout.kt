@@ -20,4 +20,10 @@ class HUDLayout {
 
     // Boss UI
     val bossHpRect = RectF()
+
+    // Safe Area Insets (Dynamic Notch Support)
+    var safeInsetTop = 0f
+    var safeInsetBottom = 0f
+    var safeInsetLeft = 0f
+    var safeInsetRight = 0f
 }

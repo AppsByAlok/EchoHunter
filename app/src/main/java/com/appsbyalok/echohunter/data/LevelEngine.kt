@@ -22,7 +22,8 @@ data class LevelConfig(
     val hpMultiplier: Float,
     val spawnRateMultiplier: Float,
     val aiIntelligence: Float,
-    val clearRewardKB: Long
+    val clearRewardKB: Long,
+    val parTime: Float
 )
 
 object LevelEngine {
@@ -122,8 +123,32 @@ object LevelEngine {
         clearReward += (clearReward * UpgradeSystem.getRewardBonusPercent()).toLong()
 
         if (features.contains(LevelFeature.ADMIN_BONUS)) {
-            return LevelConfig(features, 0, 1.1f, 1f, 0.4f, 0f, 153600L)
+            return LevelConfig(features, 0, 1.1f, 1f, 0.4f, 0f, 153600L, 180f)
         }
+
+        // --- NAYA: DYNAMIC PAR TIME CALCULATION ---
+        val basePar = if (isHard) 50f else 60f
+        // Level growth: up to 120s extra for higher levels
+        val levelTimeGrowth = getSaturatedValue(level, 0f, 120f, 600f)
+        
+        var featureBonus = 0f
+        if (features.contains(LevelFeature.MAZE)) featureBonus += 25f
+        if (features.contains(LevelFeature.BOSS)) {
+            // Boss HP scales massively, so time also scales
+            featureBonus += 30f + getSaturatedValue(level, 0f, 90f, 400f)
+        }
+        if (features.contains(LevelFeature.DEFENSE)) {
+            // Defense is wave-based, requires more time for enemy spawns
+            featureBonus += 80f + (level / 25f)
+        }
+        if (features.contains(LevelFeature.BOMB)) featureBonus += 55f
+        if (features.contains(LevelFeature.CLEAN_SWEEP)) featureBonus += 45f
+        if (features.contains(LevelFeature.ESCAPE)) featureBonus += 35f
+        if (features.contains(LevelFeature.DARKNESS)) featureBonus += 20f
+        
+        var parTime = basePar + levelTimeGrowth + featureBonus
+        // Hard mode is 10% tighter for a challenge
+        if (isHard) parTime *= 0.9f
 
         return LevelConfig(
             features = features,
@@ -132,7 +157,8 @@ object LevelEngine {
             hpMultiplier = hpMult,
             spawnRateMultiplier = spawnRateMult,
             aiIntelligence = aiIntel,
-            clearRewardKB = clearReward
+            clearRewardKB = clearReward,
+            parTime = parTime
         )
     }
 
