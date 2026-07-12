@@ -40,6 +40,7 @@ class MainActivity : Activity() {
         }
 
         savedInstanceState?.let { gameView.restoreState(it) }
+        applyOrientation()
 
         // Android 13+ Back Navigation
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -53,7 +54,7 @@ class MainActivity : Activity() {
         // Immersive Mode
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.insetsController?.let {
-                it.hide(android.view.WindowInsets.Type.systemBars())
+                it.hide(WindowInsets.Type.systemBars())
                 it.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             }
         } else {
@@ -94,5 +95,14 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         super.onDestroy()
         EchoAudioManager.release() // Releasing audio resources
+    }
+
+    fun applyOrientation() {
+        requestedOrientation = when (SaveManager.screenOrientation) {
+            1 -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            2 -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            0 -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+            else -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
     }
 }

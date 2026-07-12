@@ -28,6 +28,11 @@ object SaveManager {
     var isEffectsEnabled: Boolean = true
         private set
 
+    // --- ORIENTATION SETTINGS ---
+    // 0: Auto-Rotate, 1: Portrait, 2: Landscape, 3: Device Default
+    var screenOrientation: Int = 0
+        private set
+
     // --- TERMINAL SETTINGS ---
     var terminalTheme: String = "DARK"
         set(value) {
@@ -66,6 +71,11 @@ object SaveManager {
     fun setEffectsEnabled(enabled: Boolean) {
         isEffectsEnabled = enabled
         prefs.edit().putBoolean("isEffectsEnabled", isEffectsEnabled).apply()
+    }
+
+    fun setScreenOrientation(mode: Int) {
+        screenOrientation = mode
+        prefs.edit().putInt("screenOrientation", screenOrientation).apply()
     }
 
     fun setAttackMode(mode: Int) {
@@ -108,6 +118,7 @@ object SaveManager {
         isSoundEnabled = prefs.getBoolean("isSoundEnabled", true)
         isVibrationEnabled = prefs.getBoolean("isVibrationEnabled", true)
         isEffectsEnabled = prefs.getBoolean("isEffectsEnabled", true)
+        screenOrientation = prefs.getInt("screenOrientation", 0)
         
         terminalTheme = prefs.getString("terminalTheme", "DARK") ?: "DARK"
         typewriterSpeed = prefs.getInt("typewriterSpeed", 3)

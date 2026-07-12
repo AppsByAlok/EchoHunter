@@ -20,7 +20,7 @@ class UINanoOS {
     }
 
     private val closeBtnRect = RectF()
-    private val cardRects = Array(4) { RectF() }
+    private val cardRects = Array(5) { RectF() }
     private var hitOnDown = -1
     private var downX = 0f
     private var downY = 0f
@@ -30,13 +30,15 @@ class UINanoOS {
         "</> EXPLOIT.exe",
         "[+] LOADOUT.sys",
         "[■] ARCHIVES.dir",
-        ">_ ROOT_TERM.sh"
+        ">_ ROOT_TERM.sh",
+        "[*] SETTINGS.cfg"
     )
     private val subs = arrayOf(
         "Firmware Upgrades",
         "Hardware Weapons",
         "Simulation Memory",
-        "System Control & Logs"
+        "System Control & Logs",
+        "System Configuration"
     )
 
     fun draw(c: Canvas, targetW: Float, targetH: Float, scale: Float, time: Float) {
@@ -88,32 +90,38 @@ class UINanoOS {
         val gap = scale * 0.05f
 
         if (isPortrait) {
-            // Portrait: 1 Column, 4 Rows
+            // Portrait: 1 Column, 5 Rows
             val cardW = targetW * 0.85f
-            val cardH = scale * 0.2f
+            val cardH = scale * 0.16f
             val startX = (targetW - cardW) / 2f
             var currY = startY
 
-            for (i in 0..3) {
+            for (i in 0..4) {
                 cardRects[i].set(startX, currY, startX + cardW, currY + cardH)
                 drawCard(c, cardRects[i], i, scale)
                 currY += cardH + gap
             }
         } else {
-            // Landscape: 2x2 Grid
-            val cardW = targetW * 0.4f
-            val cardH = scale * 0.18f
-            val startX1 = targetW / 2f - cardW - gap / 2f
-            val startX2 = targetW / 2f + gap / 2f
+            // Landscape: Grid (3 on top, 2 on bottom or similar)
+            val cardW = targetW * 0.3f
+            val cardH = scale * 0.16f
+            val startX1 = targetW / 2f - cardW * 1.5f - gap
+            val startX2 = targetW / 2f - cardW / 2f
+            val startX3 = targetW / 2f + cardW / 2f + gap
 
             // Row 1
             cardRects[0].set(startX1, startY, startX1 + cardW, startY + cardH)
             cardRects[1].set(startX2, startY, startX2 + cardW, startY + cardH)
+            cardRects[2].set(startX3, startY, startX3 + cardW, startY + cardH)
+            
             // Row 2
-            cardRects[2].set(startX1, startY + cardH + gap, startX1 + cardW, startY + cardH * 2 + gap)
-            cardRects[3].set(startX2, startY + cardH + gap, startX2 + cardW, startY + cardH * 2 + gap)
+            val row2Y = startY + cardH + gap
+            val startX2_1 = targetW / 2f - cardW - gap / 2f
+            val startX2_2 = targetW / 2f + gap / 2f
+            cardRects[3].set(startX2_1, row2Y, startX2_1 + cardW, row2Y + cardH)
+            cardRects[4].set(startX2_2, row2Y, startX2_2 + cardW, row2Y + cardH)
 
-            for (i in 0..3) drawCard(c, cardRects[i], i, scale)
+            for (i in 0..4) drawCard(c, cardRects[i], i, scale)
         }
 
         // --- 3. BOTTOM FOOTER (DISCONNECT) ---
@@ -128,7 +136,7 @@ class UINanoOS {
             targetH - bottomMargin
         )
 
-        val isPressed = (hitOnDown == 4)
+        val isPressed = (hitOnDown == 5)
         val baseRed = 0xFF330000.toInt()
         p.style = Paint.Style.FILL; p.color = if (isPressed) GameColors.mixColors(baseRed, GameColors.RED, 0.4f) else baseRed
         c.drawRoundRect(closeBtnRect, scale * 0.02f, scale * 0.02f, p)
@@ -171,10 +179,10 @@ class UINanoOS {
                 downX = x
                 downY = y
                 hitOnDown = when {
-                    closeBtnRect.contains(x, y) -> 4
+                    closeBtnRect.contains(x, y) -> 5
                     else -> {
                         var hit = -1
-                        for (i in 0..3) {
+                        for (i in 0..4) {
                             if (cardRects[i].contains(x, y)) {
                                 hit = i
                                 break
@@ -196,10 +204,10 @@ class UINanoOS {
             MotionEvent.ACTION_UP -> {
                 if (hitOnDown != -1) {
                     val hitOnUp = when {
-                        closeBtnRect.contains(x, y) -> 4
+                        closeBtnRect.contains(x, y) -> 5
                         else -> {
                             var hit = -1
-                            for (i in 0..3) {
+                            for (i in 0..4) {
                                 if (cardRects[i].contains(x, y)) {
                                     hit = i
                                     break
@@ -210,12 +218,12 @@ class UINanoOS {
                     }
 
                     if (hitOnUp == hitOnDown) {
-                        if (hitOnUp == 4) {
+                        if (hitOnUp == 5) {
                             EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
                             onDisconnect()
                         } else {
                             EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
-                            onAppSelect(hitOnUp) // i: 0=Decompiler, 1=Arsenal, 2=Archives, 3=Terminal
+                            onAppSelect(hitOnUp) // i: 0=Decompiler, 1=Arsenal, 2=Archives, 3=Terminal, 4=Settings
                         }
                     }
                 }

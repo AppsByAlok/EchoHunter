@@ -10,6 +10,7 @@ import android.media.ToneGenerator
 import android.os.Bundle
 import android.view.MotionEvent
 import android.view.View
+import com.appsbyalok.echohunter.MainActivity
 import com.appsbyalok.echohunter.R
 import com.appsbyalok.echohunter.data.SaveManager
 import com.appsbyalok.echohunter.data.StoryProtocol
@@ -65,6 +66,7 @@ class GameView(context: Context) : View(context) {
     internal val uiNanoOS = UINanoOS()
     internal val uiArchives = UIArchives()
     internal val uiTerminal = UITerminal()
+    internal val uiSettings = com.appsbyalok.echohunter.ui.UISettings()
     internal val touchController = TouchController(gs)
 
     internal var storyStep = 0
@@ -84,6 +86,13 @@ class GameView(context: Context) : View(context) {
     internal val onHelpOpen: () -> Unit = { changeState(3) }
     internal val onModMenuOpen: () -> Unit = { }
     internal val onHelpClose: () -> Unit = { changeState(0) }
+    internal val onWipeData: () -> Unit = {
+        gs.resetGame()
+        disconnectCable()
+    }
+    internal val onOrientationChange: () -> Unit = {
+        (context as? MainActivity)?.applyOrientation()
+    }
     internal val onDifficultyToggle: () -> Unit = {
         if (SaveManager.isHardModeUnlocked) {
             gs.difficulty = if (gs.difficulty == 0) 1 else 0
@@ -223,7 +232,7 @@ class GameView(context: Context) : View(context) {
             3 -> stateManager.helpState
             4, 5, 6, 7 -> stateManager.storyState
             12 -> stateManager.victoryState
-            10, 11, 13, 14, 15 -> stateManager.subMenuState
+            10, 11, 13, 14, 15, 16 -> stateManager.subMenuState
             else -> stateManager.mainMenuState
         }
         if (stateManager.currentState != newStateObj) {
@@ -514,6 +523,10 @@ class GameView(context: Context) : View(context) {
 
 
     fun handleBackPressed(): Boolean {
+        if (gs.state == 16) {
+            onAppClose()
+            return true
+        }
         return stateManager.onBackPressed()
     }
 
