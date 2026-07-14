@@ -704,11 +704,11 @@ class MarketCommand : TerminalCommand {
         return CommandResult(
             output = ">> ACCESSING UNDERGROUND MARKET...\n>> TYPE 'LIST' TO SEE ITEMS, 'EXIT' TO LEAVE.",
             mode = OutputMode.TYPEWRITER,
-            subSession = MarketSession(this)
+            subSession = MarketSession()
         )
     }
 
-    inner class MarketSession(cmd: MarketCommand) : InputHandler {
+    inner class MarketSession() : InputHandler {
         override fun getPrompt(): String = "MARKET>"
 
         override fun handleInput(input: String, context: CommandContext): CommandResult {

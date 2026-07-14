@@ -53,6 +53,12 @@ object SaveManager {
     var activeAttackMode: Int = 1 // Default to AUTO_AIM (index 1)
         private set
 
+    // Temporary session cache for UI layout (Notch handling)
+    var lastInsetTop = 0f
+    var lastInsetBottom = 0f
+    var lastInsetLeft = 0f
+    var lastInsetRight = 0f
+
     fun setAutoNextLevel(enabled: Boolean) {
         isAutoNextLevelEnabled = enabled
         prefs.edit().putBoolean("isAutoNextLevelEnabled", isAutoNextLevelEnabled).apply()

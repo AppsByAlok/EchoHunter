@@ -194,6 +194,14 @@ class CollisionSystem(
                             effectSystem.spawnFloatingText(gs.bossX, gs.bossY, damage.toLong(), GameColors.RED)
                             gs.shakeAmount = max(gs.shakeAmount, scale * 0.1f)
 
+                            // PATCH: CRIT VAMP (Lifesteal)
+                            if (UpgradeSystem.hasCritVampPatch() && gs.hp < gs.maxHp) {
+                                if (kotlin.random.Random.nextFloat() < 0.2f) { // 20% chance as per spec
+                                    gs.hp = min(gs.maxHp, gs.hp + 2)
+                                    effectSystem.spawnFloatingText(gs.px, gs.py, 2L, GameColors.HP)
+                                }
+                            }
+
                             // NEW: KINETIC OVERLOAD (AoE Damage on Crit)
                             val overloadLvl = UpgradeSystem.getLevel(UpgradeType.KINETIC_OVERLOAD)
                             if (overloadLvl > 0) {
@@ -273,6 +281,14 @@ class CollisionSystem(
                                 effectSystem.spawnFloatingText(enemySystem.ex[i], enemySystem.ey[i], damage.toLong(), GameColors.RED)
                                 EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 50)
                                 
+                                // PATCH: CRIT VAMP (Lifesteal)
+                                if (UpgradeSystem.hasCritVampPatch() && gs.hp < gs.maxHp) {
+                                    if (kotlin.random.Random.nextFloat() < 0.2f) {
+                                        gs.hp = min(gs.maxHp, gs.hp + 2)
+                                        effectSystem.spawnFloatingText(gs.px, gs.py, 2L, GameColors.HP)
+                                    }
+                                }
+
                                 // NEW: KINETIC OVERLOAD (Explosion on Crit)
                                 val overloadLvl = UpgradeSystem.getLevel(UpgradeType.KINETIC_OVERLOAD)
                                 if (overloadLvl > 0) {
@@ -322,6 +338,13 @@ class CollisionSystem(
                                 
                                 // Combo Window Upgrade
                                 gs.comboBreakTimer = 3.0f + UpgradeSystem.getComboBonusTime()
+
+                                // PATCH: COMBO SHIELD (Shield recharge on Combo x10)
+                                if (UpgradeSystem.hasComboShieldPatch() && gs.combo % 10 == 0) {
+                                    // Recharge existing timer by 2 seconds, max 5s
+                                    gs.shieldTimer = min(5f, gs.shieldTimer + 2f)
+                                    effectSystem.spawnFloatingText(gs.px, gs.py, 100L, GameColors.SHIELD) // 100 for "100%" boost feel
+                                }
 
                                 if (!gs.isOverclocked) {
                                     gs.overclockMeter = min(100f, gs.overclockMeter + 15f)
@@ -610,7 +633,11 @@ class CollisionSystem(
         }
 
         onScoreAdd((50 * UpgradeSystem.getRewardMultiplier()).toLong())
-        gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = true)
+        
+        // PATCH: DATA OVERFLOW (2x Boss Data Drops)
+        val bossReward = LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = true)
+        val finalReward = if (UpgradeSystem.hasDataOverflowPatch()) bossReward * 2 else bossReward
+        gs.collectedDataKB += finalReward
 
         effectSystem.spawnFloatingText(gs.bossX, gs.bossY, (50 * UpgradeSystem.getRewardMultiplier()).toLong(), GameColors.YELLOW)
         EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 500)

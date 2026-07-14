@@ -37,7 +37,10 @@ enum class UpgradeType {
     // --- FIRMWARE PATCHES (MARKET EXCLUSIVES) ---
     PATCH_OVERCLOCK_REGEN, // +25% Overclock charge rate
     PATCH_HEALTH_SIPHON,   // 5% chance to heal 1 HP on enemy kill
-    PATCH_SHIELD_BURST     // EMP Shockwave on shield depletion
+    PATCH_SHIELD_BURST,    // EMP Shockwave on shield depletion
+    PATCH_CRIT_VAMP,       // Lifesteal on Critical Hits
+    PATCH_DATA_OVERFLOW,   // 2x Data from Bosses
+    PATCH_COMBO_SHIELD     // Shield recharge on Combo x10
 }
 
 data class UpgradeConfig(
@@ -221,6 +224,24 @@ object UpgradeSystem {
             "Releases a localized EMP burst when your shield is depleted.",
             "Weaponizing failure. If the shield drops, everyone else goes with it.",
             1, 3500000L, 1.0f // 3.5 GB
+        ),
+        UpgradeType.PATCH_CRIT_VAMP to UpgradeConfig(
+            UpgradeType.PATCH_CRIT_VAMP, "PATCH_VAMP.FW", "Lifesteal on Critical Hits.",
+            "Critical strikes have a 20% chance to restore 2 HP.",
+            "Feeding on the flaws in their code. Their destruction is your vitality.",
+            1, 7500000L, 1.0f // 7.5 GB
+        ),
+        UpgradeType.PATCH_DATA_OVERFLOW to UpgradeConfig(
+            UpgradeType.PATCH_DATA_OVERFLOW, "PATCH_OVERFLOW.FW", "2x Boss Data Drops.",
+            "Doubles the amount of data harvested from Boss-class entities.",
+            "Removing the limiters on data ingestion protocols.",
+            1, 10000000L, 1.0f // 10 GB
+        ),
+        UpgradeType.PATCH_COMBO_SHIELD to UpgradeConfig(
+            UpgradeType.PATCH_COMBO_SHIELD, "PATCH_C_SHIELD.FW", "Shield Regen on Combo x10.",
+            "Instantly restores 10% shield when hitting a 10x combo.",
+            "Momentum is the best defense. Keep the rhythm, keep the shield.",
+            1, 4500000L, 1.0f // 4.5 GB
         )
     )
 
@@ -303,4 +324,7 @@ object UpgradeSystem {
     fun hasOverclockRegenPatch(): Boolean = getLevel(UpgradeType.PATCH_OVERCLOCK_REGEN) > 0
     fun hasHealthSiphonPatch(): Boolean = getLevel(UpgradeType.PATCH_HEALTH_SIPHON) > 0
     fun hasShieldBurstPatch(): Boolean = getLevel(UpgradeType.PATCH_SHIELD_BURST) > 0
+    fun hasCritVampPatch(): Boolean = getLevel(UpgradeType.PATCH_CRIT_VAMP) > 0
+    fun hasDataOverflowPatch(): Boolean = getLevel(UpgradeType.PATCH_DATA_OVERFLOW) > 0
+    fun hasComboShieldPatch(): Boolean = getLevel(UpgradeType.PATCH_COMBO_SHIELD) > 0
 }

@@ -9,9 +9,11 @@ import android.view.MotionEvent
 import com.appsbyalok.echohunter.data.SaveManager
 import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.input.AttackMode
+import com.appsbyalok.echohunter.ui.components.UIMenuButton
+import com.appsbyalok.echohunter.ui.components.UIMenuCard
+import com.appsbyalok.echohunter.ui.components.UIScrollView
 import com.appsbyalok.echohunter.utils.EchoAudioManager
 import com.appsbyalok.echohunter.utils.GameColors
-import kotlin.math.abs
 
 class UISettings {
     private val p = Paint().apply { isAntiAlias = true }
@@ -20,14 +22,12 @@ class UISettings {
         typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
     }
 
-    private val backBtnRect = RectF()
+    private val backButton = UIMenuButton()
+    private val optionCard = UIMenuCard()
     private val optionRects = Array(7) { RectF() }
     private var hitOnDown = -1
 
-    private var scrollY = 0f
-    private var lastTouchY = 0f
-    private var isDragging = false
-    private var maxScroll = 0f
+    private val scroller = UIScrollView()
 
     private var showWipeConfirm = false
     private val confirmDialogRect = RectF()
@@ -48,42 +48,56 @@ class UISettings {
         c.drawColor(0xEE050A0F.toInt())
 
         val isPortrait = targetH > targetW
+        val insetT = SaveManager.lastInsetTop
+        val insetR = SaveManager.lastInsetRight
+        val insetB = SaveManager.lastInsetBottom
 
         // --- HEADER (Fixed) ---
         pText.textAlign = Paint.Align.CENTER
-        pText.textSize = scale * 0.07f
+        pText.textSize = scale * 0.08f
         pText.color = GameColors.PULSE
-        c.drawText("SYSTEM CONFIG", targetW / 2f, scale * 0.12f, pText)
+        pText.isFakeBoldText = true
+        pText.setShadowLayer(10f, 0f, 0f, GameColors.PULSE)
+        c.drawText("SYSTEM CONFIG", targetW / 2f, scale * 0.12f + insetT, pText)
+        pText.clearShadowLayer()
+        pText.isFakeBoldText = false
+
+        // Subtitle line
+        p.style = Paint.Style.STROKE
+        p.strokeWidth = scale * 0.002f
+        p.color = GameColors.CLARITY
+        c.drawLine(targetW*0.25f, scale * 0.14f + insetT, targetW*0.75f, scale * 0.14f + insetT, p)
 
         // --- SCROLLABLE CONTENT ---
-        val startY = scale * 0.22f
+        val startY = scale * 0.22f + insetT
         val itemH = scale * 0.11f
         val gap = scale * 0.02f
         val itemW = if (isPortrait) targetW * 0.85f else targetW * 0.6f
         val startX = (targetW - itemW) / 2f
 
         val totalContentHeight = options.size * (itemH + gap)
-        val viewportHeight = targetH - startY - (scale * 0.15f) // Reserve space for Return button
-        maxScroll = maxOf(0f, totalContentHeight - viewportHeight)
-        
-        c.save()
-        c.clipRect(0f, startY - gap, targetW, targetH - scale * 0.14f)
-        c.translate(0f, -scrollY)
+        val viewportHeight = targetH - startY - (scale * 0.15f) - insetB // Reserve space for Return button
+
+        scroller.viewport.set(0f, startY - gap, targetW, startY - gap + viewportHeight)
+        scroller.begin(c)
 
         for (i in options.indices) {
             val rect = optionRects[i]
-            val top = startY + i * (itemH + gap)
+            val top = i * (itemH + gap) + gap
             rect.set(startX, top, startX + itemW, top + itemH)
 
-            val isPressed = (hitOnDown == i) && !isDragging
-            p.style = Paint.Style.FILL
-            p.color = if (isPressed) 0xFF102530.toInt() else 0xFF0A1520.toInt()
-            c.drawRoundRect(rect, scale * 0.02f, scale * 0.02f, p)
-
-            p.style = Paint.Style.STROKE
-            p.color = if (i == 6) GameColors.RED else GameColors.PULSE
-            p.strokeWidth = scale * 0.004f
-            c.drawRoundRect(rect, scale * 0.02f, scale * 0.02f, p)
+            val isPressed = (hitOnDown == i) && !scroller.isDragging && !scroller.isDraggingScrollbar
+            optionCard.draw(
+                c = c,
+                rect = rect,
+                scale = scale,
+                paint = p,
+                pressed = isPressed,
+                fillColor = 0xFF0A1520.toInt(),
+                strokeColor = if (i == 6) GameColors.RED else GameColors.PULSE,
+                activeStrokeColor = if (i == 6) GameColors.RED else GameColors.PULSE,
+                radius = scale * 0.02f
+            )
 
             pText.textAlign = Paint.Align.LEFT
             pText.textSize = scale * 0.038f
@@ -110,21 +124,24 @@ class UISettings {
             pText.color = if (valueText == "OFF" || i == 6) GameColors.RED else GameColors.PULSE
             c.drawText(valueText, rect.right - scale * 0.04f, rect.centerY() + scale * 0.015f, pText)
         }
-        c.restore()
+        scroller.end(c, totalContentHeight + gap, scale, insetR)
 
         // --- BACK BUTTON (Fixed at bottom) ---
         val btnW = scale * 0.3f
         val btnH = scale * 0.08f
-        backBtnRect.set(targetW / 2f - btnW / 2f, targetH - btnH - scale * 0.04f, targetW / 2f + btnW / 2f, targetH - scale * 0.04f)
-
-        p.style = Paint.Style.STROKE
-        p.color = GameColors.CLARITY
-        c.drawRoundRect(backBtnRect, scale * 0.01f, scale * 0.01f, p)
-
-        pText.textAlign = Paint.Align.CENTER
-        pText.textSize = scale * 0.035f
-        pText.color = GameColors.CLARITY
-        c.drawText("RETURN", backBtnRect.centerX(), backBtnRect.centerY() + scale * 0.012f, pText)
+        backButton.set(targetW / 2f - btnW / 2f, targetH - btnH - scale * 0.04f - insetB, targetW / 2f + btnW / 2f, targetH - scale * 0.04f - insetB)
+        backButton.draw(
+            c = c,
+            scale = scale,
+            paint = p,
+            textPaint = pText,
+            label = "RETURN",
+            pressed = hitOnDown == 10,
+            fillColor = 0x00000000,
+            strokeColor = GameColors.CLARITY,
+            textColor = GameColors.CLARITY,
+            radius = scale * 0.01f
+        )
 
         if (showWipeConfirm) {
             drawWipeConfirm(c, targetW, targetH, scale)
@@ -175,6 +192,10 @@ class UISettings {
         c.drawText("WIPE", confirmYesRect.centerX(), confirmYesRect.centerY() + scale * 0.012f, pText)
     }
 
+    fun update(dt: Float) {
+        scroller.updatePhysics(dt)
+    }
+
     fun onTouch(vx: Float, vy: Float, action: Int, scale: Float, gs: GameState, onClose: () -> Unit, onWipe: () -> Unit, onOrientChange: () -> Unit): Boolean {
         if (showWipeConfirm) {
             // ... (keep wipe confirm logic as is, it's overlay)
@@ -201,42 +222,33 @@ class UISettings {
             return returnValue
         }
 
+        scroller.onTouch(vx, vy, action, scale)
+
         when (action) {
             MotionEvent.ACTION_DOWN -> {
                 hitOnDown = -1
-                lastTouchY = vy
-                isDragging = false
                 
                 // Adjust for scroll when checking hits
-                val adjustedVy = vy + scrollY
+                val adjustedVy = vy - scroller.viewport.top - scroller.scrollY
+                val adjustedVx = vx - scroller.viewport.left
                 for (i in options.indices) {
-                    if (optionRects[i].contains(vx, adjustedVy)) {
+                    if (optionRects[i].contains(adjustedVx, adjustedVy)) {
                         hitOnDown = i
                         break
                     }
                 }
-                if (backBtnRect.contains(vx, vy)) hitOnDown = 10
-            }
-            MotionEvent.ACTION_MOVE -> {
-                val diff = lastTouchY - vy
-                if (abs(diff) > scale * 0.01f) {
-                    isDragging = true
-                }
-                if (isDragging) {
-                    scrollY += diff
-                    scrollY = scrollY.coerceIn(0f, maxScroll)
-                    lastTouchY = vy
-                }
+                if (backButton.contains(vx, vy)) hitOnDown = 10
             }
             MotionEvent.ACTION_UP -> {
-                if (!isDragging && hitOnDown != -1) {
-                    if (backBtnRect.contains(vx, vy) && hitOnDown == 10) {
+                if (!scroller.isDragging && !scroller.isDraggingScrollbar && hitOnDown != -1) {
+                    if (backButton.contains(vx, vy) && hitOnDown == 10) {
                         EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
                         onClose()
                     } else if (hitOnDown < options.size) {
-                         // Check with adjusted Y for items
-                        val adjustedVy = vy + scrollY
-                        if (optionRects[hitOnDown].contains(vx, adjustedVy)) {
+                         // Check with adjusted coordinates for items
+                        val adjustedVy = vy - scroller.viewport.top - scroller.scrollY
+                        val adjustedVx = vx - scroller.viewport.left
+                        if (optionRects[hitOnDown].contains(adjustedVx, adjustedVy)) {
                             EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100)
                             when (hitOnDown) {
                                 0 -> SaveManager.setSoundEnabled(!SaveManager.isSoundEnabled)
@@ -262,7 +274,6 @@ class UISettings {
                     }
                 }
                 hitOnDown = -1
-                isDragging = false
             }
         }
         return true

@@ -75,7 +75,8 @@ class MainMenuState(private val manager: AppStateManager) : IAppState {
         manager.view.uiMainMenu.draw(c, scale, gs, width, height, manager.view.effectSys)
     }
     override fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean {
-        return manager.view.uiMainMenu.onTouch(vx, vy, action, scale, targetW, targetH, manager.view, gs, manager.view.onDifficultyToggle, manager.view.onHelpOpen, manager.view.onModMenuOpen, manager.view.onMenuRoute)
+        return manager.view.uiMainMenu.onTouch(vx, vy, action, scale, targetW, targetH, manager.view, gs, manager.view.onDifficultyToggle, manager.view.onHelpOpen,
+            manager.view.onMenuRoute)
     }
     override fun onBackPressed(gs: GameState): Boolean = false
 }
@@ -337,14 +338,17 @@ class SubMenuState(private val manager: AppStateManager) : IAppState {
     override fun onEnter(gs: GameState) {}
     override fun onExit(gs: GameState) {}
     override fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {
-        manager.view.uiHelpMenu.update(dt)
+        when (gs.state) {
+            16 -> manager.view.uiSettings.update(dt)
+            else -> manager.view.uiHelpMenu.update(dt)
+        }
     }
     override fun draw(c: Canvas, gs: GameState, width: Float, height: Float, scale: Float, dt: Float) {
         c.drawColor(0xFF050A0F.toInt())
         when (gs.state) {
-            10 -> manager.view.uiDecompiler.draw(c, width, height, scale)
-            11 -> manager.view.uiArchives.draw(c, width, height, gs, scale)
-            13 -> manager.view.uiArsenal.draw(c, width, height, scale, gs)
+            10 -> manager.view.uiDecompiler.draw(c, width, height, scale, dt)
+            11 -> manager.view.uiArchives.draw(c, width, height, gs, scale, dt)
+            13 -> manager.view.uiArsenal.draw(c, width, height, scale, gs, dt)
             14 -> manager.view.uiNanoOS.draw(c, width, height, scale, gs.timeSinceStart)
             15 -> manager.view.uiTerminal.draw(c, width, height, scale)
             16 -> manager.view.uiSettings.draw(c, width, height, scale, gs)
@@ -353,7 +357,8 @@ class SubMenuState(private val manager: AppStateManager) : IAppState {
     override fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean {
         return when (gs.state) {
             10 -> manager.view.uiDecompiler.onTouch(vx, vy, action, scale, gs, manager.view.onAppClose)
-            11 -> manager.view.uiArchives.onTouch(vx, vy, action, scale, gs, manager.view.onArchiveSelect, manager.view.onAppClose)
+            11 -> manager.view.uiArchives.onTouch(vx, vy, action,
+                gs, manager.view.onArchiveSelect, manager.view.onAppClose)
             13 -> manager.view.uiArsenal.onTouch(vx, vy, action, scale, gs, manager.view.onAppClose)
             14 -> manager.view.uiNanoOS.onTouch(vx, vy, action, scale, { appIndex ->
                 manager.view.menuReturnState = 14

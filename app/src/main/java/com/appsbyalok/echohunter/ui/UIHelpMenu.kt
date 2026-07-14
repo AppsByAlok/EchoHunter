@@ -16,10 +16,11 @@ import com.appsbyalok.echohunter.data.SaveManager
 import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.systems.EffectSystem
+import com.appsbyalok.echohunter.ui.components.UIMenuButton
+import com.appsbyalok.echohunter.ui.components.UIScrollView
 import com.appsbyalok.echohunter.utils.EchoAudioManager
 import com.appsbyalok.echohunter.utils.GameColors
 import com.appsbyalok.echohunter.utils.LevelIcons
-import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
@@ -31,16 +32,9 @@ class UIHelpMenu(private val context: Context) {
         typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
     }
 
-    private var scrollY = 0f
-    private var maxScroll = 0f
-    private var lastTouchY = 0f
-    private var isDragging = false
+    private val scroller = UIScrollView()
 
-    // --- NAYA: MOMENTUM SCROLL VARIABLES ---
-    private var scrollVelocity = 0f
-    private var lastTouchTime = 0L
-
-    private val backBtnRect = RectF()
+    private val backButton = UIMenuButton()
     private val repairBtnRect = RectF()
     private var hitOnDown = -1
     private var downX = 0f
@@ -70,6 +64,7 @@ class UIHelpMenu(private val context: Context) {
 
     fun update(dt: Float) {
         if (repairFadeTimer > 0f) repairFadeTimer -= dt
+        scroller.updatePhysics(dt)
         if (isBooting) {
             bootTimer += dt
             // After 2.5 seconds boot
@@ -87,24 +82,10 @@ class UIHelpMenu(private val context: Context) {
         val bgColor = 0xEE05050A.toInt()
         c.drawColor(bgColor) // Dark Hacker Background
 
-        // --- NAYA: MOMENTUM / FLING PHYSICS ---
-        if (!isDragging && abs(scrollVelocity) > 0.5f) {
-            scrollY += scrollVelocity
-            scrollVelocity *= 0.96f
-
-            if (scrollY > 0f) {
-                scrollY = 0f
-                scrollVelocity = 0f
-            } else if (scrollY < -maxScroll) {
-                scrollY = -maxScroll
-                scrollVelocity = 0f
-            }
-        }
-
         val isPortrait = targetW < targetH
         val btnW = if (isPortrait) scale * 0.45f else scale * 0.3f
         val btnH = scale * 0.1f
-        backBtnRect.set(
+        backButton.set(
             targetW / 2f - btnW / 2f,
             targetH * 0.88f - btnH / 2f,
             targetW / 2f + btnW / 2f,
@@ -201,27 +182,26 @@ class UIHelpMenu(private val context: Context) {
             return
         }
 
-
-        // --- NORMAL HELP UI (Scrollable & Responsive) ---
-        var titleSize = scale * 0.08f
-        pText.textSize = titleSize
-        val headerTitle = "UPLINK TERMINAL : DATALOG"
-        while (pText.measureText(headerTitle) > targetW * 0.95f) {
-            titleSize *= 0.95f
-            pText.textSize = titleSize
-        }
-
+        // --- HEADER ---
         pText.textAlign = Paint.Align.CENTER
+        pText.textSize = scale * 0.08f
         pText.color = GameColors.PULSE
-        pText.setShadowLayer(20f, 0f, 0f, GameColors.PULSE)
-        c.drawText(headerTitle, targetW / 2f, targetH * 0.12f, pText)
+        pText.isFakeBoldText = true
+        pText.setShadowLayer(15f, 0f, 0f, GameColors.PULSE)
+        c.drawText("FIELD MANUAL", targetW / 2f, targetH * 0.1f, pText)
         pText.clearShadowLayer()
+        pText.isFakeBoldText = false
 
-        c.save()
-        // Clip view so text doesn't overlap the header and footer
-        c.clipRect(0f, targetH * 0.15f, targetW, targetH * 0.85f)
+        // Divider
+        p.style = Paint.Style.STROKE
+        p.strokeWidth = scale * 0.002f
+        p.color = GameColors.CLARITY
+        c.drawLine(targetW*0.3f, targetH * 0.13f, targetW*0.7f, targetH * 0.13f, p)
 
-        var sy = targetH * 0.22f + scrollY
+        scroller.viewport.set(0f, targetH * 0.15f, targetW, targetH * 0.84f)
+        scroller.begin(c)
+
+        var sy = scale * 0.07f // Relative to scroller.viewport.top
         val lh = scale * 0.045f
         val headerH = scale * 0.07f
 
@@ -410,11 +390,8 @@ class UIHelpMenu(private val context: Context) {
             if (isHardModeUnlocked) GameColors.RED else GameColors.HP
         )
 
-        c.restore()
-
-        val totalHeight = sy - (targetH * 0.22f + scrollY)
-        val viewableArea = (targetH * 0.85f) - (targetH * 0.15f)
-        maxScroll = max(0f, totalHeight - viewableArea + targetH * 0.05f)
+        val totalContentHeight = sy + scale * 0.05f
+        scroller.end(c, totalContentHeight, scale)
 
         // Draw Fixed Back Button (Footer)
 
@@ -424,29 +401,25 @@ class UIHelpMenu(private val context: Context) {
         p.color = (0x33 or (GameColors.RED and 0xFFFFFF)) // 20% alpha red
         p.strokeWidth = scale * 0.002f
         c.drawLine(0f, targetH * 0.84f, targetW, targetH * 0.84f, p)
-        backBtnRect.set(
+        backButton.set(
             targetW / 2f - btnW / 2f,
             targetH * 0.91f - btnH / 2f,
             targetW / 2f + btnW / 2f,
             targetH * 0.91f + btnH / 2f
         )
-        p.style = Paint.Style.FILL
-        p.color = 0xFF1A0000.toInt()
-        c.drawRoundRect(backBtnRect, scale * 0.02f, scale * 0.02f, p)
-        p.style = Paint.Style.STROKE
-        p.color = GameColors.RED
-        p.strokeWidth = scale * 0.005f
-        c.drawRoundRect(backBtnRect, scale * 0.02f, scale * 0.02f, p)
-        pText.textAlign = Paint.Align.CENTER
-        pText.color = GameColors.RED
-        pText.textSize = scale * 0.04f
-
-        pText.setShadowLayer(10f, 0f, 0f, GameColors.RED)
-        val textHeightOffset = (pText.descent() + pText.ascent()) / 2f
-        c.drawText(
-            "DISCONNECT", backBtnRect.centerX(), backBtnRect.centerY() - textHeightOffset, pText
+        backButton.draw(
+            c = c,
+            scale = scale,
+            paint = p,
+            textPaint = pText,
+            label = "DISCONNECT",
+            pressed = hitOnDown == 2,
+            fillColor = 0xFF1A0000.toInt(),
+            strokeColor = GameColors.RED,
+            textColor = GameColors.RED,
+            radius = scale * 0.02f,
+            textSize = scale * 0.04f
         )
-        pText.clearShadowLayer()
     }
 
     fun onTouch(
@@ -463,52 +436,29 @@ class UIHelpMenu(private val context: Context) {
             MotionEvent.ACTION_DOWN -> {
                 downX = x
                 downY = y
-                lastTouchY = y
-                lastTouchTime = System.currentTimeMillis()
-                scrollVelocity = 0f
-                isDragging = false
                 hitOnDown = when {
                     StoryProtocol.isGlitchActive && repairFadeTimer <= 0f && !isBooting && repairBtnRect.contains(x, y) -> 1
-                    backBtnRect.contains(x, y) || repairFadeTimer > 0f -> 2
+                    backButton.contains(x, y) || repairFadeTimer > 0f -> 2
                     else -> -1
                 }
             }
 
             MotionEvent.ACTION_MOVE -> {
-                val dy = y - lastTouchY
                 val dx = x - downX
-                val currentTime = System.currentTimeMillis()
-                val dt = currentTime - lastTouchTime
-
-                val distSq = dx * dx + (y - downY) * (y - downY)
+                val dy = y - downY
+                val distSq = dx * dx + dy * dy
                 val threshold = scale * scale * 0.05f
 
-                if (abs(dy) > scale * 0.02f) {
-                    isDragging = true
-                    hitOnDown = -1
-                } else if (distSq > threshold) {
+                if (distSq > threshold) {
                     hitOnDown = -1
                 }
-
-                // Calculate momentum
-                if (dt > 0) {
-                    val rawVelocity = (dy / dt.toFloat()) * 16f
-                    scrollVelocity = (scrollVelocity * 0.3f) + (rawVelocity * 0.7f)
-                }
-
-                scrollY += dy
-                if (scrollY > 0f) scrollY = 0f
-                if (scrollY < -maxScroll) scrollY = -maxScroll
-
-                lastTouchY = y
-                lastTouchTime = currentTime
             }
 
             MotionEvent.ACTION_UP -> {
-                if (!isDragging && gs.stateTimer > 0.2f && hitOnDown != -1) {
+                if (!scroller.isDragging && !scroller.isDraggingScrollbar && gs.stateTimer > 0.2f && hitOnDown != -1) {
                     val hitOnUp = when {
                         StoryProtocol.isGlitchActive && repairFadeTimer <= 0f && !isBooting && repairBtnRect.contains(x, y) -> 1
-                        backBtnRect.contains(x, y) || repairFadeTimer > 0f -> 2
+                        backButton.contains(x, y) || repairFadeTimer > 0f -> 2
                         else -> -1
                     }
 
@@ -530,11 +480,9 @@ class UIHelpMenu(private val context: Context) {
                         }
                     }
                 }
-                isDragging = false
                 hitOnDown = -1
             }
             MotionEvent.ACTION_CANCEL -> {
-                isDragging = false
                 hitOnDown = -1
             }
         }

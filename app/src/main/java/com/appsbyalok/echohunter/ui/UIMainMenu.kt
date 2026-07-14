@@ -50,7 +50,6 @@ class UIMainMenu(private val context: Context) {
     private val portY = FloatArray(3)
     private val helpBtnRect = RectF()
     private val hardModeBtnRect = RectF()
-    private val modMenuBtnRect = RectF()
     private var touchDownX = 0f; private var touchDownY = 0f
     private var wasSwitchHitOnDown = false
     private var hitPortOnDown = -1
@@ -391,7 +390,7 @@ class UIMainMenu(private val context: Context) {
             val pFill = Paint().apply { isAntiAlias = true; style = Paint.Style.FILL }
             val pText = Paint().apply { isAntiAlias = true; textAlign = Paint.Align.CENTER; typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD); textSize = scale * 0.05f }
 
-            val rect = android.graphics.RectF(startX, startY, startX + cardW, startY + cardH)
+            val rect = RectF(startX, startY, startX + cardW, startY + cardH)
 
             if (isFullyBeatenCurrent || i == currentStreak) {
                 // NEXT TARGET: FULL GLOW
@@ -425,7 +424,7 @@ class UIMainMenu(private val context: Context) {
     fun onTouch(
         vx: Float, vy: Float, action: Int, scale: Float, targetW: Float, targetH: Float,
         view: View, gs: GameState, onDifficultyToggle: () -> Unit, onHelpOpen: () -> Unit,
-        onModMenuOpen: () -> Unit, onRouteConnection: (Int) -> Unit
+        onRouteConnection: (Int) -> Unit
     ): Boolean {
         val pw = scale * 0.08f
         val ph = scale * 0.045f

@@ -159,35 +159,31 @@ class HUDRenderer(private val context: Context) {
         if (com.appsbyalok.echohunter.data.UpgradeSystem.hasHealthSiphonPatch()) activePatches++
         if (com.appsbyalok.echohunter.data.UpgradeSystem.hasShieldBurstPatch()) activePatches++
         if (com.appsbyalok.echohunter.data.UpgradeSystem.hasOverclockRegenPatch()) activePatches++
+        if (com.appsbyalok.echohunter.data.UpgradeSystem.hasCritVampPatch()) activePatches++
+        if (com.appsbyalok.echohunter.data.UpgradeSystem.hasDataOverflowPatch()) activePatches++
+        if (com.appsbyalok.echohunter.data.UpgradeSystem.hasComboShieldPatch()) activePatches++
 
         if (activePatches > 0) {
             val totalPatchesW = activePatches * patchIconSize + (activePatches - 1) * patchGap
             var startX = targetW / 2f - totalPatchesW / 2f
             val patchY = currentY
 
-            if (com.appsbyalok.echohunter.data.UpgradeSystem.hasHealthSiphonPatch()) {
-                p.style = Paint.Style.FILL; p.color = GameColors.HP
+            fun drawPatchIcon(label: String, color: Int) {
+                p.style = Paint.Style.FILL; p.color = color
                 rectPopup.set(startX, patchY, startX + patchIconSize, patchY + patchIconSize)
                 c.drawRoundRect(rectPopup, scale * 0.005f, scale * 0.005f, p)
                 pText.textSize = scale * 0.02f; pText.color = 0xFFFFFFFF.toInt()
-                c.drawText("H", rectPopup.centerX(), rectPopup.centerY() + scale * 0.007f, pText)
+                c.drawText(label, rectPopup.centerX(), rectPopup.centerY() + scale * 0.007f, pText)
                 startX += patchIconSize + patchGap
             }
-            if (com.appsbyalok.echohunter.data.UpgradeSystem.hasShieldBurstPatch()) {
-                p.style = Paint.Style.FILL; p.color = GameColors.SHIELD
-                rectPopup.set(startX, patchY, startX + patchIconSize, patchY + patchIconSize)
-                c.drawRoundRect(rectPopup, scale * 0.005f, scale * 0.005f, p)
-                pText.textSize = scale * 0.02f; pText.color = 0xFFFFFFFF.toInt()
-                c.drawText("S", rectPopup.centerX(), rectPopup.centerY() + scale * 0.007f, pText)
-                startX += patchIconSize + patchGap
-            }
-            if (com.appsbyalok.echohunter.data.UpgradeSystem.hasOverclockRegenPatch()) {
-                p.style = Paint.Style.FILL; p.color = GameColors.OVERCLOCK
-                rectPopup.set(startX, patchY, startX + patchIconSize, patchY + patchIconSize)
-                c.drawRoundRect(rectPopup, scale * 0.005f, scale * 0.005f, p)
-                pText.textSize = scale * 0.02f; pText.color = 0xFFFFFFFF.toInt()
-                c.drawText("O", rectPopup.centerX(), rectPopup.centerY() + scale * 0.007f, pText)
-            }
+
+            if (com.appsbyalok.echohunter.data.UpgradeSystem.hasHealthSiphonPatch()) drawPatchIcon("H", GameColors.HP)
+            if (com.appsbyalok.echohunter.data.UpgradeSystem.hasShieldBurstPatch()) drawPatchIcon("S", GameColors.SHIELD)
+            if (com.appsbyalok.echohunter.data.UpgradeSystem.hasOverclockRegenPatch()) drawPatchIcon("O", GameColors.OVERCLOCK)
+            if (com.appsbyalok.echohunter.data.UpgradeSystem.hasCritVampPatch()) drawPatchIcon("V", GameColors.RED)
+            if (com.appsbyalok.echohunter.data.UpgradeSystem.hasDataOverflowPatch()) drawPatchIcon("D", GameColors.YELLOW)
+            if (com.appsbyalok.echohunter.data.UpgradeSystem.hasComboShieldPatch()) drawPatchIcon("C", GameColors.PULSE)
+
             currentY += patchIconSize + scale * 0.025f
         } else {
             currentY += scale * 0.02f

@@ -49,9 +49,17 @@ class ArchiveDetailView {
         c.drawLine(detailBoxRect.left, scanY, detailBoxRect.right, scanY, p)
         
         var y = detailBoxRect.top + scale * (if (isLandscape) 0.06f else 0.08f)
+        
+        // Header Ribbon
+        val headH = scale * (if (isLandscape) 0.05f else 0.06f)
+        p.style = Paint.Style.FILL; p.color = 0x3300FFFF
+        c.drawRect(detailBoxRect.left, y - headH * 0.7f, detailBoxRect.right, y + headH * 0.3f, p)
+        
         pText.textSize = scale * (if (isLandscape) 0.045f else 0.05f); pText.color = GameColors.PULSE
         pText.textAlign = Paint.Align.CENTER
+        pText.isFakeBoldText = true
         c.drawText("PROTOCOL DECODED: $level", detailBoxRect.centerX(), y, pText)
+        pText.isFakeBoldText = false
 
         y += scale * (if (isLandscape) 0.04f else 0.05f)
         val rating = calculateThreatRating(level)

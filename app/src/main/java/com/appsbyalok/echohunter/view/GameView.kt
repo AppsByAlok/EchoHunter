@@ -403,12 +403,24 @@ class GameView(context: Context) : View(context) {
         uiMainMenu.initLayout(w.toFloat(), h.toFloat())
         worldRenderer.updateDashEffect(gameScale)
 
-        // Recalculate dynamic UI coordinates (Refined Layout)
-        gs.hudLayout.btnRadius = gameScale * 0.11f // Slightly larger
-        gs.hudLayout.atkX = w - gameScale * 0.16f
-        gs.hudLayout.atkY = h - gameScale * 0.16f
+        // Apply Safe Area Insets (Notch Handling from SaveManager)
+        val insetL = SaveManager.lastInsetLeft
+        val insetR = SaveManager.lastInsetRight
+        val insetT = SaveManager.lastInsetTop
+        val insetB = SaveManager.lastInsetBottom
+
+        // Sync with HUDLayout for other systems
+        gs.hudLayout.safeInsetLeft = insetL
+        gs.hudLayout.safeInsetRight = insetR
+        gs.hudLayout.safeInsetTop = insetT
+        gs.hudLayout.safeInsetBottom = insetB
+
+        // Recalculate dynamic UI coordinates (Refined Layout with Insets)
+        gs.hudLayout.btnRadius = gameScale * 0.11f
+        gs.hudLayout.atkX = w - gameScale * 0.16f - insetR
+        gs.hudLayout.atkY = h - gameScale * 0.16f - insetB
         
-        val spacing = gameScale * 0.25f // More spacing
+        val spacing = gameScale * 0.25f
         
         gs.hudLayout.ovrX = gs.hudLayout.atkX
         gs.hudLayout.ovrY = gs.hudLayout.atkY - spacing
@@ -419,21 +431,21 @@ class GameView(context: Context) : View(context) {
         gs.hudLayout.pulseX = gs.hudLayout.atkX - spacing
         gs.hudLayout.pulseY = gs.hudLayout.atkY - spacing
         
-        gs.hudLayout.pauseX = w - gameScale * 0.12f
-        gs.hudLayout.pauseY = gameScale * 0.12f
+        gs.hudLayout.pauseX = w - gameScale * 0.12f - insetR
+        gs.hudLayout.pauseY = gameScale * 0.12f + insetT
 
         // Manual Aim Touchpad (Wider Area for easier thumb access)
         val rectW = w * 0.45f
         val rectH = h * 0.7f
         gs.hudLayout.manualAimRect.set(
-            w - rectW, 
-            h - rectH, 
-            w.toFloat(), 
-            h.toFloat()
+            w - rectW - insetR, 
+            h - rectH - insetB, 
+            w.toFloat() - insetR, 
+            h.toFloat() - insetB
         )
 
-        gs.touch.moveBaseX = gs.hudLayout.btnRadius * 2.2f
-        gs.touch.moveBaseY = h - gs.hudLayout.btnRadius * 2.2f
+        gs.touch.moveBaseX = gs.hudLayout.btnRadius * 2.2f + insetL
+        gs.touch.moveBaseY = h - gs.hudLayout.btnRadius * 2.2f - insetB
         gs.touch.moveKnobX = gs.touch.moveBaseX
         gs.touch.moveKnobY = gs.touch.moveBaseY
     }
