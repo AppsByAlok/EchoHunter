@@ -253,6 +253,7 @@ class GameState {
 
     var bossAttackTimer = 0f // Timer to manage boss attack patterns
     var bossAttackState = 0 // Current attack state (0: Idle, 1: Charging, 2: Executing)
+    var bossAttackCounter = 0 // Counter for consecutive attacks (e.g., double jump)
     var bossZ = 0f // Height offset for "Jump" attacks
 
     var isEnemyNear = false // Proximity flag for general enemy presence

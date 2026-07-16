@@ -1050,6 +1050,7 @@ class UIArchives {
         y: Float,
         action: Int,
         gs: GameState,
+        scale: Float,
         onSelect: (Int) -> Unit,
         onBack: () -> Unit,
     ): Boolean {
@@ -1062,7 +1063,10 @@ class UIArchives {
         }
 
         if (selectedDetailLevel == -1) {
-            if (scroller.isDragging || scroller.isDraggingScrollbar) hitOnDown = -1
+            if (scroller.onTouch(x, y, action, scale)) {
+                hitOnDown = -1
+                longPressLevel = -1
+            }
         }
 
         when (action) {
@@ -1097,17 +1101,19 @@ class UIArchives {
                             }
 
                             -103 -> {
-                                SaveManager.setAutoNextLevel(!SaveManager.isAutoNextLevelEnabled); EchoAudioManager.playSound(
-                                    ToneGenerator.TONE_PROP_BEEP, 50
-                                )
+                                SaveManager.setAutoNextLevel(!SaveManager.isAutoNextLevelEnabled)
+                                EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 50)
                             }
 
                             -104 -> {
-                                gs.isAutoPilotActive =
-                                    !gs.isAutoPilotActive; if (gs.isAutoPilotActive) {
-                                    gs.autoPilotTimer =
-                                        600f; gs.showGlobalMessage("AUTOPILOT ENGAGED.", 2f)
+                                val newState = !SaveManager.isAutoPilotEnabled
+                                SaveManager.setAutoPilotEnabled(newState)
+                                gs.isAutoPilotActive = newState
+                                if (newState) {
+                                    gs.autoPilotTimer = 600f
+                                    gs.showGlobalMessage("AUTOPILOT ENGAGED.", 2f)
                                 }
+                                EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 50)
                             }
 
                             -2 -> {

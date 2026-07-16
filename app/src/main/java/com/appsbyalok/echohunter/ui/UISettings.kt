@@ -23,8 +23,10 @@ class UISettings {
     }
 
     private val backButton = UIMenuButton()
+    private var layoutEditorOpen = false
+    private val layoutEditor = UILayoutEditor()
     private val optionCard = UIMenuCard()
-    private val optionRects = Array(7) { RectF() }
+    private val optionRects = Array(8) { RectF() }
     private var hitOnDown = -1
 
     private val scroller = UIScrollView()
@@ -41,11 +43,16 @@ class UISettings {
         "AUTO-NEXT LEVEL",
         "ATTACK MODE",
         "SCREEN ROTATION",
+        "HUD LAYOUT",
         "WIPE ALL DATA"
     )
 
     fun draw(c: Canvas, targetW: Float, targetH: Float, scale: Float, gs: GameState) {
         c.drawColor(0xEE050A0F.toInt())
+        if (layoutEditorOpen) {
+            layoutEditor.draw(c, targetW, targetH, scale, p, pText)
+            return
+        }
 
         val isPortrait = targetH > targetW
         val insetT = SaveManager.lastInsetTop
@@ -94,8 +101,8 @@ class UISettings {
                 paint = p,
                 pressed = isPressed,
                 fillColor = 0xFF0A1520.toInt(),
-                strokeColor = if (i == 6) GameColors.RED else GameColors.PULSE,
-                activeStrokeColor = if (i == 6) GameColors.RED else GameColors.PULSE,
+                strokeColor = if (i == 7) GameColors.RED else GameColors.PULSE,
+                activeStrokeColor = if (i == 7) GameColors.RED else GameColors.PULSE,
                 radius = scale * 0.02f
             )
 
@@ -118,10 +125,11 @@ class UISettings {
                     2 -> "LANDSCAPE"
                     else -> "DEVICE DEFAULT"
                 }
-                6 -> "DANGER"
+                6 -> "EDIT"
+                7 -> "DANGER"
                 else -> ""
             }
-            pText.color = if (valueText == "OFF" || i == 6) GameColors.RED else GameColors.PULSE
+            pText.color = if (valueText == "OFF" || i == 7) GameColors.RED else GameColors.PULSE
             c.drawText(valueText, rect.right - scale * 0.04f, rect.centerY() + scale * 0.015f, pText)
         }
         scroller.end(c, totalContentHeight + gap, scale, insetR)
@@ -196,7 +204,19 @@ class UISettings {
         scroller.updatePhysics(dt)
     }
 
-    fun onTouch(vx: Float, vy: Float, action: Int, scale: Float, gs: GameState, onClose: () -> Unit, onWipe: () -> Unit, onOrientChange: () -> Unit): Boolean {
+    fun handleBack(onHudLayoutApplied: () -> Unit): Boolean {
+        if (!layoutEditorOpen) return false
+        layoutEditor.requestClose(onHudLayoutApplied) { layoutEditorOpen = false }
+        return true
+    }
+
+    fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, scale: Float, targetW: Float, targetH: Float, gs: GameState, onClose: () -> Unit, onWipe: () -> Unit, onOrientChange: () -> Unit, onHudLayoutApplied: () -> Unit): Boolean {
+        if (layoutEditorOpen) {
+            return layoutEditor.onTouch(e, targetW, targetH, scale, onHudLayoutApplied) {
+                layoutEditorOpen = false
+            }
+        }
+
         if (showWipeConfirm) {
             // ... (keep wipe confirm logic as is, it's overlay)
             when (action) {
@@ -267,6 +287,9 @@ class UISettings {
                                     onOrientChange()
                                 }
                                 6 -> {
+                                    layoutEditorOpen = true
+                                }
+                                7 -> {
                                     showWipeConfirm = true
                                 }
                             }

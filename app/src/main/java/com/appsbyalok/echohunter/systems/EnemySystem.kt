@@ -5,6 +5,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Typeface
 import com.appsbyalok.echohunter.data.UpgradeSystem
+import com.appsbyalok.echohunter.data.UpgradeType
 import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.utils.GameColors
 import com.appsbyalok.echohunter.utils.SpawnValidator
@@ -76,6 +77,26 @@ class EnemySystem {
         if (config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.DEFENSE)) {
             gs.defEnemiesAlive--
             if (gs.defEnemiesAlive < 0) gs.defEnemiesAlive = 0
+        }
+    }
+
+    // Helper for Boss mechanics (Glitch Clones, etc.)
+    fun spawnBossClone(nx: Float, ny: Float, gs: GameState, scale: Float) {
+        // Find an empty slot in the enemy arrays
+        for (i in 0 until n) {
+            if (vis[i] <= 0f) {
+                ex[i] = nx
+                ey[i] = ny
+                evx[i] = (kotlin.random.Random.nextFloat() - 0.5f) * scale * 0.5f
+                evy[i] = (kotlin.random.Random.nextFloat() - 0.5f) * scale * 0.5f
+                type[i] = 1 // Use Hunter behavior for clones
+                enemyBrains[i] = HunterBehavior
+                hp[i] = 1 // 1-hit kill for decoys
+                maxHp[i] = 1
+                vis[i] = 0.8f // Start slightly faded
+                eState[i] = 1
+                break
+            }
         }
     }
 
@@ -178,7 +199,7 @@ class EnemySystem {
 
         maxHp[i] = when (nodeType) {
             1 -> 1 // Swarmers are very weak, 1 hit kill
-            2 -> (baseHp * 2.5f * (1.0f + UpgradeSystem.getRewardBonusPercent())).toInt() // HVTs or Guards have higher HP
+            2 -> (baseHp * 2.5f * (1.0f + UpgradeSystem.getLevel(UpgradeType.DATA_SYNDICATE) * 0.2f)).toInt() // Guards scale with Data Syndicate but capped
             else -> baseHp
         }
         hp[i] = maxHp[i]
@@ -721,8 +742,8 @@ class EnemySystem {
                 c.drawText(behavior.attackType, screenBx, screenBy - bossRadius - scale * 0.035f, pText)
             }
 
-            // HP BAR follows boss
-            val hpY = gs.bossY - gs.cameraY - bossRadius - scale * 0.02f
+            // HP BAR follows boss (Now includes bossZ via screenBy)
+            val hpY = screenBy - bossRadius - scale * 0.02f
             p.color = (bossAlpha shl 24) or (GameColors.RED and 0xFFFFFF)
             c.drawRect(screenBx - bossRadius, hpY, screenBx + bossRadius, hpY + scale * 0.01f, p)
 

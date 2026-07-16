@@ -364,9 +364,9 @@ class UIHelpMenu(private val context: Context) {
         drawLine("- Performance is rated 1-5 STARS [★].", GameColors.TEXT); sy += lh * 0.2f
         drawLine("  * Finish Level", GameColors.TEXT); sy += lh * 0.15f
         drawLine("  ** Finish without taking Damage", GameColors.TEXT); sy += lh * 0.15f
-        drawLine("  *** Finish within time limit (<90s)", GameColors.TEXT); sy += lh * 0.15f
+        drawLine("  *** Finish within time limit (Under Par)", GameColors.TEXT); sy += lh * 0.15f
         drawLine("  **** Finish in HARD MODE", GameColors.TEXT); sy += lh * 0.15f
-        drawLine("  ***** HARD MODE + (No Damage or <120s)", GameColors.TEXT); sy += lh * 0.2f
+        drawLine("  ***** HARD MODE + No Damage + Under Par", GameColors.TEXT); sy += lh * 0.2f
         drawLine("- Total cleared levels and stats are logged in the ARCHIVES.", GameColors.TEXT)
         sy += lh * 0.5f
 
@@ -403,9 +403,9 @@ class UIHelpMenu(private val context: Context) {
         c.drawLine(0f, targetH * 0.84f, targetW, targetH * 0.84f, p)
         backButton.set(
             targetW / 2f - btnW / 2f,
-            targetH * 0.91f - btnH / 2f,
+            targetH * 0.92f - btnH / 2f,
             targetW / 2f + btnW / 2f,
-            targetH * 0.91f + btnH / 2f
+            targetH * 0.92f + btnH / 2f
         )
         backButton.draw(
             c = c,
@@ -432,6 +432,8 @@ class UIHelpMenu(private val context: Context) {
         effectSys: EffectSystem,
         onClose: () -> Unit,
     ): Boolean {
+        scroller.onTouch(x, y, action, scale)
+
         when (action) {
             MotionEvent.ACTION_DOWN -> {
                 downX = x

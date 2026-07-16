@@ -12,12 +12,30 @@ import kotlin.math.sqrt
 
 // Blueprint for Enemy Brains
 interface IEnemyBehavior {
-    fun updateBehavior(i: Int, dt: Float, gs: GameState, enemySys: EnemySystem, ai: EnemyAI, targetW: Float, targetH: Float, scale: Float)
+    fun updateBehavior(
+        i: Int,
+        dt: Float,
+        gs: GameState,
+        enemySys: EnemySystem,
+        ai: EnemyAI,
+        targetW: Float,
+        targetH: Float,
+        scale: Float,
+    )
 }
 
 // 1. PATROL BEHAVIOR (Yellow - Investigates sounds)
 object PatrolBehavior : IEnemyBehavior {
-    override fun updateBehavior(i: Int, dt: Float, gs: GameState, enemySys: EnemySystem, ai: EnemyAI, targetW: Float, targetH: Float, scale: Float) {
+    override fun updateBehavior(
+        i: Int,
+        dt: Float,
+        gs: GameState,
+        enemySys: EnemySystem,
+        ai: EnemyAI,
+        targetW: Float,
+        targetH: Float,
+        scale: Float,
+    ) {
         val targetX = if (gs.isDecoyActive) gs.decoyX else gs.px
         val targetY = if (gs.isDecoyActive) gs.decoyY else gs.py
         val tdx = targetX - enemySys.ex[i]
@@ -25,21 +43,23 @@ object PatrolBehavior : IEnemyBehavior {
         val td2 = tdx * tdx + tdy * tdy
 
         val hitDistSq = (scale * 0.045f) * (scale * 0.045f)
-        
+
         // Intelligence Scaling: Reaction speed increases with level
         val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
         val reactionThreshold = scale * (1.5f + (gs.currentLevel * 0.01f).coerceAtMost(1.0f))
-        
+
         val speed = scale * (if (gs.difficulty == 0) 0.25f else 0.4f) * config.speedMultiplier
-        
+
         val hitByPulse = (gs.pulse && td2 in gs.innerRSq..gs.outerRSq)
-        
+
         // --- NEW: SONAR ALERT LOGIC ---
         // Base sonar alert range is high; reduced by upgrades.
-        val sonarAlertRange = scale * 8f * com.appsbyalok.echohunter.data.UpgradeSystem.getSonarSilenceMultiplier()
+        val sonarAlertRange =
+            scale * 8f * com.appsbyalok.echohunter.data.UpgradeSystem.getSonarSilenceMultiplier()
         val heardPulse = hitByPulse && td2 < sonarAlertRange * sonarAlertRange
-        
-        val heardSound = heardPulse || (gs.localAttackAlert && td2 < reactionThreshold * reactionThreshold)
+
+        val heardSound =
+            heardPulse || (gs.localAttackAlert && td2 < reactionThreshold * reactionThreshold)
 
         if (heardSound && (enemySys.eState[i] != 2 || enemySys.investigateTimer[i] < 2.5f)) {
             enemySys.eState[i] = 2
@@ -52,8 +72,10 @@ object PatrolBehavior : IEnemyBehavior {
         if (enemySys.eState[i] == 2) {
             // High level enemies use predictive pathing (simulated by better LoS checks)
             val losRange = (scale * 7f) + (gs.currentLevel * 0.1f)
-            val inLoS = td2 < losRange * losRange && ai.hasLineOfSight(enemySys.ex[i], enemySys.ey[i], gs.px, gs.py, gs)
-            
+            val inLoS = td2 < losRange * losRange && ai.hasLineOfSight(
+                enemySys.ex[i], enemySys.ey[i], gs.px, gs.py, gs
+            )
+
             if (inLoS && td2 < hitDistSq * 50f) {
                 // Transform to Hunter
                 enemySys.type[i] = 1
@@ -67,15 +89,25 @@ object PatrolBehavior : IEnemyBehavior {
             val distToInvSq = idx * idx + idy * idy
             if (distToInvSq > (scale * 0.05f) * (scale * 0.05f)) {
                 if (gs.gridMap != null) {
-                    val (nvx, nvy) = ai.steerByAlertHeatMap(enemySys.ex[i], enemySys.ey[i], enemySys.evx[i], enemySys.evy[i], speed * 0.7f, gs, dt)
+                    val (nvx, nvy) = ai.steerByAlertHeatMap(
+                        enemySys.ex[i],
+                        enemySys.ey[i],
+                        enemySys.evx[i],
+                        enemySys.evy[i],
+                        speed * 0.7f,
+                        gs,
+                        dt
+                    )
                     enemySys.evx[i] = nvx
                     enemySys.evy[i] = nvy
                 } else {
                     val invDist = sqrt(distToInvSq)
                     val investigateSpeed = speed * 0.7f
                     val lerpFactor = (dt * 5f).coerceIn(0f, 1f)
-                    enemySys.evx[i] = (enemySys.evx[i] * (1f - lerpFactor)) + ((idx / invDist) * investigateSpeed * lerpFactor)
-                    enemySys.evy[i] = (enemySys.evy[i] * (1f - lerpFactor)) + ((idy / invDist) * investigateSpeed * lerpFactor)
+                    enemySys.evx[i] =
+                        (enemySys.evx[i] * (1f - lerpFactor)) + ((idx / invDist) * investigateSpeed * lerpFactor)
+                    enemySys.evy[i] =
+                        (enemySys.evy[i] * (1f - lerpFactor)) + ((idy / invDist) * investigateSpeed * lerpFactor)
                 }
             } else {
                 enemySys.investigateTimer[i] -= dt
@@ -89,7 +121,16 @@ object PatrolBehavior : IEnemyBehavior {
 
 // 2. HUNTER BEHAVIOR (Red - Chases Player Aggressively)
 object HunterBehavior : IEnemyBehavior {
-    override fun updateBehavior(i: Int, dt: Float, gs: GameState, enemySys: EnemySystem, ai: EnemyAI, targetW: Float, targetH: Float, scale: Float) {
+    override fun updateBehavior(
+        i: Int,
+        dt: Float,
+        gs: GameState,
+        enemySys: EnemySystem,
+        ai: EnemyAI,
+        targetW: Float,
+        targetH: Float,
+        scale: Float,
+    ) {
         val targetX = if (gs.isDecoyActive) gs.decoyX else gs.px
         val targetY = if (gs.isDecoyActive) gs.decoyY else gs.py
         val tdx = targetX - enemySys.ex[i]
@@ -99,17 +140,18 @@ object HunterBehavior : IEnemyBehavior {
         val dist = sqrt(td2)
         val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
         val speed = scale * (if (gs.difficulty == 0) 0.25f else 0.4f) * config.speedMultiplier
-        
+
         // Predictive Movement Logic: Anticipate player movement but cap it by distance to prevent overshooting
         val baseLead = (gs.currentLevel * 0.004f).coerceAtMost(0.4f)
-        val leadAmount = if (dist > 0.001f) (baseLead * (dist / scale)).coerceAtMost(baseLead) else 0f
-        
+        val leadAmount =
+            if (dist > 0.001f) (baseLead * (dist / scale)).coerceAtMost(baseLead) else 0f
+
         val pvx = gs.pvx
         val pvy = gs.pvy
-        
+
         val predX = targetX + pvx * leadAmount
         val predY = targetY + pvy * leadAmount
-        
+
         val ptdx = predX - enemySys.ex[i]
         val ptdy = predY - enemySys.ey[i]
         val ptd2 = ptdx * ptdx + ptdy * ptdy
@@ -119,25 +161,29 @@ object HunterBehavior : IEnemyBehavior {
         if (inLoS) {
             enemySys.eState[i] = 1
             val eDist = sqrt(ptd2)
-            
+
             // Speed Multiplier: Normal is easier, Hard is faster
             val chaseMult = if (gs.difficulty == 1) 1.2f else 1.05f
-            
+
             // Effect of Decoy or Camouflage
             val isPlayerTarget = !gs.isDecoyActive && !gs.isCamouflaged
             val chaseSpeed = speed * (if (gs.isOverclocked && isPlayerTarget) -0.5f else chaseMult)
-            
+
             if (eDist > 0f) {
                 val lerpFactor = (dt * 6f).coerceIn(0f, 1f)
-                enemySys.evx[i] = (enemySys.evx[i] * (1f - lerpFactor)) + ((ptdx / eDist) * chaseSpeed * lerpFactor)
-                enemySys.evy[i] = (enemySys.evy[i] * (1f - lerpFactor)) + ((ptdy / eDist) * chaseSpeed * lerpFactor)
+                enemySys.evx[i] =
+                    (enemySys.evx[i] * (1f - lerpFactor)) + ((ptdx / eDist) * chaseSpeed * lerpFactor)
+                enemySys.evy[i] =
+                    (enemySys.evy[i] * (1f - lerpFactor)) + ((ptdy / eDist) * chaseSpeed * lerpFactor)
             }
         } else {
             enemySys.eState[i] = 2
         }
 
         if (enemySys.eState[i] == 2 && gs.gridMap != null) {
-            val (nvx, nvy) = ai.steerByPlayerHeatMap(enemySys.ex[i], enemySys.ey[i], enemySys.evx[i], enemySys.evy[i], speed, gs, dt)
+            val (nvx, nvy) = ai.steerByPlayerHeatMap(
+                enemySys.ex[i], enemySys.ey[i], enemySys.evx[i], enemySys.evy[i], speed, gs, dt
+            )
             enemySys.evx[i] = nvx
             enemySys.evy[i] = nvy
         }
@@ -146,11 +192,22 @@ object HunterBehavior : IEnemyBehavior {
 
 // 3. KAMIKAZE BEHAVIOR (Bombers for Core Defense)
 object KamikazeBehavior : IEnemyBehavior {
-    override fun updateBehavior(i: Int, dt: Float, gs: GameState, enemySys: EnemySystem, ai: EnemyAI, targetW: Float, targetH: Float, scale: Float) {
+    override fun updateBehavior(
+        i: Int,
+        dt: Float,
+        gs: GameState,
+        enemySys: EnemySystem,
+        ai: EnemyAI,
+        targetW: Float,
+        targetH: Float,
+        scale: Float,
+    ) {
         val speed = scale * (if (gs.difficulty == 0) 0.25f else 0.35f)
         // Relentlessly pathfind to the Core Map
         if (gs.gridMap != null) {
-            val (nvx, nvy) = ai.steerByCoreHeatMap(enemySys.ex[i], enemySys.ey[i], enemySys.evx[i], enemySys.evy[i], speed, gs, dt)
+            val (nvx, nvy) = ai.steerByCoreHeatMap(
+                enemySys.ex[i], enemySys.ey[i], enemySys.evx[i], enemySys.evy[i], speed, gs, dt
+            )
             enemySys.evx[i] = nvx
             enemySys.evy[i] = nvy
         }
@@ -160,7 +217,16 @@ object KamikazeBehavior : IEnemyBehavior {
 
 // 4. TARGET BEHAVIOR (High-Value Target - Runs away when spotted)
 object TargetBehavior : IEnemyBehavior {
-    override fun updateBehavior(i: Int, dt: Float, gs: GameState, enemySys: EnemySystem, ai: EnemyAI, targetW: Float, targetH: Float, scale: Float) {
+    override fun updateBehavior(
+        i: Int,
+        dt: Float,
+        gs: GameState,
+        enemySys: EnemySystem,
+        ai: EnemyAI,
+        targetW: Float,
+        targetH: Float,
+        scale: Float,
+    ) {
         val targetX = if (gs.isDecoyActive) gs.decoyX else gs.px
         val targetY = if (gs.isDecoyActive) gs.decoyY else gs.py
         val tdx = targetX - enemySys.ex[i]
@@ -171,7 +237,7 @@ object TargetBehavior : IEnemyBehavior {
         val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
         val speedMult = config.speedMultiplier
         val speed = scale * (if (gs.difficulty == 0) 0.25f else 0.35f) * speedMult
-        
+
         val panicDist = scale * (0.8f + (gs.currentLevel * 0.005f).coerceAtMost(0.5f))
         val inLoS = ai.hasLineOfSight(enemySys.ex[i], enemySys.ey[i], targetX, targetY, gs)
 
@@ -181,7 +247,7 @@ object TargetBehavior : IEnemyBehavior {
             if (dist > 0f) {
                 val steerSharpness = if (gs.difficulty == 1) 8f else 4f
                 val lerpFactor = (dt * steerSharpness).coerceIn(0f, 1f)
-                
+
                 val fleeMult = if (gs.difficulty == 1) 1.5f else 1.2f
                 val targetVx = -(tdx / dist) * speed * fleeMult
                 val targetVy = -(tdy / dist) * speed * fleeMult
@@ -204,11 +270,20 @@ object TargetBehavior : IEnemyBehavior {
 // 5. REPAIR DRONE BEHAVIOR (Support Unit - Repairs Destroyed Spawners)
 object RepairDroneBehavior : IEnemyBehavior {
 
-    override fun updateBehavior(i: Int, dt: Float, gs: GameState, enemySys: EnemySystem, ai: EnemyAI, targetW: Float, targetH: Float, scale: Float) {
+    override fun updateBehavior(
+        i: Int,
+        dt: Float,
+        gs: GameState,
+        enemySys: EnemySystem,
+        ai: EnemyAI,
+        targetW: Float,
+        targetH: Float,
+        scale: Float,
+    ) {
         val speed = scale * 0.4f
 
         // 1. Find the nearest destroyed spawner using system helper
-        val spawnerSys = gs.spawnerNodes.let { nodes -> 
+        val spawnerSys = gs.spawnerNodes.let { nodes ->
             // We can't easily get SpawnerSystem instance here without interface change,
             // but we can at least centralize the search logic if we had access.
             // For now, let's keep the logic but prepare it for future SpawnerSystem integration
@@ -234,14 +309,18 @@ object RepairDroneBehavior : IEnemyBehavior {
                     spawnerSys.hp = 1f
                     enemySys.investigateTimer[i] = 5f
                     // Notify system
-                    com.appsbyalok.echohunter.data.StoryProtocol.showIngameMessage("SYSTEM: REPAIR SEQUENCE INITIATED", 1f)
-                    
+                    com.appsbyalok.echohunter.data.StoryProtocol.showIngameMessage(
+                        "SYSTEM: REPAIR SEQUENCE INITIATED", 1f
+                    )
+
                     // Distinct visual alert
                     enemySys.getEffectSystem()?.let { effects ->
                         effects.spawnAlertPulse(spawnerSys.x, spawnerSys.y, GameColors.RED)
-                        effects.spawnFloatingText(spawnerSys.x, spawnerSys.y, 0, GameColors.RED, "REPAIRING")
+                        effects.spawnFloatingText(
+                            spawnerSys.x, spawnerSys.y, 0, GameColors.RED, "REPAIRING"
+                        )
                     }
-                    
+
                     // Audio alert
                     EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 200)
                 }
@@ -249,8 +328,10 @@ object RepairDroneBehavior : IEnemyBehavior {
                 // Move towards destroyed node
                 val dist = sqrt(d2)
                 val lerpFactor = (dt * 5f).coerceIn(0f, 1f)
-                enemySys.evx[i] = (enemySys.evx[i] * (1f - lerpFactor)) + ((dx / dist) * speed * lerpFactor)
-                enemySys.evy[i] = (enemySys.evy[i] * (1f - lerpFactor)) + ((dy / dist) * speed * lerpFactor)
+                enemySys.evx[i] =
+                    (enemySys.evx[i] * (1f - lerpFactor)) + ((dx / dist) * speed * lerpFactor)
+                enemySys.evy[i] =
+                    (enemySys.evy[i] * (1f - lerpFactor)) + ((dy / dist) * speed * lerpFactor)
             }
         } else {
             // No destroyed nodes: Wander or flee player
@@ -260,8 +341,10 @@ object RepairDroneBehavior : IEnemyBehavior {
                 // Flee
                 val dist = sqrt(tdx * tdx + tdy * tdy)
                 val lerpFactor = (dt * 3f).coerceIn(0f, 1f)
-                enemySys.evx[i] = (enemySys.evx[i] * (1f - lerpFactor)) - ((tdx / dist) * speed * lerpFactor)
-                enemySys.evy[i] = (enemySys.evy[i] * (1f - lerpFactor)) - ((tdy / dist) * speed * lerpFactor)
+                enemySys.evx[i] =
+                    (enemySys.evx[i] * (1f - lerpFactor)) - ((tdx / dist) * speed * lerpFactor)
+                enemySys.evy[i] =
+                    (enemySys.evy[i] * (1f - lerpFactor)) - ((tdy / dist) * speed * lerpFactor)
             } else {
                 // Wander
                 if (kotlin.random.Random.nextFloat() < 0.6f * dt) {
@@ -287,7 +370,14 @@ interface IBossBehavior {
     val attackType: String
     val spawnMessage: String
 
-    fun applyMovementPattern(vx: Float, vy: Float, dt: Float, gs: GameState, scale: Float): Pair<Float, Float>
+    fun applyMovementPattern(
+        vx: Float,
+        vy: Float,
+        dt: Float,
+        gs: GameState,
+        scale: Float,
+    ): Pair<Float, Float>
+
     fun updateSpecial(dt: Float, gs: GameState, enemySys: EnemySystem, scale: Float)
 }
 
@@ -301,19 +391,30 @@ object UltimaBossBehavior : IBossBehavior {
     override val attackType = "OMNI-HYBRID"
     override val spawnMessage = "CRITICAL: ADMINISTRATIVE ENTITY 'ULTIMA' DETECTED."
 
-    override fun applyMovementPattern(vx: Float, vy: Float, dt: Float, gs: GameState, scale: Float): Pair<Float, Float> {
+    override fun applyMovementPattern(
+        vx: Float,
+        vy: Float,
+        dt: Float,
+        gs: GameState,
+        scale: Float,
+    ): Pair<Float, Float> {
         val rageMult = if (gs.isBossRage) 1.5f else 1.0f
         val damping = (dt * 5f).coerceIn(0f, 1f)
-        return Pair(vx * (1f - damping) * 0.4f * rageMult, vy * (1f - damping) * 0.4f * rageMult)
+
+        // Jittery movement
+        val jx = (kotlin.random.Random.nextFloat() - 0.5f) * scale * 0.2f
+        val jy = (kotlin.random.Random.nextFloat() - 0.5f) * scale * 0.2f
+
+        return Pair(vx * (1f - damping) * 0.4f * rageMult + jx, vy * (1f - damping) * 0.4f * rageMult + jy)
     }
     // ... existing updateSpecial ...
 
     override fun updateSpecial(dt: Float, gs: GameState, enemySys: EnemySystem, scale: Float) {
         gs.bossAttackTimer += dt
-        
+
         // Phase-based multi-attack logic
         val cycle = (gs.bossAttackTimer % 15f)
-        
+
         when {
             cycle < 4f -> { // Phase 1: Drone Rain
                 if (cycle < dt) gs.bossAttackState = 0 // Reset state for the new cycle
@@ -321,6 +422,7 @@ object UltimaBossBehavior : IBossBehavior {
                     enemySys.spawnSwarmIfNeeded(gs, scale)
                 }
             }
+
             cycle < 8f -> { // Phase 2: Glitch Storm
                 gs.chromaticIntensity = 0.5f
                 if (gs.bossAttackTimer % 0.5f < dt) {
@@ -329,6 +431,7 @@ object UltimaBossBehavior : IBossBehavior {
                     spawnProjectile(gs, scale, (kotlin.random.Random.nextFloat() * 6.28f))
                 }
             }
+
             cycle < 12f -> { // Phase 3: Seismic Pulsar
                 if (gs.bossAttackTimer % 3f < dt) {
                     gs.shakeAmount = scale * 0.3f
@@ -339,6 +442,7 @@ object UltimaBossBehavior : IBossBehavior {
                     // Global damage if not moving (hypothetical mechanic: stay in motion)
                 }
             }
+
             else -> { // Phase 4: Recovery/Teleport
                 // FIX: Use bossAttackState to ensure teleport only triggers ONCE per cycle
                 if (cycle > 14.5f && gs.bossAttackState == 0) {
@@ -349,7 +453,13 @@ object UltimaBossBehavior : IBossBehavior {
 
                     val bossRadius = scale * 0.08f * sizeMult
                     val validPos = com.appsbyalok.echohunter.utils.SpawnValidator.findValidNear(
-                        targetX, targetY, bossRadius, gs, maxAttempts = 30, searchRadius = scale * 0.8f, hitboxScale = 1.0f
+                        targetX,
+                        targetY,
+                        bossRadius,
+                        gs,
+                        maxAttempts = 30,
+                        searchRadius = scale * 0.8f,
+                        hitboxScale = 1.0f
                     )
                     if (validPos != null) {
                         gs.bossX = validPos.first
@@ -388,17 +498,32 @@ object GuardianBossBehavior : IBossBehavior {
     override val attackType = "MELEE_SEISMIC"
     override val spawnMessage = "GUARDIAN: SECTOR LOCKDOWN INITIATED."
 
-    override fun applyMovementPattern(vx: Float, vy: Float, dt: Float, gs: GameState, scale: Float): Pair<Float, Float> {
-        // Guardian is slow but steady. Stops when jumping.
+    override fun applyMovementPattern(
+        vx: Float,
+        vy: Float,
+        dt: Float,
+        gs: GameState,
+        scale: Float,
+    ): Pair<Float, Float> {
+        // Guardian is slow but steady. Stops when jumping or recovering.
         if (gs.bossAttackState != 0) return Pair(0f, 0f)
 
         val rageMult = if (gs.isBossRage) 1.5f else 1.0f
         val damping = (dt * 5f).coerceIn(0f, 1f)
-        return Pair(vx * (1f - damping) * 0.8f, vy + kotlin.math.sin(gs.timeSinceStart * (3f * rageMult)) * scale * 0.3f)
+        return Pair(
+            vx * (1f - damping) * 0.8f,
+            vy + kotlin.math.sin(gs.timeSinceStart * (3f * rageMult)) * scale * 0.3f
+        )
     }
 
     override fun updateSpecial(dt: Float, gs: GameState, enemySys: EnemySystem, scale: Float) {
-        val attackCooldown = if (gs.isBossRage) 3f else 5f
+        // --- DYNAMIC SCALING (Targeting Extreme Depths) ---
+        val depthFactor =
+            (gs.currentLevel / 1200f).coerceAtMost(0.7f) // Attack frequency increases with level
+        val hardMult = if (gs.difficulty == 1) 0.8f else 1.0f // 20% faster in Hard Mode
+
+        val baseCooldown = if (gs.isBossRage) 2.2f else 3.8f
+        val attackCooldown = baseCooldown * (1f - depthFactor) * hardMult
         gs.bossAttackTimer += dt
 
         if (gs.bossAttackState == 0 && gs.bossAttackTimer > attackCooldown) {
@@ -407,23 +532,22 @@ object GuardianBossBehavior : IBossBehavior {
         }
 
         if (gs.bossAttackState == 1) {
-            if (gs.bossAttackTimer > 1.0f) {
+            val chargeDuration = 0.8f * hardMult
+            if (gs.bossAttackTimer > chargeDuration) {
                 gs.bossAttackState = 2 // In Air
                 gs.bossAttackTimer = 0f
                 EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 100)
             }
         } else if (gs.bossAttackState == 2) {
             // Parabolic Jump
-            val jumpDuration = 1.0f
+            val jumpDuration = 0.8f * hardMult
             val t = gs.bossAttackTimer / jumpDuration
-            gs.bossZ = kotlin.math.sin(t * kotlin.math.PI.toFloat()) * scale * 0.5f
+            gs.bossZ = kotlin.math.sin(t * kotlin.math.PI.toFloat()) * scale * 0.6f
 
             if (t >= 1.0f) {
-                gs.bossAttackState = 0
-                gs.bossAttackTimer = 0f
                 gs.bossZ = 0f
                 // SEISMIC SLAM EFFECT
-                gs.shakeAmount = scale * 0.2f
+                gs.shakeAmount = scale * 0.25f
                 gs.shockwaveActive = true
                 gs.shockwaveX = gs.bossX
                 gs.shockwaveY = gs.bossY
@@ -433,11 +557,37 @@ object GuardianBossBehavior : IBossBehavior {
                 // Damage player if close
                 val dx = gs.px - gs.bossX
                 val dy = gs.py - gs.bossY
-                if (dx * dx + dy * dy < (scale * 0.6f) * (scale * 0.6f) && gs.playerIframe <= 0f) {
+                if (dx * dx + dy * dy < (scale * 0.7f) * (scale * 0.7f) && gs.playerIframe <= 0f) {
                     gs.playerIframe = 1.0f
                     gs.hp--
                     gs.damageFlash = 0.5f
                 }
+
+                // --- CONTINUOUS PROBABILISTIC DOUBLE JUMP ---
+                val baseChance = if (gs.currentLevel >= 15) 0.10f else 0f
+                val levelBonus = (gs.currentLevel / 1500f).coerceAtMost(0.35f)
+                val rageBonus =
+                    if (gs.isBossRage) (if (gs.difficulty == 1) 0.50f else 0.30f) else 0.0f
+
+                val totalChance = baseChance + levelBonus + rageBonus
+
+                if (kotlin.random.Random.nextFloat() < totalChance && gs.bossAttackCounter < 1) {
+                    gs.bossAttackCounter++
+                    gs.bossAttackState = 1
+                    gs.bossAttackTimer = 0.2f // Faster second charge
+                } else {
+                    gs.bossAttackCounter = 0
+                    gs.bossAttackState = 3 // Recovery State
+                    gs.bossAttackTimer = 0f
+                }
+            }
+        } else if (gs.bossAttackState == 3) {
+            // Recovery: Scales down with level and difficulty
+            val baseRecovery = if (gs.isBossRage) 0.4f else 1.0f
+            val recoveryTime = baseRecovery * (1f - depthFactor * 0.5f) * hardMult
+            if (gs.bossAttackTimer > recoveryTime) {
+                gs.bossAttackState = 0
+                gs.bossAttackTimer = 0f
             }
         }
     }
@@ -448,67 +598,107 @@ object StalkerBossBehavior : IBossBehavior {
     override val name = "STALKER_PROTOTYPE"
     override val color = 0xFF44FF44.toInt() // Toxic Green
     override val sizeMult = 1.0f
-    override val baseHpMult = 1.5f
-    override val baseSpeedMult = 1.6f
-    override val attackType = "RANGED_KINETIC"
+    override val baseHpMult = 1.8f
+    override val baseSpeedMult = 1.1f // Nerfed from 1.4f for better early-game pacing
+    override val attackType = "ASSASSIN_STRIKE"
     override val spawnMessage = "STALKER: TARGET ACQUIRED. NO ESCAPE."
 
-    override fun applyMovementPattern(vx: Float, vy: Float, dt: Float, gs: GameState, scale: Float): Pair<Float, Float> {
-        val rageMult = if (gs.isBossRage) 2.0f else 1.0f
-        var nvx = vx; var nvy = vy
-        // Occasional Dash
-        if (gs.timeSinceStart % (3.0f / rageMult) < 0.3f) {
-            nvx *= 4.0f; nvy *= 4.0f
-        } else {
-            val damping = (dt * 5f).coerceIn(0f, 1f)
-            nvx *= (1f - damping)
-            nvy *= (1f - damping)
-        }
-        return Pair(nvx, nvy)
+    override fun applyMovementPattern(
+        vx: Float,
+        vy: Float,
+        dt: Float,
+        gs: GameState,
+        scale: Float,
+    ): Pair<Float, Float> {
+        // Stalker stops completely when charging or recovering
+        if (gs.bossAttackState == 1 || gs.bossAttackState == 3) return Pair(0f, 0f)
+
+        val damping = (dt * 5f).coerceIn(0f, 1f)
+        return Pair(vx * (1f - damping), vy * (1f - damping))
     }
 
     override fun updateSpecial(dt: Float, gs: GameState, enemySys: EnemySystem, scale: Float) {
+        // --- DYNAMIC SCALING ---
+        val depthFactor = (gs.currentLevel / 1500f).coerceAtMost(0.6f)
+        val hardMult = if (gs.difficulty == 1) 0.85f else 1.0f
+
         gs.bossAttackTimer += dt
-        val dashCooldown = if (gs.isBossRage) 1.5f else 3f
+        val baseCooldown = if (gs.isBossRage) 1.5f else 3.2f
+        val dashCooldown = baseCooldown * (1f - depthFactor) * hardMult
 
-        // BOSS ABILITY: Sudden Dash
-        if (gs.bossAttackTimer > dashCooldown && gs.bossAttackState == 0) {
-            gs.bossAttackState = 1 // Charging
+        // State 0: Idle/Chasing
+        if (gs.bossAttackState == 0 && gs.bossAttackTimer > dashCooldown) {
+            gs.bossAttackState = 1 // Charging Dash
             gs.bossAttackTimer = 0f
+            deployTrap(gs, enemySys)
         }
 
-        if (gs.bossAttackState == 1 && gs.bossAttackTimer > 0.5f) {
-            // EXECUTE DASH
-            val dx = gs.px - gs.bossX
-            val dy = gs.py - gs.bossY
-            val dist = sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
-            val dashSpeed = scale * 5f
-            gs.bossVx = (dx / dist) * dashSpeed
-            gs.bossVy = (dy / dist) * dashSpeed
-            gs.bossAttackState = 2 // Dashing
-            gs.bossAttackTimer = 0f
-            EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 50)
+        // State 1: Charge Dash (Telegraphing)
+        if (gs.bossAttackState == 1) {
+            val chargeDuration = 0.5f * hardMult
+            if (gs.bossAttackTimer > chargeDuration) {
+                val dx = gs.px - gs.bossX
+                val dy = gs.py - gs.bossY
+                val dist = sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
+
+                // Dash Speed scales with level
+                val dashSpeed = scale * (4.0f + (gs.currentLevel / 200f).coerceAtMost(2.0f))
+                gs.bossVx = (dx / dist) * dashSpeed
+                gs.bossVy = (dy / dist) * dashSpeed
+
+                gs.bossAttackState = 2 // Executing Dash
+                gs.bossAttackTimer = 0f
+                EchoAudioManager.playSound(
+                    ToneGenerator.TONE_CDMA_PIP, 60
+                )
+            }
         }
 
-        if (gs.bossAttackState == 2 && gs.bossAttackTimer > 0.3f) {
-            gs.bossAttackState = 0 // Back to Idle
-            gs.bossAttackTimer = 0f
+        // State 2: Dashing
+        if (gs.bossAttackState == 2) {
+            if (gs.bossAttackTimer > 0.3f) {
+                // CONTINUOUS CHAIN DASH LOGIC
+                val chainChance =
+                    (gs.currentLevel / 2000f).coerceAtMost(0.4f) + (if (gs.isBossRage) 0.3f else 0f)
+                val maxDashes =
+                    if (gs.currentLevel >= 150) 3 else (if (gs.currentLevel >= 50) 2 else 1)
+
+                if (kotlin.random.Random.nextFloat() < chainChance && gs.bossAttackCounter < maxDashes - 1) {
+                    gs.bossAttackCounter++
+                    gs.bossAttackState = 1
+                    gs.bossAttackTimer = 0.15f // Faster follow-up
+                } else {
+                    gs.bossAttackCounter = 0
+                    gs.bossAttackState = 3 // Recovery
+                    gs.bossAttackTimer = 0f
+                }
+            }
+        }
+
+        // State 3: Recovery
+        if (gs.bossAttackState == 3) {
+            val baseRecovery = if (gs.isBossRage) 0.4f else 1.0f
+            val recoveryTime = baseRecovery * (1f - depthFactor) * hardMult
+            if (gs.bossAttackTimer > recoveryTime) {
+                gs.bossAttackState = 0
+                gs.bossAttackTimer = 0f
+            }
+            // Decelerate quickly
             val damping = (dt * 15f).coerceIn(0f, 1f)
             gs.bossVx *= (1f - damping)
             gs.bossVy *= (1f - damping)
         }
+    }
 
-        if (kotlin.random.Random.nextFloat() < 0.1f * dt) {
-            // EMP TRAP DEPLOYMENT
-            for (i in 0 until enemySys.pwn) {
-                if (!enemySys.pwActive[i]) {
-                    enemySys.pwX[i] = gs.bossX
-                    enemySys.pwY[i] = gs.bossY
-                    enemySys.pwType[i] = 4 // Custom Trap Type for Boss
-                    enemySys.pwActive[i] = true
-                    enemySys.pwVis[i] = 1.0f
-                    break
-                }
+    private fun deployTrap(gs: GameState, enemySys: EnemySystem) {
+        for (i in 0 until enemySys.pwn) {
+            if (!enemySys.pwActive[i]) {
+                enemySys.pwX[i] = gs.bossX
+                enemySys.pwY[i] = gs.bossY
+                enemySys.pwType[i] = 4 // EMP Slow Trap
+                enemySys.pwActive[i] = true
+                enemySys.pwVis[i] = 1.0f
+                break
             }
         }
     }
@@ -524,34 +714,97 @@ object GlitchBossBehavior : IBossBehavior {
     override val attackType = "HACKER_PHASE"
     override val spawnMessage = "GLITCH: SYST3M... ERR0R... DELETE(YOU)."
 
-    override fun applyMovementPattern(vx: Float, vy: Float, dt: Float, gs: GameState, scale: Float): Pair<Float, Float> {
-        val rageMult = if (gs.isBossRage) 2.0f else 1.0f
-        // Jittery movement
-        val damping = (dt * 12f).coerceIn(0f, 1f)
-        val jx = (kotlin.random.Random.nextFloat() - 0.5f) * scale * 1.2f * rageMult
-        val jy = (kotlin.random.Random.nextFloat() - 0.5f) * scale * 1.2f * rageMult
+    override fun applyMovementPattern(
+        vx: Float,
+        vy: Float,
+        dt: Float,
+        gs: GameState,
+        scale: Float,
+    ): Pair<Float, Float> {
+        val rageMult = if (gs.isBossRage) 1.5f else 1.0f
+        
+        // State 1: Invisible/Stealth Phase -> Extremely fast and jittery
+        val moveMult = if (gs.bossAttackState == 1) 2.2f * rageMult else 1.0f
+        
+        val damping = (dt * 10f).coerceIn(0f, 1f)
+        val jitter = if (gs.bossAttackState == 1) 2.0f else 1.2f
+        val jx = (kotlin.random.Random.nextFloat() - 0.5f) * scale * jitter * moveMult
+        val jy = (kotlin.random.Random.nextFloat() - 0.5f) * scale * jitter * moveMult
+        
         return Pair(vx * (1f - damping) + jx, vy * (1f - damping) + jy)
     }
 
     override fun updateSpecial(dt: Float, gs: GameState, enemySys: EnemySystem, scale: Float) {
+        val depthFactor = (gs.currentLevel / 1200f).coerceAtMost(0.7f)
+        val hardMult = if (gs.difficulty == 1) 0.8f else 1.0f
+        
         gs.bossAttackTimer += dt
-        if (gs.bossAttackTimer > 6f) {
-            gs.bossAttackTimer = 0f
-            // Teleport near player - VALIDATED
-            val angle = kotlin.random.Random.nextFloat() * 6.28f
-            val targetX = gs.px + kotlin.math.cos(angle) * scale * 1.0f
-            val targetY = gs.py + kotlin.math.sin(angle) * scale * 1.0f
+        val baseInterval = if (gs.isBossRage) 3.5f else 6.0f
+        val stateInterval = baseInterval * (1f - depthFactor) * hardMult
 
-            val bossRadius = scale * 0.08f * sizeMult
-            val validPos = com.appsbyalok.echohunter.utils.SpawnValidator.findValidNear(
-                targetX, targetY, bossRadius, gs, maxAttempts = 30, searchRadius = scale * 0.5f, hitboxScale = 1.0f
-            )
+        when (gs.bossAttackState) {
+            0 -> { // IDLE / CHASING
+                if (gs.bossAttackTimer > stateInterval) {
+                    val roll = kotlin.random.Random.nextFloat()
+                    gs.bossAttackState = when {
+                        roll < 0.35f -> 1 // Invisible Phase
+                        roll < 0.75f && gs.currentLevel >= 40 -> 3 // Glitch Clones
+                        else -> 2 // Hyper-Teleport
+                    }
+                    gs.bossAttackTimer = 0f
+                }
+            }
+            1 -> { // PHASE: INVISIBLE (Scanline / Glitch Effect)
+                // We simulate the "vertical scanline" glitch by pulsing chromatic aberration
+                gs.chromaticIntensity = 0.4f + (kotlin.math.sin(gs.timeSinceStart * 25f) * 0.4f)
+                
+                val duration = (2.0f + depthFactor * 2.5f) * hardMult
+                if (gs.bossAttackTimer > duration) {
+                    gs.bossAttackState = 0
+                    gs.bossAttackTimer = -0.5f // Delay
+                    gs.chromaticIntensity = 0f
+                }
+            }
+            2 -> { // PHASE: HYPER-TELEPORT
+                val angle = kotlin.random.Random.nextFloat() * 6.28f
+                // Teleport distance decreases as player gets better (more aggressive boss)
+                val dist = scale * (1.1f - depthFactor * 0.4f)
+                val targetX = gs.px + kotlin.math.cos(angle) * dist
+                val targetY = gs.py + kotlin.math.sin(angle) * dist
 
-            if (validPos != null) {
-                gs.bossX = validPos.first
-                gs.bossY = validPos.second
-                EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
-                gs.chromaticIntensity = 0.8f
+                val validPos = com.appsbyalok.echohunter.utils.SpawnValidator.findValidNear(
+                    targetX, targetY, scale * 0.1f, gs, 30
+                )
+                
+                if (validPos != null) {
+                    gs.bossX = validPos.first
+                    gs.bossY = validPos.second
+                    gs.shakeAmount = scale * 0.2f
+                    EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
+                    gs.chromaticIntensity = 0.7f // Flash glitch on exit
+                }
+                
+                gs.bossAttackState = 0
+                gs.bossAttackTimer = -1.0f
+            }
+            3 -> { // PHASE: GLITCH CLONES (Decoys)
+                val maxClones = when {
+                    gs.currentLevel >= 500 -> 4
+                    gs.currentLevel >= 150 -> 3
+                    else -> 2
+                }
+                
+                for (i in 0 until maxClones) {
+                    val angle = (6.28f / maxClones) * i + (kotlin.random.Random.nextFloat() * 0.5f)
+                    val cx = gs.bossX + kotlin.math.cos(angle) * scale * 0.7f
+                    val cy = gs.bossY + kotlin.math.sin(angle) * scale * 0.7f
+                    
+                    enemySys.spawnBossClone(cx, cy, gs, scale)
+                }
+                
+                EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 120)
+                gs.bossAttackState = 0
+                gs.bossAttackTimer = -0.8f
             }
         }
     }
@@ -567,11 +820,19 @@ object OmegaBossBehavior : IBossBehavior {
     override val attackType = "HYBRID_COMMAND"
     override val spawnMessage = "OMEGA: WE ARE THE SWARM. WE ARE MANY."
 
-    override fun applyMovementPattern(vx: Float, vy: Float, dt: Float, gs: GameState, scale: Float): Pair<Float, Float> {
+    override fun applyMovementPattern(
+        vx: Float,
+        vy: Float,
+        dt: Float,
+        gs: GameState,
+        scale: Float,
+    ): Pair<Float, Float> {
         val rageMult = if (gs.isBossRage) 2.0f else 1.0f
         val damping = (dt * 5f).coerceIn(0f, 1f)
-        val svy = vy * (1f - damping) + kotlin.math.cos(gs.timeSinceStart * (5f * rageMult)) * scale * 0.6f
-        val svx = vx * (1f - damping) + kotlin.math.sin(gs.timeSinceStart * (3f * rageMult)) * scale * 0.3f
+        val svy =
+            vy * (1f - damping) + kotlin.math.cos(gs.timeSinceStart * (5f * rageMult)) * scale * 0.6f
+        val svx =
+            vx * (1f - damping) + kotlin.math.sin(gs.timeSinceStart * (3f * rageMult)) * scale * 0.3f
         return Pair(svx, svy)
     }
 
@@ -581,9 +842,11 @@ object OmegaBossBehavior : IBossBehavior {
             gs.bossAttackTimer = 0f
             // Spawn Hunter Swarm
             for (i in 0 until 3) {
-                enemySys.spawnSwarmIfNeeded(gs, scale) // Simplified call
+                enemySys.spawnSwarmIfNeeded(gs, scale)
             }
-            com.appsbyalok.echohunter.data.StoryProtocol.showIngameMessage("OMEGA: DEPLOYING SWARM UNITS", 2f)
+            com.appsbyalok.echohunter.data.StoryProtocol.showIngameMessage(
+                "OMEGA: DEPLOYING SWARM UNITS", 2f
+            )
         }
     }
 }

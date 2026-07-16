@@ -30,10 +30,11 @@ class MainActivity : Activity() {
                 val bars = insets.getInsets(WindowInsets.Type.systemBars())
                 val displayCutout = insets.getInsets(WindowInsets.Type.displayCutout())
                 
-                gameView.gs.hudLayout.safeInsetTop = maxOf(bars.top, displayCutout.top).toFloat()
-                gameView.gs.hudLayout.safeInsetBottom = maxOf(bars.bottom, displayCutout.bottom).toFloat()
-                gameView.gs.hudLayout.safeInsetLeft = maxOf(bars.left, displayCutout.left).toFloat()
-                gameView.gs.hudLayout.safeInsetRight = maxOf(bars.right, displayCutout.right).toFloat()
+                SaveManager.lastInsetTop = maxOf(bars.top, displayCutout.top).toFloat()
+                SaveManager.lastInsetBottom = maxOf(bars.bottom, displayCutout.bottom).toFloat()
+                SaveManager.lastInsetLeft = maxOf(bars.left, displayCutout.left).toFloat()
+                SaveManager.lastInsetRight = maxOf(bars.right, displayCutout.right).toFloat()
+                gameView.resolveHudLayout()
                 
                 insets
             }

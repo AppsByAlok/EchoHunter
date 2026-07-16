@@ -282,10 +282,16 @@ object MazeGenerator {
     }
 
     private fun placeGuards(grid: Array<IntArray>, w: Int, h: Int, rand: Random, level: Int, px: Int, py: Int) {
-        val guardCount = 5 + (level * 2)
+        // Density-based guard placement instead of linear level scaling
+        // Linear scaling (level * 2) hits integer limits or becomes unmanageable
+        val area = w * h
+        val baseGuards = 5
+        val densityFactor = LevelEngine.getSaturatedValue(level, 0.002f, 0.01f, 500f) // 0.2% to 1% of area
+        val guardCount = (baseGuards + (area * densityFactor)).toInt().coerceAtMost(1000)
+        
         var placed = 0
         var attempts = 0
-        while (placed < guardCount && attempts < 1000) {
+        while (placed < guardCount && attempts < 2000) {
             attempts++
             val gx = rand.nextInt(1, w - 1)
             val gy = rand.nextInt(1, h - 1)

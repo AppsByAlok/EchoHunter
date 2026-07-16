@@ -16,6 +16,7 @@ class ControlsState {
 
     // Raw Input (Filled by TouchController)
     var isAttackTouching = false
+    var attackTapQueued = false
     var attackTouchX = 0f
     var attackTouchY = 0f
 

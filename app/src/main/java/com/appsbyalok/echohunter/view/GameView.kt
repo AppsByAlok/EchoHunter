@@ -161,9 +161,17 @@ class GameView(context: Context) : View(context) {
         gs.gameMode = mode
         gs.currentLevel = level
         gs.resetGame()
+
+        if (mode == 0) {
+            SaveManager.incrementLevelAttempts(level, gs.difficulty == 1)
+        }
         
-        // Restore Aiming preference from SaveManager
+        // Restore persistent combat/loadout preferences after resetGame clears transient state.
         gs.controls.activeAttackMode = AttackMode.entries.toTypedArray()[SaveManager.activeAttackMode]
+        gs.controls.currentWeapon = SaveManager.activeWeapon
+        gs.controls.currentTrap = SaveManager.activeTrap
+        gs.isAutoPilotActive = SaveManager.isAutoPilotEnabled
+        gs.autoPilotTimer = if (gs.isAutoPilotActive) 600f else 0f
 
         effectSys.reset()
         enemySys.respawnAll(gs)
@@ -403,6 +411,12 @@ class GameView(context: Context) : View(context) {
         uiMainMenu.initLayout(w.toFloat(), h.toFloat())
         worldRenderer.updateDashEffect(gameScale)
 
+        resolveHudLayout(w.toFloat(), h.toFloat())
+    }
+
+    fun resolveHudLayout(targetW: Float = width.toFloat(), targetH: Float = height.toFloat()) {
+        if (targetW <= 0f || targetH <= 0f) return
+
         // Apply Safe Area Insets (Notch Handling from SaveManager)
         val insetL = SaveManager.lastInsetLeft
         val insetR = SaveManager.lastInsetRight
@@ -415,37 +429,10 @@ class GameView(context: Context) : View(context) {
         gs.hudLayout.safeInsetTop = insetT
         gs.hudLayout.safeInsetBottom = insetB
 
-        // Recalculate dynamic UI coordinates (Refined Layout with Insets)
-        gs.hudLayout.btnRadius = gameScale * 0.11f
-        gs.hudLayout.atkX = w - gameScale * 0.16f - insetR
-        gs.hudLayout.atkY = h - gameScale * 0.16f - insetB
-        
-        val spacing = gameScale * 0.25f
-        
-        gs.hudLayout.ovrX = gs.hudLayout.atkX
-        gs.hudLayout.ovrY = gs.hudLayout.atkY - spacing
-        
-        gs.hudLayout.trapX = gs.hudLayout.atkX - spacing
-        gs.hudLayout.trapY = gs.hudLayout.atkY
-        
-        gs.hudLayout.pulseX = gs.hudLayout.atkX - spacing
-        gs.hudLayout.pulseY = gs.hudLayout.atkY - spacing
-        
-        gs.hudLayout.pauseX = w - gameScale * 0.12f - insetR
-        gs.hudLayout.pauseY = gameScale * 0.12f + insetT
-
-        // Manual Aim Touchpad (Wider Area for easier thumb access)
-        val rectW = w * 0.45f
-        val rectH = h * 0.7f
-        gs.hudLayout.manualAimRect.set(
-            w - rectW - insetR, 
-            h - rectH - insetB, 
-            w.toFloat() - insetR, 
-            h.toFloat() - insetB
-        )
-
-        gs.touch.moveBaseX = gs.hudLayout.btnRadius * 2.2f + insetL
-        gs.touch.moveBaseY = h - gs.hudLayout.btnRadius * 2.2f - insetB
+        val isPortrait = targetH > targetW
+        gs.hudLayout.resolve(SaveManager.loadHudLayoutProfile(isPortrait), targetW, targetH, gameScale)
+        gs.touch.moveBaseX = gs.hudLayout.movementX
+        gs.touch.moveBaseY = gs.hudLayout.movementY
         gs.touch.moveKnobX = gs.touch.moveBaseX
         gs.touch.moveKnobY = gs.touch.moveBaseY
     }

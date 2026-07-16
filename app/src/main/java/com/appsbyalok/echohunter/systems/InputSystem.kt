@@ -123,6 +123,7 @@ class InputSystem(private val gs: GameState) {
             AttackMode.AUTO_AIM -> handleAutoAim(enemySys)
             AttackMode.MANUAL_AIM -> handleManualAim(scale)
         }
+        gs.controls.attackTapQueued = false
     }
 
     private fun getIndexByAngle(dx: Float, dy: Float, count: Int): Int {
@@ -146,7 +147,7 @@ class InputSystem(private val gs: GameState) {
     }
 
     private fun handleDirectionalAttack(scale: Float) {
-        gs.controls.attackRequested = gs.controls.isAttackTouching && !gs.controls.isWeaponMenuOpen
+        gs.controls.attackRequested = (gs.controls.isAttackTouching || gs.controls.attackTapQueued) && !gs.controls.isWeaponMenuOpen
         
         val dx = gs.touch.manualAimCurrentX - gs.touch.manualAimBaseX
         val dy = gs.touch.manualAimCurrentY - gs.touch.manualAimBaseY
@@ -194,7 +195,7 @@ class InputSystem(private val gs: GameState) {
     }
 
     private fun handleAutoAim(enemySys: EnemySystem?) {
-        gs.controls.attackRequested = gs.controls.isAttackTouching && !gs.controls.isWeaponMenuOpen
+        gs.controls.attackRequested = (gs.controls.isAttackTouching || gs.controls.attackTapQueued) && !gs.controls.isWeaponMenuOpen
         gs.controls.attackPullDist = 0f
 
         if (enemySys != null) {
@@ -350,7 +351,7 @@ class InputSystem(private val gs: GameState) {
         } else {
             gs.touch.manualAimKnobX = gs.touch.manualAimBaseX
             gs.touch.manualAimKnobY = gs.touch.manualAimBaseY
-            gs.controls.attackRequested = false
+            gs.controls.attackRequested = gs.controls.attackTapQueued
             gs.controls.attackPullDist = 0f
             
             // Always sync aimDir with lastFacing when idle

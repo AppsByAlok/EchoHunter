@@ -2,6 +2,16 @@ package com.appsbyalok.echohunter.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.appsbyalok.echohunter.input.HudAction
+import com.appsbyalok.echohunter.input.HudControl
+import com.appsbyalok.echohunter.input.HudInputBehavior
+import com.appsbyalok.echohunter.input.HudLayoutProfile
+import com.appsbyalok.echohunter.input.HudVisualType
+import com.appsbyalok.echohunter.input.ManualAimControl
+import com.appsbyalok.echohunter.input.MovementControl
+import com.appsbyalok.echohunter.input.MovementMode
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.Locale
 import kotlin.math.max
 
@@ -52,6 +62,12 @@ object SaveManager {
 
     var activeAttackMode: Int = 1 // Default to AUTO_AIM (index 1)
         private set
+    var activeWeapon: Int = 1
+        private set
+    var activeTrap: Int = 2
+        private set
+    var isAutoPilotEnabled: Boolean = false
+        private set
 
     // Temporary session cache for UI layout (Notch handling)
     var lastInsetTop = 0f
@@ -88,6 +104,118 @@ object SaveManager {
         activeAttackMode = mode
         prefs.edit().putInt("attackMode", activeAttackMode).apply()
     }
+
+    fun setActiveWeapon(weapon: Int) {
+        activeWeapon = weapon
+        prefs.edit().putInt("activeWeapon", activeWeapon).apply()
+    }
+
+    fun setActiveTrap(trap: Int) {
+        activeTrap = trap
+        prefs.edit().putInt("activeTrap", activeTrap).apply()
+    }
+
+    fun setAutoPilotEnabled(enabled: Boolean) {
+        isAutoPilotEnabled = enabled
+        prefs.edit().putBoolean("isAutoPilotEnabled", isAutoPilotEnabled).apply()
+    }
+
+    fun loadHudLayoutProfile(isPortrait: Boolean): HudLayoutProfile {
+        val key = if (isPortrait) HUD_LAYOUT_PORTRAIT_KEY else HUD_LAYOUT_LANDSCAPE_KEY
+        val saved = prefs.getString(key, null) ?: return HudLayoutProfile.defaults(isPortrait)
+        return runCatching { decodeHudLayout(saved) }.getOrElse { HudLayoutProfile.defaults(isPortrait) }
+    }
+
+    fun saveHudLayoutProfile(isPortrait: Boolean, profile: HudLayoutProfile) {
+        val key = if (isPortrait) HUD_LAYOUT_PORTRAIT_KEY else HUD_LAYOUT_LANDSCAPE_KEY
+        prefs.edit().putString(key, encodeHudLayout(profile.copyMutable().normalize())).apply()
+    }
+
+    fun resetHudLayoutProfile(isPortrait: Boolean) {
+        val key = if (isPortrait) HUD_LAYOUT_PORTRAIT_KEY else HUD_LAYOUT_LANDSCAPE_KEY
+        prefs.edit().remove(key).apply()
+    }
+
+    private fun encodeHudLayout(profile: HudLayoutProfile): String {
+        val root = JSONObject().put("version", 1)
+        root.put("movement", JSONObject().apply {
+            put("mode", profile.movement.mode.name)
+            put("x", profile.movement.x.toDouble())
+            put("y", profile.movement.y.toDouble())
+            put("scale", profile.movement.scale.toDouble())
+            put("left", profile.movement.zoneLeft.toDouble())
+            put("top", profile.movement.zoneTop.toDouble())
+            put("right", profile.movement.zoneRight.toDouble())
+            put("bottom", profile.movement.zoneBottom.toDouble())
+        })
+        root.put("manualAim", JSONObject().apply {
+            put("mode", profile.manualAim.mode.name)
+            put("x", profile.manualAim.x.toDouble())
+            put("y", profile.manualAim.y.toDouble())
+            put("scale", profile.manualAim.scale.toDouble())
+            put("left", profile.manualAim.zoneLeft.toDouble())
+            put("top", profile.manualAim.zoneTop.toDouble())
+            put("right", profile.manualAim.zoneRight.toDouble())
+            put("bottom", profile.manualAim.zoneBottom.toDouble())
+        })
+        root.put("controls", JSONArray().apply {
+            profile.controls.forEach { control -> put(JSONObject().apply {
+                put("id", control.id)
+                put("action", control.action.name)
+                put("x", control.x.toDouble())
+                put("y", control.y.toDouble())
+                put("scale", control.scale.toDouble())
+                put("visual", control.visualType.name)
+                put("input", control.inputBehavior.name)
+            }) }
+        })
+        return root.toString()
+    }
+
+    private fun decodeHudLayout(raw: String): HudLayoutProfile {
+        val root = JSONObject(raw)
+        if (root.optInt("version", 0) != 1) error("Unsupported HUD layout version")
+        val movementJson = root.getJSONObject("movement")
+        val movement = MovementControl(
+            mode = enumOrDefault(movementJson.optString("mode"), MovementMode.FLOATING),
+            x = movementJson.optDouble("x", 0.18).toFloat(),
+            y = movementJson.optDouble("y", 0.82).toFloat(),
+            scale = movementJson.optDouble("scale", 1.0).toFloat(),
+            zoneLeft = movementJson.optDouble("left", 0.0).toFloat(),
+            zoneTop = movementJson.optDouble("top", 0.35).toFloat(),
+            zoneRight = movementJson.optDouble("right", 0.5).toFloat(),
+            zoneBottom = movementJson.optDouble("bottom", 1.0).toFloat()
+        )
+        val manualAimJson = root.optJSONObject("manualAim")
+        val manualAim = ManualAimControl(
+            mode = enumOrDefault(manualAimJson?.optString("mode") ?: "", MovementMode.FLOATING),
+            x = manualAimJson?.optDouble("x", 0.76)?.toFloat() ?: 0.76f,
+            y = manualAimJson?.optDouble("y", 0.68)?.toFloat() ?: 0.68f,
+            scale = manualAimJson?.optDouble("scale", 1.0)?.toFloat() ?: 1f,
+            zoneLeft = manualAimJson?.optDouble("left", 0.5)?.toFloat() ?: 0.5f,
+            zoneTop = manualAimJson?.optDouble("top", 0.28)?.toFloat() ?: 0.28f,
+            zoneRight = manualAimJson?.optDouble("right", 1.0)?.toFloat() ?: 1f,
+            zoneBottom = manualAimJson?.optDouble("bottom", 1.0)?.toFloat() ?: 1f
+        )
+        val controls = root.getJSONArray("controls").let { array ->
+            MutableList(array.length()) { index ->
+                val item = array.getJSONObject(index)
+                HudControl(
+                    id = item.optString("id", "control_$index"),
+                    action = enumOrDefault(item.optString("action"), HudAction.ATTACK),
+                    x = item.optDouble("x", 0.5).toFloat(),
+                    y = item.optDouble("y", 0.5).toFloat(),
+                    scale = item.optDouble("scale", 1.0).toFloat(),
+                    visualType = enumOrDefault(item.optString("visual"), HudVisualType.STANDARD),
+                    inputBehavior = enumOrDefault(item.optString("input"), HudInputBehavior.TAP)
+                )
+            }
+        }
+        return HudLayoutProfile(controls, movement, manualAim).normalize()
+    }
+
+    private inline fun <reified T : Enum<T>> enumOrDefault(value: String, default: T): T =
+        enumValues<T>().firstOrNull { it.name == value } ?: default
     // --- NAYA STREAK SYSTEM (ROGUELITE) ---
     var currentStoryStreak: Int = 0
         private set
@@ -131,6 +259,9 @@ object SaveManager {
         fontSize = prefs.getString("fontSize", "NORMAL") ?: "NORMAL"
 
         activeAttackMode = prefs.getInt("attackMode", 1) // Default to AUTO_AIM
+        activeWeapon = prefs.getInt("activeWeapon", 1)
+        activeTrap = prefs.getInt("activeTrap", 2)
+        isAutoPilotEnabled = prefs.getBoolean("isAutoPilotEnabled", false)
 
         // Load Streaks
         currentStoryStreak = prefs.getInt("currStory", 0)
@@ -364,6 +495,9 @@ object SaveManager {
         totalData = 0L
         maxCampaignLevel = 1
         isAutoNextLevelEnabled = false
+        activeWeapon = 1
+        activeTrap = 2
+        isAutoPilotEnabled = false
         currentStoryStreak = 0
         unlockedStoryStreak = 0
         currentHardStreak = 0
@@ -374,4 +508,7 @@ object SaveManager {
         prefs.edit().clear().apply()
         UpgradeSystem.clearAllData()
     }
+
+    private const val HUD_LAYOUT_PORTRAIT_KEY = "hud_layout_v1_portrait"
+    private const val HUD_LAYOUT_LANDSCAPE_KEY = "hud_layout_v1_landscape"
 }

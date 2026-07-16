@@ -76,14 +76,28 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
         val bonus = if (gs.gameMode == 1) 4f else 0f
         
         // Scale max addition based on level features for more density at higher levels
-        var maxAdd = if (isHard) 30f else 18f
-        if (config.features.contains(LevelFeature.CLEAN_SWEEP)) maxAdd += 45f
-        if (config.features.contains(LevelFeature.ELIMINATION)) maxAdd += 25f
+        var maxAdd = if (isHard) 12f else 8f
+        if (config.features.contains(LevelFeature.CLEAN_SWEEP)) maxAdd += 25f
+        if (config.features.contains(LevelFeature.ELIMINATION)) maxAdd += 10f
 
-        val targetCount = LevelEngine.getSaturatedValue(gs.currentLevel, baseNodes + bonus, maxAdd, 400f).toInt()
+        val targetCount = if (config.features.contains(LevelFeature.CLEAN_SWEEP)) {
+            // Density-based scaling for Clean Sweep (Total Destruction)
+            // Area-based target: ~1 spawner per 20x20 tile area + base
+            val area = (gs.gridMap?.size ?: 100) * (gs.gridMap?.get(0)?.size ?: 100)
+            val areaDensityBonus = (area / 400f) // 1 per 20x20
+            (baseNodes + bonus + areaDensityBonus).coerceAtMost(60f).toInt()
+        } else {
+            LevelEngine.getSaturatedValue(gs.currentLevel, baseNodes + bonus, maxAdd, 20f).toInt()
+        }
         
-        if (gs.spawnerNodes.size < targetCount) {
-            val remaining = targetCount - gs.spawnerNodes.size
+        // --- NEW: DENSITY MINIMUM ---
+        // Ensure spawners aren't too sparse in large maps (especially at high levels)
+        val currentArea = (gs.gridMap?.size ?: 1) * (gs.gridMap?.get(0)?.size ?: 1)
+        val minDensityCount = (currentArea / 625f).toInt() // At least 1 spawner per 25x25 area
+        val finalTarget = kotlin.math.max(targetCount, minDensityCount)
+
+        if (gs.spawnerNodes.size < finalTarget) {
+            val remaining = finalTarget - gs.spawnerNodes.size
             for (i in 0 until remaining) {
                 var nx = Random.nextFloat() * mapW
                 var ny = Random.nextFloat() * mapH
@@ -366,6 +380,13 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
                 effectSys.spawnParticles(node.x, node.y, 0, scale * 0.5f)
             }
         }
+
+        // --- SOFT-LOCK PROTECTION ---
+        // If all nodes are gone, we must ensure objectives keep progressing
+        val allActuallyDestroyed = gs.spawnerNodes.isNotEmpty() && gs.spawnerNodes.all { it.state == SpawnState.DESTROYED }
+        if (allActuallyDestroyed) {
+            triggerPurgeVictory(gs)
+        }
     }
 
     private fun relocateNode(node: SpawnNode, gs: GameState, targetW: Float, scale: Float) {
@@ -510,11 +531,28 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
             objectivesCompletedByPurge = true
         }
 
+        // 1.5 FORCE BOSS TRIGGER: If spawners are gone, boss MUST arrive or player gets soft-locked
+        // In Story Mode, we force the score to meet the current sector's target.
+        if (config.features.contains(LevelFeature.BOSS) && !gs.bossActive) {
+            if (gs.gameMode == 1) {
+                if (gs.score < gs.sectorTarget) {
+                    gs.score = gs.sectorTarget.toLong()
+                    objectivesCompletedByPurge = true
+                }
+            } else if (gs.score < config.targetScore) {
+                gs.score = config.targetScore
+                objectivesCompletedByPurge = true
+            }
+        }
+
         // 2. Wipe all current enemies since their source is gone
+        var enemiesWipedAny = false
         for (i in 0 until enemySys.n) {
-            if (enemySys.ex[i] > -1000f) {
+            // Check state first to avoid re-killing already dead/dying enemies
+            if (enemySys.ex[i] > -1000f && enemySys.hp[i] > 0) {
                 enemySys.hp[i] = 0
                 enemySys.killEnemy(i, gs)
+                enemiesWipedAny = true
             }
         }
 
@@ -528,8 +566,9 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
                     "ADMIN UPLINK SEVERED. ACCESS GRANTED."
                 )
             }
-        } else {
+        } else if (objectivesCompletedByPurge || enemiesWipedAny) {
             // Level not cleared yet (maybe BOMB or ESCAPE still pending)
+            // Show message only when we actually take an action (wipe or objective jump)
             val msg = if (objectivesCompletedByPurge) {
                 "SECURITY LAYER PURGED: DEPENDENT PROTOCOLS BYPASSED.\n" +
                 "COMPLETE REMAINING OBJECTIVES."
@@ -539,7 +578,7 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
             }
             com.appsbyalok.echohunter.data.StoryProtocol.showTypewriterMessage(msg, 4f)
             
-            // Massive rewards for the purge
+            // Massive rewards for the purge (Only given once per 'action' event)
             gs.collectedDataKB += (250 * (1.0f + com.appsbyalok.echohunter.data.UpgradeSystem.getRewardBonusPercent())).toLong()
             gs.overclockTimer = 8f
         }

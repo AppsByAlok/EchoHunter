@@ -67,12 +67,13 @@ class EffectSystem {
                 pvyA[i] = sin(angle) * speed
                 
                 // --- FIX: VISUAL CLARITY COLOR MAPPING ---
-                // 0 -> PULSE (Blue), 1 -> RED (Default/Enemy), 2 -> OVERCLOCK (Orange), 3 -> BOSS (Magenta)
+                // 0 -> PULSE (Blue), 1 -> RED (Default/Enemy), 2 -> OVERCLOCK (Orange), 3 -> BOSS (Magenta), 4 -> CRIT (Yellow)
                 pLife[i] = when(colorMode) {
                     0 -> 0.9f  // Pulse Blue
                     1 -> 1.0f  // Red
                     2 -> 2.0f  // Overclock
                     3 -> 3.0f  // Boss
+                    4 -> 1.5f  // CRIT (Yellow/White)
                     else -> 1.0f
                 }
                 // Break condition adjusted for higher particle count
@@ -152,6 +153,7 @@ class EffectSystem {
                 val life = pLife[i]
                 val pColor = when {
                     life > 2.0f -> GameColors.BOSS
+                    life > 1.0f && life <= 1.5f -> GameColors.YELLOW // CRIT particles
                     life > 1.0f -> GameColors.OVERCLOCK
                     life < 1.0f && life > 0.85f -> GameColors.PULSE
                     else -> GameColors.RED

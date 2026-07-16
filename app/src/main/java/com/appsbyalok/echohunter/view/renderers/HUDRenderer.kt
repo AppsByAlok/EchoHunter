@@ -11,6 +11,9 @@ import com.appsbyalok.echohunter.data.SaveManager
 import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.input.AttackMode
+import com.appsbyalok.echohunter.input.HudAction
+import com.appsbyalok.echohunter.input.HudVisualType
+import com.appsbyalok.echohunter.input.ResolvedHudControl
 import com.appsbyalok.echohunter.utils.GameColors
 import kotlin.math.cos
 import kotlin.math.sin
@@ -42,35 +45,24 @@ class HUDRenderer(private val context: Context) {
         }
 
         // --- 3. MANUAL AIM TOUCHPAD (Visual Boundary) ---
-        if (gs.controls.activeAttackMode == AttackMode.MANUAL_AIM || 
-            gs.controls.activeAttackMode == AttackMode.DIRECTIONAL) {
+        if (gs.controls.activeAttackMode == AttackMode.MANUAL_AIM) {
             p.style = Paint.Style.STROKE; p.strokeWidth = scale * 0.001f; p.color = 0x11FF0000
-            c.drawRect(gs.hudLayout.manualAimRect, p)
+            if (gs.hudLayout.manualAimMode == com.appsbyalok.echohunter.input.MovementMode.STATIC) {
+                c.drawCircle(gs.hudLayout.manualAimX, gs.hudLayout.manualAimY, gs.hudLayout.manualAimRadius, p)
+            } else {
+                c.drawRect(gs.hudLayout.manualAimZone, p)
+            }
         }
 
-        // --- 4. ACTION BUTTONS (Labels & Icons Restored) ---
-        drawAttackUI(c, scale, gs)
-        
-        val isOvrReady = gs.overclockMeter >= 100f
-        val isOvrActive = gs.isOverclocked
-        val ovrColor = if (isOvrReady || isOvrActive) GameColors.OVERCLOCK else 0xFF777777.toInt()
-        val ovrProgress = when {
-            isOvrActive -> gs.overclockMeter / 100f // Show duration remaining
-            !isOvrReady -> 1f - (gs.overclockMeter / 100f) // Show charge remaining
-            else -> 0f
-        }
-        drawActionButton(c, gs.hudLayout.ovrX, gs.hudLayout.ovrY, gs.hudLayout.btnRadius, "OVR", if (gs.controls.isOverclockPressed) GameColors.CLARITY else ovrColor, isOvrReady || isOvrActive, ovrProgress, 0f)
-
-        val trapColor = if (gs.trapCooldownTimer <= 0f) GameColors.YELLOW else 0xFF777777.toInt()
-        val trapMaxCD = 8.0f * com.appsbyalok.echohunter.data.UpgradeSystem.getTrapCooldownMultiplier()
-        val trapProgress = if (gs.trapCooldownTimer > 0) gs.trapCooldownTimer / trapMaxCD else 0f
-        drawActionButton(c, gs.hudLayout.trapX, gs.hudLayout.trapY, gs.hudLayout.btnRadius, "TRAP", if (gs.controls.isTrapPressed) GameColors.CLARITY else trapColor, false, trapProgress, gs.trapCooldownTimer)
-
-        if (gs.isDarknessLevel || StoryProtocol.isBlackoutActive) {
-            val pulseColor = if (gs.sonarTimer <= 0f) GameColors.PULSE else 0xFF777777.toInt()
-            val pulseMaxCD = 3.0f * com.appsbyalok.echohunter.data.UpgradeSystem.getPulseCooldownMultiplier()
-            val pulseProgress = if (gs.sonarTimer > 0) gs.sonarTimer / pulseMaxCD else 0f
-            drawActionButton(c, gs.hudLayout.pulseX, gs.hudLayout.pulseY, gs.hudLayout.btnRadius, "SONAR", if (gs.controls.isSonarPressed || gs.controls.isAutoSonarLocked) GameColors.CLARITY else pulseColor, gs.controls.isAutoSonarLocked, pulseProgress, gs.sonarTimer)
+        // --- 4. ACTION BUTTONS ---
+        gs.hudLayout.controls.forEach { resolved ->
+            when (resolved.control.action) {
+                HudAction.ATTACK -> drawAttackUI(c, scale, gs, resolved)
+                HudAction.OVERCLOCK -> drawOverclockButton(c, gs, resolved)
+                HudAction.TRAP -> drawTrapButton(c, gs, resolved)
+                HudAction.SONAR -> if (gs.isDarknessLevel || StoryProtocol.isBlackoutActive) drawSonarButton(c, gs, resolved)
+                HudAction.PAUSE -> drawPauseButton(c, resolved)
+            }
         }
 
         // --- 5. RADIAL MENUS (Upper Arc Distribution) ---
@@ -98,11 +90,39 @@ class HUDRenderer(private val context: Context) {
             drawFocusIndicator(c, scale, targetW, targetH)
         }
 
-        p.style = Paint.Style.STROKE; p.color = GameColors.YELLOW; p.strokeWidth = scale * 0.005f
-        c.drawCircle(gs.hudLayout.pauseX, gs.hudLayout.pauseY, gs.hudLayout.btnRadius * 0.8f, p)
+    }
+
+    private fun drawOverclockButton(c: Canvas, gs: GameState, resolved: ResolvedHudControl) {
+        val ready = gs.overclockMeter >= 100f || gs.isOverclocked
+        val progress = when {
+            gs.isOverclocked -> gs.overclockMeter / 100f
+            !ready -> 1f - gs.overclockMeter / 100f
+            else -> 0f
+        }
+        drawActionButton(c, resolved.x, resolved.y, resolved.radius, "OVR", if (gs.controls.isOverclockPressed) GameColors.CLARITY else if (ready) GameColors.OVERCLOCK else 0xFF777777.toInt(), ready, progress, 0f, resolved.control.visualType)
+    }
+
+    private fun drawTrapButton(c: Canvas, gs: GameState, resolved: ResolvedHudControl) {
+        val maxCooldown = 8f * com.appsbyalok.echohunter.data.UpgradeSystem.getTrapCooldownMultiplier()
+        val progress = if (gs.trapCooldownTimer > 0f) gs.trapCooldownTimer / maxCooldown else 0f
+        drawActionButton(c, resolved.x, resolved.y, resolved.radius, "TRAP", if (gs.controls.isTrapPressed) GameColors.CLARITY else if (gs.trapCooldownTimer <= 0f) GameColors.YELLOW else 0xFF777777.toInt(), false, progress, gs.trapCooldownTimer, resolved.control.visualType)
+    }
+
+    private fun drawSonarButton(c: Canvas, gs: GameState, resolved: ResolvedHudControl) {
+        val maxCooldown = 3f * com.appsbyalok.echohunter.data.UpgradeSystem.getPulseCooldownMultiplier()
+        val progress = if (gs.sonarTimer > 0f) gs.sonarTimer / maxCooldown else 0f
+        drawActionButton(c, resolved.x, resolved.y, resolved.radius, "SONAR", if (gs.controls.isSonarPressed || gs.controls.isAutoSonarLocked) GameColors.CLARITY else if (gs.sonarTimer <= 0f) GameColors.PULSE else 0xFF777777.toInt(), gs.controls.isAutoSonarLocked, progress, gs.sonarTimer, resolved.control.visualType)
+    }
+
+    private fun drawPauseButton(c: Canvas, resolved: ResolvedHudControl) {
+        p.style = Paint.Style.STROKE
+        p.color = GameColors.YELLOW
+        p.strokeWidth = resolved.radius * 0.06f
+        val radius = if (resolved.control.visualType == HudVisualType.COMPACT) resolved.radius * 0.65f else resolved.radius * 0.8f
+        c.drawCircle(resolved.x, resolved.y, radius, p)
         p.style = Paint.Style.FILL
-        c.drawRect(gs.hudLayout.pauseX - scale * 0.015f, gs.hudLayout.pauseY - scale * 0.02f, gs.hudLayout.pauseX - scale * 0.005f, gs.hudLayout.pauseY + scale * 0.02f, p)
-        c.drawRect(gs.hudLayout.pauseX + scale * 0.005f, gs.hudLayout.pauseY - scale * 0.02f, gs.hudLayout.pauseX + scale * 0.015f, gs.hudLayout.pauseY + scale * 0.02f, p)
+        c.drawRect(resolved.x - resolved.radius * 0.13f, resolved.y - resolved.radius * 0.24f, resolved.x - resolved.radius * 0.04f, resolved.y + resolved.radius * 0.24f, p)
+        c.drawRect(resolved.x + resolved.radius * 0.04f, resolved.y - resolved.radius * 0.24f, resolved.x + resolved.radius * 0.13f, resolved.y + resolved.radius * 0.24f, p)
     }
 
     private fun drawHealthAndScore(c: Canvas, scale: Float, gs: GameState) {
@@ -210,59 +230,20 @@ class HUDRenderer(private val context: Context) {
         }
     }
 
-    private fun drawAttackUI(c: Canvas, scale: Float, gs: GameState) {
-        val atkX = gs.hudLayout.atkX
-        val atkY = gs.hudLayout.atkY
-        val radius = gs.hudLayout.btnRadius
+    private fun drawAttackUI(c: Canvas, scale: Float, gs: GameState, resolved: ResolvedHudControl) {
+        val atkX = resolved.x
+        val atkY = resolved.y
+        val radius = resolved.radius
         val mode = gs.controls.activeAttackMode
 
         when (mode) {
             AttackMode.DIRECTIONAL -> {
                 val color = if (gs.controls.attackRequested) GameColors.TEXT else GameColors.RED
-                // 1. Added "ATK" label so it looks like a standard attack button
-                drawActionButton(c, atkX, atkY, radius, "ATK", color, false)
-
-                // 2. Decorative directional arrows (subtle, around the button)
-                p.style = Paint.Style.STROKE; p.strokeWidth = radius * 0.04f; p.color = color; p.alpha = 150
-                val off = radius * 0.55f
-                val tip = radius * 0.08f
-                c.drawLine(atkX, atkY - off, atkX - tip, atkY - off + tip, p) // Up
-                c.drawLine(atkX, atkY - off, atkX + tip, atkY - off + tip, p)
-                c.drawLine(atkX, atkY + off, atkX - tip, atkY + off - tip, p) // Down
-                c.drawLine(atkX, atkY + off, atkX + tip, atkY + off - tip, p)
-                c.drawLine(atkX - off, atkY, atkX - off + tip, atkY - tip, p) // Left
-                c.drawLine(atkX - off, atkY, atkX - off + tip, atkY + tip, p)
-                c.drawLine(atkX + off, atkY, atkX + off - tip, atkY - tip, p) // Right
-                c.drawLine(atkX + off, atkY, atkX + off - tip, atkY + tip, p)
-                p.alpha = 255
-
-                // 3. Hide joystick visuals unless the user pulls far enough (Override threshold)
-                // This prevents the "joystick confusion" during simple taps
-                val pullX = gs.touch.manualAimCurrentX - gs.touch.manualAimBaseX
-                val pullY = gs.touch.manualAimCurrentY - gs.touch.manualAimBaseY
-                val pullDist = kotlin.math.sqrt(pullX * pullX + pullY * pullY)
-                
-                if (gs.controls.manualAimActive && pullDist > radius * 0.25f) {
-                    // Draw joystick base (Subtle ring)
-                    p.style = Paint.Style.STROKE; p.strokeWidth = scale * 0.006f
-                    p.color = (0x44 shl 24) or (color and 0xFFFFFF)
-                    c.drawCircle(gs.touch.manualAimBaseX, gs.touch.manualAimBaseY, scale * 0.15f, p)
-                    
-                    // Draw joystick knob
-                    val knobRadius = radius * 0.5f
-                    p.style = Paint.Style.FILL; p.color = (0x88 shl 24) or (color and 0xFFFFFF)
-                    c.drawCircle(gs.touch.manualAimKnobX, gs.touch.manualAimKnobY, knobRadius, p)
-                    p.style = Paint.Style.STROKE; p.color = color; p.strokeWidth = scale * 0.004f
-                    c.drawCircle(gs.touch.manualAimKnobX, gs.touch.manualAimKnobY, knobRadius, p)
-                    
-                    // Knob center dot
-                    p.style = Paint.Style.FILL; p.color = GameColors.HP
-                    c.drawCircle(gs.touch.manualAimKnobX, gs.touch.manualAimKnobY, knobRadius * 0.25f, p)
-                }
+                drawActionButton(c, atkX, atkY, radius, "ATK", color, false, visualType = resolved.control.visualType)
             }
             AttackMode.AUTO_AIM -> {
                 val color = if (gs.controls.attackRequested) GameColors.OVERCLOCK else GameColors.SHIELD
-                drawActionButton(c, atkX, atkY, radius, "", color, false)
+                drawActionButton(c, atkX, atkY, radius, "", color, false, visualType = resolved.control.visualType)
                 // Technical Tracking Icon
                 p.style = Paint.Style.STROKE; p.strokeWidth = radius * 0.05f; p.color = color
                 c.drawCircle(atkX, atkY, radius * 0.35f, p)
@@ -281,7 +262,7 @@ class HUDRenderer(private val context: Context) {
                 c.drawCircle(bx, by, scale * 0.15f, p)
                 
                 // Draw Base Button Ring (No Label)
-                drawActionButton(c, atkX, atkY, radius, "", GameColors.RED, false)
+                drawActionButton(c, atkX, atkY, radius, "", GameColors.RED, false, visualType = resolved.control.visualType)
 
                 // Knob position
                 val kx = if (gs.controls.manualAimActive) gs.touch.manualAimKnobX else atkX
@@ -333,25 +314,26 @@ class HUDRenderer(private val context: Context) {
         }
     }
 
-    private fun drawActionButton(c: Canvas, x: Float, y: Float, radius: Float, label: String, color: Int, isAutoLocked: Boolean, cooldownProgress: Float = 0f, rawTime: Float = 0f) {
+    private fun drawActionButton(c: Canvas, x: Float, y: Float, radius: Float, label: String, color: Int, isAutoLocked: Boolean, cooldownProgress: Float = 0f, rawTime: Float = 0f, visualType: HudVisualType = HudVisualType.STANDARD) {
+        val visualRadius = radius * if (visualType == HudVisualType.COMPACT) 0.68f else 0.85f
         p.style = Paint.Style.STROKE; p.strokeWidth = radius * 0.06f; p.color = color
-        c.drawCircle(x, y, radius * 0.85f, p)
+        c.drawCircle(x, y, visualRadius, p)
         
         // Indicator for Ready/Auto-Locked Mode (Glow Ring)
         if (isAutoLocked) {
             p.strokeWidth = radius * 0.03f
             p.alpha = (150 + sin(System.currentTimeMillis() * 0.01).toFloat() * 100).toInt().coerceIn(0, 255)
-            c.drawCircle(x, y, radius * 0.95f, p)
+            c.drawCircle(x, y, visualRadius * 1.12f, p)
             p.alpha = 255
         }
 
         p.style = Paint.Style.FILL; p.color = (0x33 shl 24) or (color and 0xFFFFFF)
-        c.drawCircle(x, y, radius * 0.85f, p)
+        c.drawCircle(x, y, visualRadius, p)
         
         // Cooldown/Progress Radial Sweep
         if (cooldownProgress > 0f) {
             p.color = (0x66 shl 24) or (color and 0xFFFFFF)
-            val rect = RectF(x - radius * 0.85f, y - radius * 0.85f, x + radius * 0.85f, y + radius * 0.85f)
+            val rect = RectF(x - visualRadius, y - visualRadius, x + visualRadius, y + visualRadius)
             c.drawArc(rect, -90f, 360f * cooldownProgress, true, p)
         }
 
@@ -365,8 +347,10 @@ class HUDRenderer(private val context: Context) {
         } else {
             // Draw Label
             pText.color = color
-            pText.textSize = radius * 0.38f
-            c.drawText(label, x, y + pText.textSize * 0.35f, pText)
+            if (visualType != HudVisualType.COMPACT) {
+                pText.textSize = radius * if (visualType == HudVisualType.LABELED) 0.32f else 0.38f
+                c.drawText(label, x, y + pText.textSize * 0.35f, pText)
+            }
         }
     }
 

@@ -56,7 +56,23 @@ class CampaignMode : GameModeStrategy {
         if (gs.activeObjective.isBossTriggerReady(gs)) {
             if (config.features.contains(LevelFeature.BOSS) && !gs.bossActive && bossSpawnedForLevel != gs.currentLevel) {
                 bossSpawnedForLevel = gs.currentLevel
-                val bossType = Random.nextInt(0, 5)
+                
+                // BOSS SELECTION LOGIC
+                // Lvl 5: Guardian (Type 0)
+                // Lvl 10: Swarm Mother (Type 1)
+                // Lvl 15: Glitcher (Type 2)
+                // Lvl 20: Admin (Type 3)
+                // Lvl 25: Singularity (Type 4)
+                // Lvl 30+: Random but weighted
+                val bossType = when {
+                    gs.currentLevel == 5 -> 0
+                    gs.currentLevel == 10 -> 1
+                    gs.currentLevel == 15 -> 2
+                    gs.currentLevel == 20 -> 3
+                    gs.currentLevel == 25 -> 4
+                    gs.currentLevel < 5 -> 0 // Early bosses always Guardian
+                    else -> Random.nextInt(0, 5)
+                }
                 onTriggerBoss(bossType, scale)
             }
         }

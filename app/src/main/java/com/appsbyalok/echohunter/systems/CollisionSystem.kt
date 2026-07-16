@@ -182,7 +182,10 @@ class CollisionSystem(
                     val bdy = gs.spikeY[s] - gs.bossY
                     val bossHitRadiusSq = (scale * 0.1f) * (scale * 0.1f)
 
-                    if (bdx * bdx + bdy * bdy < bossHitRadiusSq) {
+                    // NEW: Boss is invulnerable to ground spikes if jumping high (Z-axis dodge)
+                    val isOutOfReach = gs.bossZ > scale * 0.15f
+
+                    if (bdx * bdx + bdy * bdy < bossHitRadiusSq && !isOutOfReach) {
                         spikeHit = true
                         
                         // CRITICAL EXPLOIT vs BOSS
@@ -192,7 +195,8 @@ class CollisionSystem(
 
                         if (isCrit) {
                             effectSystem.spawnFloatingText(gs.bossX, gs.bossY, damage.toLong(), GameColors.RED)
-                            gs.shakeAmount = max(gs.shakeAmount, scale * 0.1f)
+                            gs.shakeAmount = max(gs.shakeAmount, scale * 0.15f)
+                            effectSystem.spawnParticles(gs.bossX, gs.bossY, 4, scale * 2f) // Crit yellow particles
 
                             // PATCH: CRIT VAMP (Lifesteal)
                             if (UpgradeSystem.hasCritVampPatch() && gs.hp < gs.maxHp) {
@@ -280,6 +284,7 @@ class CollisionSystem(
                             if (isCrit) {
                                 effectSystem.spawnFloatingText(enemySystem.ex[i], enemySystem.ey[i], damage.toLong(), GameColors.RED)
                                 EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 50)
+                                effectSystem.spawnParticles(enemySystem.ex[i], enemySystem.ey[i], 4, scale * 1.5f)
                                 
                                 // PATCH: CRIT VAMP (Lifesteal)
                                 if (UpgradeSystem.hasCritVampPatch() && gs.hp < gs.maxHp) {
@@ -568,8 +573,11 @@ class CollisionSystem(
             val entityRadius = scale * 0.015f
             val combinedRadiusSq = (bossRadius + entityRadius) * (bossRadius + entityRadius)
 
-            if (bdx * bdx + bdy * bdy < combinedRadiusSq && gs.bossZ <= scale * 0.1f) {
-                if (gs.isOverclocked && gs.bossIframe <= 0f) {
+            if (bdx * bdx + bdy * bdy < combinedRadiusSq) {
+                // HEIGHT CHECK: Player only interacts with boss if it's on/near ground
+                val isInteractable = gs.bossZ < scale * 0.15f
+                
+                if (isInteractable && gs.isOverclocked && gs.bossIframe <= 0f) {
                     gs.bossHp--
                     gs.bossIframe = 1.0f
                     effectSystem.spawnParticles(gs.bossX, gs.bossY, 3, scale)
@@ -580,7 +588,7 @@ class CollisionSystem(
 
                     if (gs.bossHp <= 0) triggerBossDeath(scale, onScoreAdd, onCoreUnlock)
 
-                } else if (gs.bossIframe <= 0f && gs.playerIframe <= 0f) {
+                } else if (isInteractable && gs.bossIframe <= 0f && gs.playerIframe <= 0f) {
                     gs.bossIframe = 1.0f
 
                     if (gs.shieldTimer > 0f) {

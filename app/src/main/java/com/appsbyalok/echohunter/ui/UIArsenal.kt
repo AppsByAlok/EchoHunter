@@ -5,6 +5,7 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import android.media.ToneGenerator
 import android.view.MotionEvent
+import com.appsbyalok.echohunter.data.SaveManager
 import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.input.AttackMode
 import com.appsbyalok.echohunter.ui.arsenal.ArsenalListView
@@ -116,6 +117,14 @@ class UIArsenal {
     private var touchDownX = 0f
     private var touchDownY = 0f
 
+    fun handleBack(): Boolean {
+        if (currentTab == 0) return false
+        currentTab = 0
+        hitOnDown = -1
+        listView.scroller.scrollY = 0f
+        return true
+    }
+
     fun onTouch(x: Float, y: Float, action: Int, scale: Float, gs: GameState, onBack: () -> Unit): Boolean {
         if (currentTab != 0) {
             if (listView.scroller.isDragging || listView.scroller.isDraggingScrollbar) {
@@ -191,14 +200,17 @@ class UIArsenal {
                             when (currentTab) {
                                 1 -> {
                                     gs.controls.currentWeapon = hitOnUp
+                                    SaveManager.setActiveWeapon(hitOnUp)
                                     gs.showGlobalMessage("WEAPON PROTOCOL UPDATED.", 1.5f)
                                 }
                                 2 -> {
                                     gs.controls.currentTrap = hitOnUp
+                                    SaveManager.setActiveTrap(hitOnUp)
                                     gs.showGlobalMessage("TRAP MODULE LOADED.", 1.5f)
                                 }
                                 3 -> {
                                     gs.controls.activeAttackMode = AttackMode.entries.toTypedArray()[hitOnUp]
+                                    SaveManager.setAttackMode(hitOnUp)
                                     gs.showGlobalMessage("AIMING LOGIC RECONFIGURED.", 1.5f)
                                 }
                             }
