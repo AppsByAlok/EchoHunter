@@ -84,7 +84,6 @@ class GameView(context: Context) : View(context) {
     internal val onAppClose: () -> Unit = { changeState(menuReturnState) }
     internal val onArchiveSelect: (Int) -> Unit = { lvl -> startGame(0, lvl) }
     internal val onHelpOpen: () -> Unit = { changeState(3) }
-    internal val onModMenuOpen: () -> Unit = { }
     internal val onHelpClose: () -> Unit = { changeState(0) }
     internal val onWipeData: () -> Unit = {
         gs.resetGame()

@@ -87,8 +87,8 @@ class EnemySystem {
             if (vis[i] <= 0f) {
                 ex[i] = nx
                 ey[i] = ny
-                evx[i] = (kotlin.random.Random.nextFloat() - 0.5f) * scale * 0.5f
-                evy[i] = (kotlin.random.Random.nextFloat() - 0.5f) * scale * 0.5f
+                evx[i] = (Random.nextFloat() - 0.5f) * scale * 0.5f
+                evy[i] = (Random.nextFloat() - 0.5f) * scale * 0.5f
                 type[i] = 1 // Use Hunter behavior for clones
                 enemyBrains[i] = HunterBehavior
                 hp[i] = 1 // 1-hit kill for decoys
@@ -173,6 +173,9 @@ class EnemySystem {
                 4 -> { // REPAIR DRONE
                     type[i] = 4; enemyBrains[i] = RepairDroneBehavior
                 }
+                5 -> { // GUARD AI (For HVTs)
+                    type[i] = 5; enemyBrains[i] = GuardBehavior
+                }
                 else -> { // Compiler (Normal)
                     val repairProb = 0.15f // 15% chance to spawn repair drone instead of patrol
                     if (gs.spawnerNodes.any { it.state == SpawnState.DESTROYED } && Random.nextFloat() < repairProb) {
@@ -199,7 +202,8 @@ class EnemySystem {
 
         maxHp[i] = when (nodeType) {
             1 -> 1 // Swarmers are very weak, 1 hit kill
-            2 -> (baseHp * 2.5f * (1.0f + UpgradeSystem.getLevel(UpgradeType.DATA_SYNDICATE) * 0.2f)).toInt() // Guards scale with Data Syndicate but capped
+            2 -> (baseHp * 2.5f * (1.0f + UpgradeSystem.getLevel(UpgradeType.DATA_SYNDICATE) * 0.2f)).toInt() // HVTs
+            5 -> (baseHp * 1.5f).toInt() // Guards
             else -> baseHp
         }
         hp[i] = maxHp[i]
@@ -219,7 +223,7 @@ class EnemySystem {
         }
 
         val enemyRadius = scale * 0.02f
-        val stealthCamoMult = 1.0f - (com.appsbyalok.echohunter.data.UpgradeSystem.getLevel(com.appsbyalok.echohunter.data.UpgradeType.STEALTH_CAMO) * 0.1f)
+        val stealthCamoMult = 1.0f - (UpgradeSystem.getLevel(UpgradeType.STEALTH_CAMO) * 0.1f)
 
         for (i in 0 until n) {
             if (ex[i] < -1000f) continue
@@ -300,23 +304,31 @@ class EnemySystem {
                         effectSys.spawnSonarPing(ex[i], ey[i], if (type[i] == 1) GameColors.RED else GameColors.YELLOW)
                         
                         // Sonar Noise: Attract enemy to pulse location if they were patrolling
-                        if (eState[i] == 0) {
+                        if (eState[i] == 0 && type[i] != 5) {
                             eState[i] = 2 // INVESTIGATE
                             investigateTimer[i] = 3f
                             invX[i] = gs.px
                             invY[i] = gs.py
+                        } else if (type[i] == 5) {
+                            // Guards don't wander, they just get alerted in place
+                            investigateTimer[i] = 2f
                         }
                     }
                     vis[i] = 1.0f
                 }
                 
                 // Linear decay instead of exponential for predictable duration
-                val duration = com.appsbyalok.echohunter.data.UpgradeSystem.getSonarDurationBonus()
+                val duration = UpgradeSystem.getSonarDurationBonus()
                 vis[i] = max(0f, vis[i] - dt / duration)
             }
 
-            val maxAllowedDistSq = if (gs.bossActive || gs.coreRadius > 0f) (width * 1.5f) * (width * 1.5f) else (width * 4.0f) * (width * 4.0f)
-            if (d2 > maxAllowedDistSq) {
+            val maxAllowedDistSq = if (gs.bossActive || gs.coreRadius > 0f || type[i] == 3 || type[i] == 5) (width * 1.5f) * (width * 1.5f) else (width * 4.0f) * (width * 4.0f)
+            
+            // SPECIAL HANDLING: Elimination Targets and Guards do NOT despawn based on distance
+            // unless they are extremely far away (e.g., procedural glitching out).
+            if (type[i] == 3 || type[i] == 5) {
+                // Do nothing, keep them alive
+            } else if (d2 > maxAllowedDistSq) {
                 // Using killEnemy ensures defEnemiesAlive is decremented if in Defense mode.
                 killEnemy(i, gs)
                 vis[i] = 0f
@@ -482,7 +494,7 @@ class EnemySystem {
                 }
                 gs.bossVis = 1.0f
             } else {
-                val duration = com.appsbyalok.echohunter.data.UpgradeSystem.getSonarDurationBonus()
+                val duration = UpgradeSystem.getSonarDurationBonus()
                 gs.bossVis = max(0f, gs.bossVis - dt / duration)
             }
         } else {
@@ -524,7 +536,7 @@ class EnemySystem {
                     }
                     pwVis[i] = 1f
                 } else {
-                    val duration = com.appsbyalok.echohunter.data.UpgradeSystem.getSonarDurationBonus()
+                    val duration = UpgradeSystem.getSonarDurationBonus()
                     pwVis[i] = max(0f, pwVis[i] - dt / duration)
                 }
             }
@@ -637,6 +649,16 @@ class EnemySystem {
                         p.color = (a shl 24) or (GameColors.BG and 0xFFFFFF)
                         c.drawRect(screenEx - entitySize * 0.4f, screenEy - entitySize * 0.1f, screenEx + entitySize * 0.4f, screenEy + entitySize * 0.1f, p)
                         c.drawRect(screenEx - entitySize * 0.1f, screenEy - entitySize * 0.4f, screenEx + entitySize * 0.1f, screenEy + entitySize * 0.4f, p)
+                    }
+                    5 -> {
+                        // --- NEW: GUARD (Defense Drone) ---
+                        p.color = (a shl 24) or (0xFF00AAFF.toInt() and 0xFFFFFF) // Cyan/Blue
+                        c.drawCircle(screenEx, screenEy, entitySize * 0.8f, p)
+                        p.color = (a shl 24) or (0xFFFFFFFF.toInt() and 0xFFFFFF)
+                        p.style = Paint.Style.STROKE
+                        p.strokeWidth = scale * 0.005f
+                        c.drawCircle(screenEx, screenEy, entitySize, p)
+                        p.style = Paint.Style.FILL
                     }
                     else -> {
                         p.color = (a shl 24) or (GameColors.YELLOW and 0xFFFFFF)

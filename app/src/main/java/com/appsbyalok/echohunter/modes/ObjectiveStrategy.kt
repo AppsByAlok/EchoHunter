@@ -12,7 +12,7 @@ import kotlin.math.sqrt
 
 // Blueprint for all level objectives
 interface IGameObjective {
-    fun setupObjective(gs: GameState, targetW: Float, targetH: Float, scale: Float)
+    fun setupObjective(gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float)
     fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float)
     fun checkWinCondition(gs: GameState): Boolean
     fun isBossTriggerReady(gs: GameState): Boolean
@@ -53,7 +53,7 @@ interface IGameObjective {
 class StandardObjective : IGameObjective {
     private var trickleTimer = 2f
 
-    override fun setupObjective(gs: GameState, targetW: Float, targetH: Float, scale: Float) {
+    override fun setupObjective(gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
         gs.coreX = -9999f
         gs.coreY = -9999f
         gs.coreRadius = 0f
@@ -102,7 +102,7 @@ class StandardObjective : IGameObjective {
 class DefenseObjective : IGameObjective {
     private var trickleTimer = 2f
 
-    override fun setupObjective(gs: GameState, targetW: Float, targetH: Float, scale: Float) {
+    override fun setupObjective(gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
         gs.defWaveMax = when {
             gs.currentLevel <= 30 -> 1
             gs.currentLevel <= 70 -> 2
@@ -249,7 +249,7 @@ class EscapeObjective : IGameObjective {
     private var exitX = -9999f
     private var exitY = -9999f
 
-    override fun setupObjective(gs: GameState, targetW: Float, targetH: Float, scale: Float) {
+    override fun setupObjective(gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
         gs.escapeGateActive = false
         coreReached = false
 
@@ -488,7 +488,7 @@ class EscapeObjective : IGameObjective {
 // 4. STORY OBJECTIVE (Progresses only via Boss Kills)
 class StoryObjective : IGameObjective {
     private var trickleTimer = 2f
-    override fun setupObjective(gs: GameState, targetW: Float, targetH: Float, scale: Float) {
+    override fun setupObjective(gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
         gs.coreRadius = 0f 
 
         // STORY MODE CORE: Set central core position for the "Merge" sequence
@@ -562,12 +562,86 @@ class StoryObjective : IGameObjective {
 class EliminationObjective : IGameObjective {
     private var trickleTimer = 1f
 
-    override fun setupObjective(gs: GameState, targetW: Float, targetH: Float, scale: Float) {
+    override fun setupObjective(gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
         gs.coreX = -9999f
         gs.coreY = -9999f
         gs.coreRadius = 0f
         gs.elimTargetsKilled = 0
         gs.elimTargetsRequired = LevelEngine.getSaturatedValue(gs.currentLevel, 5f, 10f, 100f).toInt()
+
+        // --- NEW: MANUAL HVT & GUARD INJECTION ---
+        // Elimination mode should have fixed HVTs and Guards spawned at start, not just trickle.
+        if (gs.spawnerNodes.isNotEmpty()) {
+            val hvtCount = gs.elimTargetsRequired
+            var spawnedHVT = 0
+            
+            // 1. Spawn HVTs at Gateway nodes
+            val gateways = gs.spawnerNodes.filter { it.type == 2 } // Type 2 = Admin Gateway
+            for (node in gateways) {
+                if (spawnedHVT >= hvtCount) break
+                
+                // Find empty slot for HVT
+                var hvtIdx = -1
+                for (i in 0 until enemySys.n) {
+                    if (enemySys.ex[i] < -1000f) {
+                        hvtIdx = i; break
+                    }
+                }
+                
+                if (hvtIdx != -1) {
+                    enemySys.spawnAt(hvtIdx, node.x, node.y, gs, scale, 2) // nodeType 2 triggers TargetBehavior
+                    spawnedHVT++
+                    
+                    // 2. Spawn 2 Guards for each HVT
+                    var guardsSpawnedForThisHVT = 0
+                    for (i in 0 until enemySys.n) {
+                        if (guardsSpawnedForThisHVT >= 2) break
+                        if (enemySys.ex[i] < -1000f) {
+                            enemySys.spawnAt(i, node.x, node.y, gs, scale, 5) 
+                            // Setup Guard AI parameters (spawnAt resets them)
+                            enemySys.invX[i] = hvtIdx.toFloat()
+                            enemySys.invY[i] = guardsSpawnedForThisHVT * 180f // Start on opposite sides
+                            guardsSpawnedForThisHVT++
+                        }
+                    }
+                }
+            }
+            
+            // 3. Fallback: If not enough gateways, use normal nodes for remaining HVTs
+            if (spawnedHVT < hvtCount) {
+                val others = gs.spawnerNodes.filter { it.type != 2 }
+                for (node in others) {
+                    if (spawnedHVT >= hvtCount) break
+                    var hvtIdx = -1
+                    for (i in 0 until enemySys.n) {
+                        if (enemySys.ex[i] < -1000f) {
+                            hvtIdx = i; break
+                        }
+                    }
+                    if (hvtIdx != -1) {
+                        enemySys.spawnAt(hvtIdx, node.x, node.y, gs, scale, 2)
+                        spawnedHVT++
+                        
+                        // Guard for fallback HVTs too
+                        var guardsSpawnedForThisHVT = 0
+                        for (i in 0 until enemySys.n) {
+                            if (guardsSpawnedForThisHVT >= 1) break // Only 1 guard for "exposed" HVTs
+                            if (enemySys.ex[i] < -1000f) {
+                                enemySys.spawnAt(i, node.x, node.y, gs, scale, 5)
+                                enemySys.invX[i] = hvtIdx.toFloat()
+                                enemySys.invY[i] = 0f
+                                guardsSpawnedForThisHVT++
+                            }
+                        }
+                    }
+                }
+            }
+
+            // FINAL SAFETY: If we couldn't spawn enough HVTs, adjust requirement to avoid soft-lock
+            if (spawnedHVT < gs.elimTargetsRequired) {
+                gs.elimTargetsRequired = spawnedHVT
+            }
+        }
     }
 
     override fun updateObjective(dt: Float, gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
@@ -609,7 +683,7 @@ class BombObjective : IGameObjective {
     private var defuseTimer = 45f 
     private var detonationTimer = 0f
 
-    override fun setupObjective(gs: GameState, targetW: Float, targetH: Float, scale: Float) {
+    override fun setupObjective(gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
         gs.coreX = -9999f
         gs.coreY = -9999f
         gs.coreRadius = 0f
@@ -713,7 +787,7 @@ class CleanSweepObjective : IGameObjective {
     private var trickleTimer = 1f
     private var initialNodes = 0
 
-    override fun setupObjective(gs: GameState, targetW: Float, targetH: Float, scale: Float) {
+    override fun setupObjective(gs: GameState, enemySys: EnemySystem, spawnerSys: SpawnerSystem, targetW: Float, targetH: Float, scale: Float) {
         gs.coreX = -9999f
         gs.coreY = -9999f
         gs.coreRadius = 0f

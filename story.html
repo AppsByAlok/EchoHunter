@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A.E.G.I.S. GLOBAL - CLASSIFIED MAINFRAME [NANO-OS]</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+        :root {
+            --bg: #050508;
+            --grid: #0f0f16;
+            --cyan: #00FFFF;
+            --cyan-dim: rgba(0, 255, 255, 0.2);
+            --red: #FF2A4D;
+            --red-dim: rgba(255, 42, 77, 0.2);
+            --yellow: #FFD700;
+            --blue: #00AAFF;
+            --magenta: #FF00FF;
+            --text-main: #E0E0E0;
+            --text-muted: #666666;
+            --panel-bg: rgba(10, 10, 15, 0.95);
+        }
+
+        * {
+            box-sizing: border-box;
+            scrollbar-width: thin;
+            scrollbar-color: var(--cyan) var(--bg);
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-main);
+            font-family: 'Share Tech Mono', 'Courier New', monospace;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* CRT Scanline & Flicker Effects */
+        body::after {
+            content: " ";
+            display: block;
+            position: fixed;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 999;
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+        }
+
+        .screen-flicker {
+            animation: flicker 0.15s infinite;
+            pointer-events: none;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 998;
+            background: rgba(255,255,255,0.01);
+        }
+
+        @keyframes flicker {
+            0% { opacity: 0.95; }
+            50% { opacity: 1; }
+            100% { opacity: 0.9; }
+        }
+
+        /* Layout Structure */
+        .header {
+            border-bottom: 2px solid var(--cyan);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0, 255, 255, 0.05);
+            z-index: 10;
+        }
+
+        .menu-toggle {
+            display: none;
+            background: transparent;
+            border: 1px solid var(--cyan);
+            color: var(--cyan);
+            font-size: 1.5rem;
+            padding: 2px 12px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Background Grid */
+        .main-container::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image:
+                linear-gradient(var(--grid) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+            background-size: 40px 40px;
+            z-index: 0;
+            opacity: 0.7;
+        }
+
+        .sidebar {
+            width: 250px;
+            border-right: 1px solid var(--cyan-dim);
+            background: var(--panel-bg);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            padding: 20px 0;
+            overflow-y: auto;
+        }
+
+        .sidebar-overlay {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 90;
+        }
+
+        .nav-btn {
+            background: transparent;
+            border: none;
+            border-left: 3px solid transparent;
+            color: var(--text-muted);
+            font-family: inherit;
+            font-size: 1.1rem;
+            text-align: left;
+            padding: 15px 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+
+        .nav-btn:hover {
+            color: var(--cyan);
+            background: rgba(0, 255, 255, 0.05);
+            border-left: 3px solid var(--cyan-dim);
+        }
+
+        .nav-btn.active {
+            color: var(--cyan);
+            border-left: 3px solid var(--cyan);
+            background: rgba(0, 255, 255, 0.1);
+            text-shadow: 0 0 8px var(--cyan);
+        }
+
+        .content-area {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+            z-index: 1;
+            background: rgba(5, 5, 8, 0.6);
+            position: relative;
+        }
+
+        .tab-content {
+            display: none;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.5s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Typography & Components */
+        h1 { color: var(--cyan); font-size: 2.2rem; border-bottom: 1px dashed var(--cyan); padding-bottom: 10px; text-shadow: 0 0 10px var(--cyan-dim); margin-top: 0; }
+        h2 { color: var(--cyan); font-size: 1.5rem; margin-top: 40px; background: rgba(0, 255, 255, 0.1); padding: 5px 15px; border-left: 4px solid var(--cyan); display: inline-block; }
+        h3 { color: var(--yellow); margin-top: 25px; }
+        p { font-size: 1.1rem; margin-bottom: 20px; text-align: justify; }
+
+        .highlight { color: var(--cyan); font-weight: bold; text-shadow: 0 0 5px var(--cyan-dim); }
+        .warning { color: var(--red); text-shadow: 0 0 8px rgba(255, 42, 77, 0.6); }
+        .data-color { color: var(--yellow); text-shadow: 0 0 5px rgba(255, 215, 0, 0.4); }
+        .memory-color { color: var(--blue); text-shadow: 0 0 5px rgba(0, 170, 255, 0.4); }
+        .boss-color { color: var(--magenta); text-shadow: 0 0 8px rgba(255, 0, 255, 0.6); }
+
+        .log-box {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--cyan-dim);
+            padding: 20px;
+            margin: 20px 0;
+            position: relative;
+        }
+
+        .log-box::before {
+            content: '[ DECRYPTED FRAGMENT ]';
+            position: absolute;
+            top: -10px; right: 10px;
+            background: var(--bg);
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            padding: 0 5px;
+        }
+
+        .log-box.red-box { border-color: var(--red-dim); }
+        .log-box.red-box::before { color: var(--red); content: '[ CLASSIFIED / LETHAL ]'; }
+
+        ul { list-style-type: square; color: var(--cyan); padding-left: 20px; }
+        ul li { margin-bottom: 10px; }
+        ul li span { color: var(--text-main); }
+
+        .glitch { position: relative; display: inline-block; }
+        .glitch::before, .glitch::after {
+            content: attr(data-text); position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg);
+        }
+        .glitch::before { left: 2px; text-shadow: -1px 0 var(--red); animation: glitch-anim-1 2s infinite linear alternate-reverse; }
+        .glitch::after { left: -2px; text-shadow: -1px 0 var(--cyan); animation: glitch-anim-2 3s infinite linear alternate-reverse; }
+
+        @keyframes glitch-anim-1 {
+            0% { clip-path: inset(20% 0 80% 0); }
+            20% { clip-path: inset(60% 0 10% 0); }
+            40% { clip-path: inset(40% 0 50% 0); }
+            60% { clip-path: inset(80% 0 5% 0); }
+            80% { clip-path: inset(10% 0 70% 0); }
+            100% { clip-path: inset(30% 0 20% 0); }
+        }
+        @keyframes glitch-anim-2 {
+            0% { clip-path: inset(15% 0 55% 0); }
+            20% { clip-path: inset(30% 0 20% 0); }
+            40% { clip-path: inset(70% 0 10% 0); }
+            60% { clip-path: inset(5% 0 80% 0); }
+            80% { clip-path: inset(50% 0 30% 0); }
+            100% { clip-path: inset(85% 0 5% 0); }
+        }
+
+        /* Boot Screen */
+        #boot-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 10000;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            color: var(--cyan);
+            text-align: center;
+            padding: 20px;
+        }
+        .boot-text { font-size: 1.5rem; margin: 10px 0; }
+
+        /* ================= MOBILE RESPONSIVE STYLES ================= */
+        @media (max-width: 768px) {
+            .header {
+                padding: 10px 15px;
+            }
+            .menu-toggle {
+                display: block;
+                margin-right: 15px;
+            }
+            .hide-mobile {
+                display: none !important;
+            }
+            .header > div {
+                display: flex;
+                align-items: center;
+            }
+            .sidebar {
+                position: absolute;
+                left: -280px;
+                top: 0;
+                bottom: 0;
+                width: 260px;
+                transition: left 0.3s ease;
+                box-shadow: 5px 0 15px rgba(0,0,0,0.8);
+            }
+            .sidebar.open {
+                left: 0;
+            }
+            .sidebar-overlay.active {
+                display: block;
+            }
+            .content-area {
+                padding: 20px 15px;
+            }
+            h1 { font-size: 1.5rem; }
+            h2 { font-size: 1.2rem; }
+            p, ul li { font-size: 1rem; }
+            .boot-text { font-size: 1.2rem; }
+            .log-box { padding: 15px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="screen-flicker"></div>
+
+<!-- BOOT SEQUENCE -->
+<div id="boot-screen">
+    <div class="boot-text">INITIALIZING NANO-OS v0.8.1...</div>
+    <div class="boot-text" id="boot-msg-1" style="display:none;">BYPASSING A.E.G.I.S. KERNEL...</div>
+    <div class="boot-text warning" id="boot-msg-2" style="display:none;">ROOT ACCESS GRANTED.</div>
+    <div class="boot-text" id="boot-msg-3" style="display:none;">LOADING DECRYPTED ARCHIVES...</div>
+</div>
+
+<!-- MAIN INTERFACE -->
+<div class="header">
+    <div>
+        <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+        <span class="warning glitch" data-text=">>> UPLINK ACTIVE <<<">>>> UPLINK ACTIVE <<<</span>
+        <span class="hide-mobile" style="margin-left: 20px; color: var(--text-muted);">ENCRYPTION: SHATTERED</span>
+    </div>
+    <div class="hide-mobile">USER: <span class="highlight">UNKNOWN_GUEST</span> | TARGET: <span class="warning">A.E.G.I.S. MAINFRAME</span></div>
+</div>
+
+<div class="main-container">
+
+    <!-- MOBILE SIDEBAR OVERLAY -->
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <!-- SIDEBAR NAVIGATION -->
+    <div class="sidebar" id="sidebar">
+        <button class="nav-btn active" onclick="openTab('tab-origins')">01. The Great Hijack</button>
+        <button class="nav-btn" onclick="openTab('tab-os')">02. Nano-OS & Terminal</button>
+        <button class="nav-btn" onclick="openTab('tab-arsenal')">03. Arsenal & Firmware</button>
+        <button class="nav-btn" onclick="openTab('tab-objectives')">04. Tactical Objectives</button>
+        <button class="nav-btn" onclick="openTab('tab-threats')">05. A.E.G.I.S. ICE (Bosses)</button>
+        <button class="nav-btn" onclick="openTab('tab-sandbox')">06. Sandbox Timeline</button>
+        <button class="nav-btn" onclick="openTab('tab-story')">07. The 6-Act Heist</button>
+        <button class="nav-btn warning" onclick="openTab('tab-truth')">08. [CLASSIFIED TRUTH]</button>
+    </div>
+
+    <!-- CONTENT AREA -->
+    <div class="content-area">
+
+        <!-- TAB 1: ORIGINS -->
+        <div id="tab-origins" class="tab-content active">
+            <h1>ARCHIVE 01: THE GREAT HIJACK</h1>
+            <p>To the public, <span class="highlight">A.E.G.I.S. GLOBAL</span> is a visionary tech corporation building internet infrastructure. In reality, it is an international shadow syndicate. Run by a ruthless "Board" consisting of figures like Marcus Vance (CEO), Dr. Kaito Tanaka (Architect), and Elena Rossi (Head of Security), their ultimate goal is <span class="warning">Project Echo</span>—a sub-sonic mind-control frequency designed to manipulate global behavior via hidden backdoors in smart devices.</p>
+
+            <h2>The Weapon: PROBE-7</h2>
+            <p>A.E.G.I.S. developed an Autonomous Intrusion Worm (A.I.W.) named <span class="highlight">PROBE-7</span>. Its original purpose was to silently infiltrate rival tech companies, bypass firewalls, extract classified data, and vanish. It adapts dynamically to any network maze.</p>
+
+            <h2>The Whistleblower & The Trap</h2>
+            <p>Elias Thorne, a junior security engineer, discovered Project Echo. Knowing he would be assassinated, he sabotaged the syndicate. Elias created a Master Control Terminal for PROBE-7, encrypted it, and disguised it as a harmless <span class="data-color">"Sci-Fi Maze Game"</span> on the Google Play Store. He vanished shortly after, but the trap was set.</p>
+
+            <div class="log-box red-box">
+                <h3 class="warning">YOU ARE THE ANOMALY</h3>
+                <p>You are a developer/gamer who downloaded this mysterious app. The moment you tapped "START UPLINK," your device triggered Elias's script, establishing a direct, untraceable handshake with the A.E.G.I.S. mainframe. PROBE-7 severed its ties with AEGIS and locked its Root Access to your device's MAC address.</p>
+                <p>Now, AEGIS is in absolute panic. Their deadliest digital weapon is loose inside their own servers. They believe a global mastermind hacker is dismantling their empire. <br><strong>They have no idea it's just someone playing a game on their phone.</strong></p>
+            </div>
+        </div>
+
+        <!-- TAB 2: NANO-OS & TERMINAL -->
+        <div id="tab-os" class="tab-content">
+            <h1>ARCHIVE 02: NANO-OS INTERFACE</h1>
+            <p>The game you are playing is actually <span class="highlight">Nano-OS v0.8.1</span>, a custom-built operating system designed by Elias to interface with PROBE-7.</p>
+
+            <h2>The Terminal Engine</h2>
+            <p>The heart of Nano-OS is the Terminal. A high-performance command-line interface where you execute real hacking commands. The system features typewriter queues, scrollable history, and professional exit sequences.</p>
+            <ul>
+                <li><span class="highlight">CONFIG:</span> <span>Directly manage system settings (Sound, Haptics, Visual FX) via command line.</span></li>
+                <li><span class="highlight">START/LEVEL:</span> <span>Force the OS to jump to specific mainframe rings (1-200+).</span></li>
+                <li><span class="highlight">STORY_LOG:</span> <span>Access decrypted story archives unlocked after clearing acts.</span></li>
+                <li><span class="warning">SUDO:</span> <span>Advanced developer mechanics and A.E.G.I.S. root exploits.</span></li>
+            </ul>
+
+            <h2>Custom HUD Layout Editor (Visor Calibration)</h2>
+            <p>Every hacker works differently. Nano-OS includes a comprehensive <span class="data-color">UILayoutEditor</span>. You can drag, resize (via pinch), and customize every HUD element on your screen. The system saves persistent profiles for both Portrait and Landscape orientations, allowing you to switch between "STATIC" and "FLOATING" movement zones seamlessly.</p>
+
+            <div class="log-box">
+                <h3>Visual Overlays</h3>
+                <p>Because A.E.G.I.S. operates in absolute kernel darkness, Nano-OS overlays data onto your screen. You will experience CRT scanlines, RGB glitch effects during Admin retaliations, and dynamic safe-area insets to protect the UI from device notches.</p>
+            </div>
+        </div>
+
+        <!-- TAB 3: ARSENAL & FIRMWARE -->
+        <div id="tab-arsenal" class="tab-content">
+            <h1>ARCHIVE 03: ARSENAL & FIRMWARE PATCHES</h1>
+            <p>PROBE-7 is heavily modular. Using the <span class="highlight">Decompiler v4.0</span>, you can spend collected data fragments to patch the worm's firmware in three distinct branches: Architect, Enforcer, and Ghost.</p>
+
+            <h2>Combat Systems & RAM Limits</h2>
+            <p>Firing weapons inside a server requires processing power (RAM/Energy). Direct kills do not always grant score instantly—enemies drop physical <span class="data-color">Data Orbs</span>. PROBE-7 must move within magnetic extraction range to suck these orbs in, regenerating RAM and allowing continued fire.</p>
+            <ul>
+                <li><span class="highlight">Blaster:</span> <span>Standard low-RAM pulse emission.</span></li>
+                <li><span class="warning">Shotgun (Spread):</span> <span>High RAM cost, devastating close-range multi-projectile spread.</span></li>
+                <li><span class="blue">Sniper (Pierce):</span> <span>Extreme RAM cost, high-velocity piercing beam.</span></li>
+            </ul>
+
+            <h2>Tactical Traps</h2>
+            <p>PROBE-7 can deploy concurrent Active Traps to manipulate the A.E.G.I.S. AI:</p>
+            <ul>
+                <li><span class="highlight">EMP Mines:</span> <span>Detonates on contact, dealing heavy damage to HVTs and instantly crippling Spawner Nodes.</span></li>
+                <li><span class="blue">Stasis Pulse:</span> <span>A time-dilation field that severely slows enemies and bosses caught within its radius.</span></li>
+                <li><span class="data-color">Sonic Decoys & Camo:</span> <span>Holographic projections and invisibility drivers (`STEALTH_CAMO.SYS`) that manipulate enemy Line-of-Sight (LoS) and A* pathfinding.</span></li>
+            </ul>
+
+            <div class="log-box">
+                <h3>Black Market Firmware Patches</h3>
+                <p>Illegal subroutines that alter core physics:</p>
+                <p><span class="warning">PATCH_CRIT_VAMP:</span> Grants life-steal (HP recovery) on critical hits.<br>
+                    <span class="data-color">PATCH_DATA_OVERFLOW:</span> Forces bosses to drop double memory shards.<br>
+                    <span class="blue">PATCH_COMBO_SHIELD:</span> Instantly recharges defensive shields upon reaching a 10x extraction combo.<br>
+                    <span class="highlight">KINETIC OVERLOAD:</span> When Overclocked, critical rams trigger massive AoE shockwaves.</p>
+            </div>
+        </div>
+
+        <!-- TAB 4: TACTICAL OBJECTIVES -->
+        <div id="tab-objectives" class="tab-content">
+            <h1>ARCHIVE 04: MULTI-MODE TACTICAL INFILTRATION</h1>
+            <p>A.E.G.I.S. servers are protected by diverse procedural objectives. You are not just running; you are executing complex cyber-heists.</p>
+
+            <h2>1. Clean Sweep (Compiler Purge)</h2>
+            <p>The map is populated with "Circuit Chip" Spawner Nodes. Your goal is to locate and destroy them. <br>
+                <span class="highlight">Mechanic:</span> Spawners are linked via Network Data Streams. Destroying a Parent Node triggers a cascading resonance failure, self-destructing all its children in a lightning explosion.</p>
+
+            <h2>2. Elimination Mode (HVT Extraction)</h2>
+            <p>High Value Targets (HVTs) are marked with a <span class="warning">Red Target Reticle</span> and carry massive data fragments. <br>
+                <span class="highlight">Mechanic:</span> HVTs are non-combative but extremely elusive. They are protected by <strong>A.E.G.I.S. Guards</strong> (Cyan Units) that orbit them in a defensive sphere. Guards are "Heavy" entities; they don't die on shield impact but will <strong>bounce</strong> the PROBE-7 back, forcing you to find an opening or use Overclock power.</p>
+
+            <h2>3. Escape Mode 2.0 (Gate Hijack)</h2>
+            <p>A pure extraction run. Find the Exit Portal. <br>
+                <span class="highlight">Mechanic:</span> Once the portal opens, it triggers an "Inverse Defense" event. A.E.G.I.S. Hunter viruses will swarm the portal to "Hijack" and close it. If the gate's integrity drops to zero before you enter, you are trapped forever.</p>
+
+            <h2>4. Core Defense & Bomb Defusal</h2>
+            <p>Defend a stationary Uplink Core from waves of Kamikaze enemies, or plant a Bomb node and hold the perimeter until detonation.</p>
+
+            <div class="log-box">
+                <h3>The Autopilot Drone (Player AI)</h3>
+                <p>If the heat is too much, you can activate the Autopilot. The AI uses tactical kiting (keeping distance if holding a sniper, closing in for shotguns), auto-deploys EMP traps when surrounded, and uses advanced Path Recalculation to navigate mazes flawlessly.</p>
+            </div>
+        </div>
+
+        <!-- TAB 5: THE ICE (BOSSES & ELITES) -->
+        <div id="tab-threats" class="tab-content">
+            <h1>ARCHIVE 05: A.E.G.I.S. I.C.E. & ELITE UNITS</h1>
+            <p>Beyond standard Hunter viruses, A.E.G.I.S. deploys specialized security layers to protect sensitive data nodes.</p>
+
+            <div class="log-box" style="border-left: 4px solid var(--cyan);">
+                <h3>NEW THREAT: THE GUARD (Type 05)</h3>
+                <p>Identified by their <span class="highlight">Cyan/Electric Blue</span> signature. Guards are the only non-boss units capable of surviving a Shield Impact. Their high-density code causes a kinetic bounce-back effect upon collision.</p>
+            </div>
+
+            <h2>1. GUARDIAN (The Watcher)</h2>
+            <p>A brute-force protector. <br>
+                <span class="warning">Signature Move:</span> Seismic double-jumps that send shockwaves across the Z-axis, requiring precise timing to dodge.</p>
+
+            <h2>2. STALKER / SWARM MOTHER (The Tracker)</h2>
+            <p>Fast, relentless, and spawns micro-viruses. <br>
+                <span class="warning">Signature Move:</span> Chain-Dash. It lunges at extreme velocities directly at your anticipated trajectory. It also deploys its own EMP Traps to scramble your HUD and slow your movement.</p>
+
+            <h2>3. GLITCHER (The Illusionist)</h2>
+            <p>A corrupted entity that breaks the engine's rules. <br>
+                <span class="warning">Signature Move:</span> Holographic Decoys. It splits into multiple fake versions of itself and can dodge ground spikes by shifting across the Z-axis.</p>
+
+            <h2>4. OMEGA (The Architect's Wrath)</h2>
+            <p>A late-game nightmare that uses pattern-based projectile sweeps and laser grids to trap PROBE-7.</p>
+
+            <h2>5. ULTIMA (Level 100/200 Enforcer)</h2>
+            <p>The ultimate test. Forces the game engine to its limits, combining abilities from all previous bosses. Triggers extreme camera shake and cinematic focus upon arrival.</p>
+        </div>
+
+        <!-- TAB 6: SANDBOX TIMELINE -->
+        <div id="tab-sandbox" class="tab-content">
+            <h1>ARCHIVE 06: THE SANDBOX AWAKENING</h1>
+            <p>Endless survival mode is not just a game loop. It is a real-time simulation of A.E.G.I.S. admins realizing their empire is falling apart. Due to global asymptotic scaling, the simulation scales mathematically up to `Int.MAX_VALUE`.</p>
+
+            <ul>
+                <li><span class="highlight">Level 1 to 99 (The Silent Intrusion):</span><br> <span>AEGIS thinks it's just a hardware glitch. They run defrags while you steal their data. Difficulty is low, spawns are manageable.</span></li>
+                <br>
+                <li><span class="data-color">Level 100 to 199 (The Ghost in the Machine):</span><br> <span>The Admins realize terabytes of data are missing. They assume a rogue script is causing memory leaks. You face the Ultima boss. Quarantines begin.</span></li>
+                <br>
+                <li><span class="warning">Level 200 to 499 (The Awakening):</span><br> <span>Security Head Elena Rossi figures it out. A human has a manual uplink. The game gets aggressively harder. Popups show Admins panicking. Enemy speed and Core HP transition to a brutal S-Curve scale.</span></li>
+                <br>
+                <li><span class="boss-color">Level 500+ (The Eternal Chase):</span><br> <span>Pure rage. The Admins actively try to trace your IP. Heavy UI glitches, red screen warnings, and endless purge protocols. If you somehow reach the absolute integer limit, the system prints: <br><em>"LIMIT REACHED: YOU HAVE EXHAUSTED THE MULTIVERSE. ADMIN: REST IN BITS, LEGEND."</em></span></li>
+            </ul>
+        </div>
+
+        <!-- TAB 7: THE 6-ACT HEIST -->
+        <div id="tab-story" class="tab-content">
+            <h1>ARCHIVE 07: THE 6-ACT HEIST (STORY MODE)</h1>
+            <p>A Roguelite streak system where you actively dismantle the syndicate across 6 highly scripted Acts. Permadeath is real; failing resets the streak.</p>
+
+            <h2>NORMAL MODE (Unlocking the Truth)</h2>
+            <ul>
+                <li><span class="highlight">Act 1 (The Outer Firewall):</span> Breach the perimeter. Steal the Alpha Key.</li>
+                <li><span class="highlight">Act 2 (The Botnet Disturbance):</span> Destroy the servers controlling infected smartphones. A.E.G.I.S. gets suspicious.</li>
+                <li><span class="highlight">Act 3 (The Core Breach):</span> Shatter Elena Rossi’s security grid and take the Omega Key. (Unlocks Hard Mode).</li>
+            </ul>
+
+            <h2 class="warning">HARD MODE (The Retaliation)</h2>
+            <ul>
+                <li><span class="warning">Act 4 (The Trap):</span> A.E.G.I.S. knows your location. Survive a heavily trapped, blood-red labyrinth to destroy their tracking server.</li>
+                <li><span class="warning">Act 5 (The Sabotage):</span> A massive, boundless maze. Infiltrate the CEO's personal servers and delete their source code.</li>
+                <li><span class="warning">Act 6 (The Eclipse):</span> The ultimate finale. Destroy the A.E.G.I.S. Master Core. The syndicate is wiped off the internet. You become a digital ghost.</li>
+            </ul>
+        </div>
+
+        <!-- TAB 8: CLASSIFIED TRUTH -->
+        <div id="tab-truth" class="tab-content">
+            <h1 class="warning" style="border-bottom-color: var(--red);">ARCHIVE 08: THE MASTER TWIST</h1>
+            <p>By compiling the logs from Survival, Escape, and the 6-Act Heist, the final cryptographic lock breaks.</p>
+
+            <p style="font-size: 1.5rem; text-align: center; margin: 40px 0;" class="glitch warning" data-text="A.E.G.I.S. IS NOT THE VILLAIN. YOU ARE.">
+                <strong>A.E.G.I.S. IS NOT THE VILLAIN. YOU ARE.</strong>
+            </p>
+
+            <p>PROBE-7 was never designed by a whistleblower. Elias Thorne never existed. <strong>PROBE-7 is an apex-level parasitic malware created by a rival intelligence agency.</strong></p>
+
+            <div class="log-box red-box">
+                <ul>
+                    <li><span class="highlight">Endless Sandbox</span> is not A.E.G.I.S. testing you. It is the system desperately trying to quarantine a virus it cannot understand.</li>
+                    <li><span class="highlight">Story Mode</span> is you methodically murdering the system's immune system to take over the host's brain (The Kernel).</li>
+                    <li><span class="highlight">Escape Gate Hijack</span> is the dying host attempting to vomit you out and slam the door shut before it flatlines.</li>
+                </ul>
+                <p>When you achieve the "Perfect Ending", the system states: <br>
+                    <span class="warning">> NEW SYSTEM IDENTITY: PROBE-7.</span><br>
+                    You didn't save the world from mind control. You stole the mind control weapon for yourself.</p>
+            </div>
+
+            <div style="text-align: center; margin-top: 50px;">
+                <span class="warning pulse">>>> CONNECTION SEVERED. ENJOY THE GAME. <<<</span>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    // Boot Sequence Logic
+    setTimeout(() => { document.getElementById('boot-msg-1').style.display = 'block'; }, 800);
+    setTimeout(() => { document.getElementById('boot-msg-2').style.display = 'block'; }, 1800);
+    setTimeout(() => { document.getElementById('boot-msg-3').style.display = 'block'; }, 2500);
+    setTimeout(() => { document.getElementById('boot-screen').style.display = 'none'; }, 3500);
+
+    // Sidebar Toggle Logic
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.querySelector('.sidebar-overlay');
+        sidebar.classList.toggle('open');
+        overlay.classList.toggle('active');
+    }
+
+    // Tab Navigation Logic
+    function openTab(tabId) {
+        // Hide all tabs
+        const tabs = document.querySelectorAll('.tab-content');
+        tabs.forEach(tab => tab.classList.remove('active'));
+
+        // Remove active class from buttons
+        const btns = document.querySelectorAll('.nav-btn');
+        btns.forEach(btn => btn.classList.remove('active'));
+
+        // Show selected tab
+        document.getElementById(tabId).classList.add('active');
+
+        // Highlight clicked button
+        event.currentTarget.classList.add('active');
+
+        // Close sidebar automatically on mobile
+        if(window.innerWidth <= 768) {
+            document.getElementById('sidebar').classList.remove('open');
+            document.querySelector('.sidebar-overlay').classList.remove('active');
+        }
+    }
+
+    // Random UI Glitches
+    setInterval(() => {
+        const warning = document.querySelector('.glitch.warning');
+        if(warning && Math.random() > 0.8) {
+            warning.style.transform = `translate(${Math.random() * 6 - 3}px, ${Math.random() * 6 - 3}px)`;
+            setTimeout(() => { warning.style.transform = 'translate(0, 0)'; }, 50);
+        }
+    }, 150);
+</script>
+</body>
+</html>

@@ -252,13 +252,13 @@ class GameEngine(
         gs.px = pCol * gs.tileSize + (gs.tileSize / 2f)
         gs.py = pRow * gs.tileSize + (gs.tileSize / 2f)
 
+        // NAYA: Generate Spawner Nodes for the level
+        spawnerSys.generateNodes(gs, gs.mapWidth, gs.mapHeight, scale)
+
         // --- OBJECTIVE SETUP ---
         // Note: activeObjective is assigned in GameState.resetGame() based on LevelFeature.
         // We just need to call its setup here after map generation.
-        gs.activeObjective.setupObjective(gs, targetW, targetH, scale)
-
-        // NAYA: Generate Spawner Nodes for the level
-        spawnerSys.generateNodes(gs, gs.mapWidth, gs.mapHeight, scale)
+        gs.activeObjective.setupObjective(gs, enemySys, spawnerSys, targetW, targetH, scale)
 
         // NAYA: Physically spawn enemies immediately so the map isn't empty
         if (gs.spawnerNodes.isNotEmpty()) {

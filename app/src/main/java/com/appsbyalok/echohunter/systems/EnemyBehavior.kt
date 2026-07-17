@@ -357,6 +357,107 @@ object RepairDroneBehavior : IEnemyBehavior {
     }
 }
 
+// 6. GUARD BEHAVIOR (Orbits HVT, switches to Aggro when player enters range)
+object GuardBehavior : IEnemyBehavior {
+    override fun updateBehavior(
+        i: Int,
+        dt: Float,
+        gs: GameState,
+        enemySys: EnemySystem,
+        ai: EnemyAI,
+        targetW: Float,
+        targetH: Float,
+        scale: Float,
+    ) {
+        // HVT Index is stored in invX
+        val hvtIdx = enemySys.invX[i].toInt()
+        val hasHvt = hvtIdx >= 0 && hvtIdx < enemySys.n && enemySys.ex[hvtIdx] > -1000f
+
+        // If HVT is lost/destroyed, the Guard should also be terminated
+        if (!hasHvt) {
+            enemySys.hp[i] = 0
+            enemySys.killEnemy(i, gs)
+            return
+        }
+
+        val targetX = if (gs.isDecoyActive) gs.decoyX else gs.px
+        val targetY = if (gs.isDecoyActive) gs.decoyY else gs.py
+        val tdx = targetX - enemySys.ex[i]
+        val tdy = targetY - enemySys.ey[i]
+        val distToPlayerSq = tdx * tdx + tdy * tdy
+        
+        val hx = enemySys.ex[hvtIdx]
+        val hy = enemySys.ey[hvtIdx]
+        val hdx = hx - enemySys.ex[i]
+        val hdy = hy - enemySys.ey[i]
+        
+        // 1. SPLIT ROLE LOGIC: First guard is always a Defender, next 2 can be Interceptors.
+        // Any guards beyond the 3rd also stay to defend (HVT is heavily fortified).
+        var guardRank = 0
+        for (j in 0 until i) {
+            if (enemySys.type[j] == 5 && enemySys.invX[j].toInt() == hvtIdx && enemySys.ex[j] > -1000f) {
+                guardRank++
+            }
+        }
+        
+        val isInterceptor = guardRank in 1..2
+        val aggroRange = scale * 1.5f
+        val tetherRange = gs.tileSize * 4.0f
+        
+        // Alerted if player is near OR if pulse was recently heard (investigateTimer > 0)
+        val isAlerted = distToPlayerSq < aggroRange * aggroRange || enemySys.investigateTimer[i] > 0f
+        
+        // Check if we are within tether range of our HVT
+        val hvtToPlayerDx = targetX - hx
+        val hvtToPlayerDy = targetY - hy
+        val hvtToPlayerDistSq = hvtToPlayerDx * hvtToPlayerDx + hvtToPlayerDy * hvtToPlayerDy
+        val playerWithinTether = hvtToPlayerDistSq < tetherRange * tetherRange
+
+        if (isInterceptor && isAlerted && playerWithinTether) {
+            // INTERCEPT MODE: Move towards player
+            enemySys.eState[i] = 1
+            val pdist = kotlin.math.sqrt(distToPlayerSq.toDouble()).toFloat().coerceAtLeast(0.01f)
+            val speed = scale * 0.5f
+            enemySys.evx[i] = (tdx / pdist) * speed
+            enemySys.evy[i] = (tdy / pdist) * speed
+            
+            // If very close to player, slightly push away from other guards to avoid stacking
+            for (j in 0 until enemySys.n) {
+                if (i == j || enemySys.type[j] != 5 || enemySys.ex[j] < -1000f) continue
+                val gdx = enemySys.ex[i] - enemySys.ex[j]
+                val gdy = enemySys.ey[i] - enemySys.ey[j]
+                val gdistSq = gdx * gdx + gdy * gdy
+                if (gdistSq < (scale * 0.1f) * (scale * 0.1f)) {
+                    enemySys.evx[i] += (gdx / 0.01f.coerceAtLeast(kotlin.math.sqrt(gdistSq.toDouble()).toFloat())) * scale * 0.1f
+                    enemySys.evy[i] += (gdy / 0.01f.coerceAtLeast(kotlin.math.sqrt(gdistSq.toDouble()).toFloat())) * scale * 0.1f
+                }
+            }
+        } else {
+            // ORBIT/DEFEND MODE
+            enemySys.eState[i] = 0
+            
+            // Rotation: Slightly faster if alerted to look more active
+            val rotationSpeed = if (isAlerted) 2.2f else 1.2f
+            enemySys.invY[i] += dt * rotationSpeed 
+            
+            val angle = enemySys.invY[i]
+            val orbitRadius = scale * 0.35f
+            
+            val orbitX = hx + kotlin.math.cos(angle.toDouble()).toFloat() * orbitRadius
+            val orbitY = hy + kotlin.math.sin(angle.toDouble()).toFloat() * orbitRadius
+            
+            val odx = orbitX - enemySys.ex[i]
+            val ody = orbitY - enemySys.ey[i]
+            val odist = kotlin.math.sqrt((odx * odx + ody * ody).toDouble()).toFloat().coerceAtLeast(0.01f)
+            
+            // High tracking speed to stay glued to the HVT
+            val speed = scale * 0.8f 
+            enemySys.evx[i] = (odx / odist) * speed
+            enemySys.evy[i] = (ody / odist) * speed
+        }
+    }
+}
+
 // =========================================================
 // BOSS BEHAVIORS (Modular Patterns for Boss Entities)
 // =========================================================

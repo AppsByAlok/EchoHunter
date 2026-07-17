@@ -59,14 +59,22 @@ A Roguelite streak system where you target the core of AEGIS through 6 distinct 
 
 ## ⚙️ Gameplay Mechanics
 
-Navigate high-speed server corridors, hunt down **Admin Warden Programs**, and maintain your uplink.
-* **Procedural Servers (Mazes):** Explore 5 distinct tactical layouts—from open Arenas and tight Quarantine cores, to massive Server Farms and complex Labyrinths.
+Navigate high-speed server corridors, hunt down **HVTs (High Value Targets)**, and maintain your uplink.
+* **Procedural Objectives:** Beyond just surviving, execute specific missions:
+  * **Elimination:** Locate and neutralize heavily guarded HVTs marked with red targeting reticles.
+  * **Clean Sweep:** Destroy "Circuit Chip" spawner nodes to trigger cascading system failures.
+  * **Core Defense:** Protect stationary uplinks from kamikaze hunter swarms.
+  * **Gate Hijack:** Breach the exit portal before the Admin purge protocol closes it.
+* **Procedural Servers (Mazes):** Explore tactical layouts including open Arenas, tight Quarantine cores, Server Farms, and complex Labyrinths.
 * **Nano-OS Dashboard:** A simulated 3-port operating system where you can manage your Arsenal, access past Sandbox nodes via Archives, or use the Decompiler for permanent firmware upgrades.
 * **Tactical Arsenal (Weapons & Traps):** * **Pulse/Sonar:** Scan the area to reveal hidden threats and map boundaries.
   * **Weapons:** Choose between the standard Blaster, Shotgun (Spread), or Sniper (Pierce).
   * **Traps:** Deploy tactical modules like Camouflage (Invisibility), Decoy Holograms, or EMP Mines.
   * **Overclock (OVR):** Fill your meter to 100% to manually unleash Root Override. Move at blinding speeds and physically RAM enemies to delete them.
-* **Smart Stealth AI:** Avoid enemy "Line of Sight" (Vision Cones). If spotted, Hunter AIs will use advanced pathfinding to track you.
+* **Smart Stealth AI:** Avoid enemy "Line of Sight" (Vision Cones).
+  * **Hunters:** Standard viruses that track and dash toward your position.
+  * **Guards (Heavy Units):** Cyan-colored elite units that orbit HVTs. They feature high-density code, making them immune to shield-kills—instead, they trigger a kinetic bounce-back.
+  * **Pathfinding:** All enemies use advanced A* and Flow-Field algorithms to navigate server mazes.
 * **Autopilot Mode:** Engage the self-playing AI. The drone will autonomously navigate mazes, hunt enemies, and locate the core using flow-field navigation.
 
 ## 🛠️ Under The Hood (Tech Stack)

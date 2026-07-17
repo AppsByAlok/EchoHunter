@@ -303,7 +303,7 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
             }
 
             // 2. PROXIMITY STATE MANAGEMENT
-            if (distSq > maxAllowedDistSq) {
+            if (distSq > maxAllowedDistSq && node.type != 2) {
                 // If extremely far (procedural drift), relocate safely
                 relocateNode(node, gs, targetW, scale)
             }

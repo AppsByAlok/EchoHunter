@@ -119,7 +119,11 @@ class CollisionSystem(
                         // EMP Deals 5 Damage!
                         enemySystem.hp[j] -= 5
                         if (enemySystem.hp[j] <= 0) {
-                            val rewardKB = LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
+                            var rewardKB = LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
+                            // Apply Bounty Cap (15x Base Level 1 reward as safety)
+                            val cap = LevelEngine.getKillRewardKB(1, false) * 15 
+                            rewardKB = min(rewardKB, cap)
+
                             onScoreAdd((5 * UpgradeSystem.getRewardMultiplier()).toLong())
                             gs.collectedDataKB += rewardKB
 
@@ -147,7 +151,9 @@ class CollisionSystem(
                             
                             if (node.hp < prevHp) {
                                 if (node.state == SpawnState.DESTROYED) {
-                                    val rewardKB = LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false) * 3
+                                    var rewardKB = LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false) * 3
+                                    val cap = LevelEngine.getKillRewardKB(1, false) * 15 * 3
+                                    rewardKB = min(rewardKB, cap)
                                     onScoreAdd((15 * UpgradeSystem.getRewardMultiplier()).toLong())
                                     gs.collectedDataKB += rewardKB
                                     StoryProtocol.showIngameMessage("COMPILER FRIED", 1f)
@@ -224,7 +230,10 @@ class CollisionSystem(
                                         enemySystem.hp[j] -= splashDamage
                                         if (enemySystem.hp[j] <= 0) {
                                             onScoreAdd((5 * UpgradeSystem.getRewardMultiplier()).toLong())
-                                            gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
+                                            var rewardKB = LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
+                                            val cap = LevelEngine.getKillRewardKB(1, false) * 15
+                                            rewardKB = min(rewardKB, cap)
+                                            gs.collectedDataKB += rewardKB
                                             enemySystem.killEnemy(j, gs)
                                         }
                                     }
@@ -310,8 +319,10 @@ class CollisionSystem(
                                         if (edx * edx + edy * edy < explosionRadiusSq) {
                                             enemySystem.hp[j] -= splashDamage
                                             if (enemySystem.hp[j] <= 0) {
-                                                val reward = (LevelEngine.getKillRewardKB(gs.currentLevel, false) * UpgradeSystem.getRewardMultiplier()).toLong()
-                                                gs.collectedDataKB += reward
+                                                var rewardKB = LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
+                                                val cap = LevelEngine.getKillRewardKB(1, false) * 15
+                                                rewardKB = min(rewardKB, cap)
+                                                gs.collectedDataKB += rewardKB
                                                 enemySystem.killEnemy(j, gs)
                                             }
                                         }
@@ -324,20 +335,23 @@ class CollisionSystem(
                             if (enemySystem.hp[i] <= 0) {
                                 gs.combo++
                                 // --- ELIMINATION MODE SCORE LOGIC ---
+                                val baseReward = LevelEngine.getKillRewardKB(gs.currentLevel, false)
+                                val bountyCap = LevelEngine.getKillRewardKB(1, false) * 15
+
                                 if (isElimination) {
                                     if (enemySystem.type[i] == 3) {
                                         onScoreAdd(((2 + gs.combo) * UpgradeSystem.getRewardMultiplier()).toLong())
-                                        val reward = LevelEngine.getKillRewardKB(gs.currentLevel, false) * 2
+                                        val reward = min(baseReward * 2, bountyCap)
                                         gs.collectedDataKB += reward
                                         StoryProtocol.showIngameMessage("TARGET ELIMINATED!", 1.5f)
                                         gs.elimTargetsKilled++
                                     } else {
-                                        val reward = LevelEngine.getKillRewardKB(gs.currentLevel, false) / 2
+                                        val reward = min(baseReward / 2, bountyCap)
                                         gs.collectedDataKB += reward
                                     }
                                 } else {
                                     onScoreAdd(((2 + gs.combo) * UpgradeSystem.getRewardMultiplier()).toLong())
-                                    val reward = LevelEngine.getKillRewardKB(gs.currentLevel, false)
+                                    val reward = min(baseReward, bountyCap)
                                     gs.collectedDataKB += reward
                                 }
                                 
@@ -388,7 +402,10 @@ class CollisionSystem(
                                 effectSystem.spawnParticles(node.x, node.y, if (isCrit) 3 else 0, scale)
                                 if (node.state == SpawnState.DESTROYED) {
                                     onScoreAdd((20 * UpgradeSystem.getRewardMultiplier()).toLong())
-                                    gs.collectedDataKB += LevelEngine.getKillRewardKB(gs.currentLevel, false) * 3
+                                    var rewardKB = LevelEngine.getKillRewardKB(gs.currentLevel, false) * 3
+                                    val cap = LevelEngine.getKillRewardKB(1, false) * 15 * 3
+                                    rewardKB = min(rewardKB, cap)
+                                    gs.collectedDataKB += rewardKB
                                     StoryProtocol.showIngameMessage("COMPILER BREACHED", 1.5f)
 
                                     // OVERCLOCK FRENZY: Clean Sweep specific reward
@@ -487,7 +504,10 @@ class CollisionSystem(
                     }
 
                     if (enemySystem.hp[i] <= 0) {
-                        val rewardKB = LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
+                        var rewardKB = LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
+                        val cap = LevelEngine.getKillRewardKB(1, false) * 15
+                        rewardKB = min(rewardKB, cap)
+
                         if (enemySystem.type[i] == 2 || enemySystem.type[i] == 0) {
                             onScoreAdd(( (if(enemySystem.type[i] == 2) 5L else 2L) * UpgradeSystem.getRewardMultiplier() ).toLong())
                         } else {
@@ -511,28 +531,24 @@ class CollisionSystem(
 
                         enemySystem.killEnemy(i, gs)
                     }
-                } else if (enemySystem.type[i] == 1) {
-                    // --- HUNTER COLLISION ---
+                } else if (enemySystem.type[i] == 1 || enemySystem.type[i] == 5) {
+                    // --- HUNTER & GUARD COLLISION ---
                     if (gs.playerIframe <= 0f) {
                         if (gs.shieldTimer > 0f) {
                             gs.shieldTimer = 0f
                             gs.playerIframe = 1.0f + UpgradeSystem.getIframeDurationBonus()
                             effectSystem.spawnParticles(enemySystem.ex[i], enemySystem.ey[i], 1, scale)
-                            enemySystem.killEnemy(i, gs) // Shield absorbs and kills
-
-                            // PATCH: SHIELD BURST
-                            if (UpgradeSystem.hasShieldBurstPatch()) {
-                                gs.shockwaveActive = true
-                                gs.shockwaveX = gs.px; gs.shockwaveY = gs.py; gs.shockwaveR = 0f
-                                // Disable nearby enemies
-                                val stunRadiusSq = (scale * 0.45f) * (scale * 0.45f)
-                                for (j in 0 until enemySystem.n) {
-                                    val edx = gs.px - enemySystem.ex[j]
-                                    val edy = gs.py - enemySystem.ey[j]
-                                    if (edx * edx + edy * edy < stunRadiusSq) {
-                                        enemySystem.eState[j] = 2 // Stun
-                                    }
-                                }
+                            
+                            // Hunters die on shield hit, but Guards are tanky—just bounce back
+                            if (enemySystem.type[i] == 1) {
+                                enemySystem.killEnemy(i, gs)
+                            } else {
+                                // Guard Bounce
+                                val bdx = enemySystem.ex[i] - gs.px
+                                val bdy = enemySystem.ey[i] - gs.py
+                                val dist = kotlin.math.sqrt((bdx * bdx + bdy * bdy).toDouble()).toFloat().coerceAtLeast(0.01f)
+                                enemySystem.evx[i] += (bdx / dist) * scale * 2f
+                                enemySystem.evy[i] += (bdy / dist) * scale * 2f
                             }
                         } else {
                             effectSystem.spawnParticles(gs.px, gs.py, 1, scale)
@@ -643,7 +659,10 @@ class CollisionSystem(
         onScoreAdd((50 * UpgradeSystem.getRewardMultiplier()).toLong())
         
         // PATCH: DATA OVERFLOW (2x Boss Data Drops)
-        val bossReward = LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = true)
+        var bossReward = LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = true)
+        val cap = LevelEngine.getKillRewardKB(1, false) * 15 * 5 // Bosses get 5x the normal cap
+        bossReward = min(bossReward, cap)
+
         val finalReward = if (UpgradeSystem.hasDataOverflowPatch()) bossReward * 2 else bossReward
         gs.collectedDataKB += finalReward
 
