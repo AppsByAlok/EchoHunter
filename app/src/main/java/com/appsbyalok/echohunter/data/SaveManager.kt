@@ -131,11 +131,6 @@ object SaveManager {
         prefs.edit().putString(key, encodeHudLayout(profile.copyMutable().normalize())).apply()
     }
 
-    fun resetHudLayoutProfile(isPortrait: Boolean) {
-        val key = if (isPortrait) HUD_LAYOUT_PORTRAIT_KEY else HUD_LAYOUT_LANDSCAPE_KEY
-        prefs.edit().remove(key).apply()
-    }
-
     private fun encodeHudLayout(profile: HudLayoutProfile): String {
         val root = JSONObject().put("version", 1)
         root.put("movement", JSONObject().apply {

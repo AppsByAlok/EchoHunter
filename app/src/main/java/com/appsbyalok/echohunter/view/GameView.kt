@@ -298,7 +298,7 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun takeDamage(scale: Float) {
-        if (gs.gameMode == 2) return
+        if (gs.gameMode == 2 || gs.isLevelCleared) return
         if (gs.modGodMode && gs.hp <= 1) {
             StoryProtocol.showIngameMessage("MOD: GOD MODE PREVENTED DEATH", 1.5f)
             return
@@ -558,6 +558,35 @@ class GameView(context: Context) : View(context) {
         }
         if (gs.whiteFlash > 0f) {
             canvas.drawColor((min(255, (gs.whiteFlash * 255).toInt()) shl 24) or 0xFFFFFF)
+        }
+
+        // Victory Overlay Feedback
+        if (gs.isLevelCleared && gs.winDelayTimer > 0f) {
+            val progress = (1.5f - gs.winDelayTimer) / 1.5f // 0.0 to 1.0
+            
+            // 1. Full screen success tint (Subtle Cyan/Green)
+            canvas.drawColor(((progress * 40).toInt() shl 24) or 0x00FFCC)
+
+            // 2. Big Center Text with Scale-up Effect
+            pAlert.textSize = gameScale * 0.12f
+            pAlert.color = (com.appsbyalok.echohunter.utils.GameColors.CLARITY and 0xFFFFFF) or (255 shl 24)
+            pAlert.style = Paint.Style.FILL
+            
+            val centerX = width / 2f
+            val centerY = height / 2f
+            
+            val textScale = 0.8f + (progress * 0.2f)
+            canvas.save()
+            canvas.scale(textScale, textScale, centerX, centerY)
+            canvas.drawText("MISSION", centerX, centerY - pAlert.textSize * 0.5f, pAlert)
+            canvas.drawText("ACCOMPLISHED", centerX, centerY + pAlert.textSize * 0.5f, pAlert)
+            canvas.restore()
+
+            // 3. Moving Scanline effect
+            val lineY = (progress * height * 1.5f) % height
+            pAlert.strokeWidth = gameScale * 0.01f
+            pAlert.color = 0x8800FFCC.toInt()
+            canvas.drawLine(0f, lineY, width.toFloat(), lineY, pAlert)
         }
     }
 

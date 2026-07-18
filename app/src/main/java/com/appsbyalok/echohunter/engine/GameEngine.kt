@@ -123,65 +123,68 @@ class GameEngine(
 
 
         if (gs.isLevelCleared && gs.state == 1) {
-            if (gs.gameMode == 2) {
-                // Training Mode Completion: Redirect to Mainframe
-                onChangeState?.invoke(15)
-                return
-            }
-
-            if (gs.gameMode == 0) {
-                gs.isLevelCleared = false
-                val config = LevelEngine.getLevelConfig(gs.currentLevel)
-                var finalReward = config.clearRewardKB
-                if (gs.currentLevel < SaveManager.maxCampaignLevel) finalReward /= 2
-                finalReward += (finalReward * UpgradeSystem.getRewardBonusPercent()).toLong()
-
-                gs.collectedDataKB += finalReward
-                SaveManager.addData(finalReward)
-
-                if (gs.currentLevel == Int.MAX_VALUE) {
-                    gs.showGlobalMessage("LIMIT REACHED: \"YOU HAVE EXHAUSTED THE MULTIVERSE.\"\nADMIN: \"REST IN BITS, LEGEND.\"", 10f)
-                } else {
-                    SaveManager.updateCampaignProgress(gs.currentLevel)
+            // NAYA: Wait for winDelayTimer before showing victory UI
+            if (gs.winDelayTimer > 0f) {
+                // Keep updating visuals but skip objective reward logic
+            } else {
+                if (gs.gameMode == 2) {
+                    // Training Mode Completion: Redirect to Mainframe
+                    onChangeState?.invoke(15)
+                    return
                 }
 
-                // Calculate Stars based on specific achievements
-                // * - just finish game
-                // ** - finish without taking damage
-                // *** - finish in time
-                // **** - hard mode finish
-                // ***** - hard mode no damage or on time
+                if (gs.gameMode == 0) {
+                    gs.isLevelCleared = false // Reset only AFTER rewards are processed
+                    val config = LevelEngine.getLevelConfig(gs.currentLevel)
+                    var finalReward = config.clearRewardKB
+                    if (gs.currentLevel < SaveManager.maxCampaignLevel) finalReward /= 2
+                    finalReward += (finalReward * UpgradeSystem.getRewardBonusPercent()).toLong()
 
-                val duration = gs.timeSinceStart - gs.levelStartTime
-                val isHard = gs.difficulty == 1
-                val noDamage = !gs.tookDamageInLevel
-                val underPar = duration <= config.parTime
+                    gs.collectedDataKB += finalReward
+                    SaveManager.addData(finalReward)
 
-                // Record achievements (masks)
-                var recordsMask = 0
-                if (noDamage) recordsMask = recordsMask or 1 // NO DAMAGE
-                if (noDamage && underPar) recordsMask = recordsMask or 2 // PERFECT CLEAR
-                if (gs.sonarTimer == 0f && !gs.pulse) recordsMask = recordsMask or 8 // NO SONAR
+                    if (gs.currentLevel == Int.MAX_VALUE) {
+                        gs.showGlobalMessage(
+                            "LIMIT REACHED: \"YOU HAVE EXHAUSTED THE MULTIVERSE.\"\nADMIN: \"REST IN BITS, LEGEND.\"",
+                            10f
+                        )
+                    } else {
+                        SaveManager.updateCampaignProgress(gs.currentLevel)
+                    }
 
-                // MANUAL AIM logic: Award if NOT using AUTO_AIM
-                if (gs.controls.activeAttackMode != com.appsbyalok.echohunter.input.AttackMode.AUTO_AIM) {
-                    recordsMask = recordsMask or 16
+                    // Calculate Stars based on specific achievements
+                    val duration = gs.timeSinceStart - gs.levelStartTime
+                    val isHard = gs.difficulty == 1
+                    val noDamage = !gs.tookDamageInLevel
+                    val underPar = duration <= config.parTime
+
+                    // Record achievements (masks)
+                    var recordsMask = 0
+                    if (noDamage) recordsMask = recordsMask or 1 // NO DAMAGE
+                    if (noDamage && underPar) recordsMask = recordsMask or 2 // PERFECT CLEAR
+                    if (gs.sonarTimer == 0f && !gs.pulse) recordsMask = recordsMask or 8 // NO SONAR
+
+                    // MANUAL AIM logic: Award if NOT using AUTO_AIM
+                    if (gs.controls.activeAttackMode != com.appsbyalok.echohunter.input.AttackMode.AUTO_AIM) {
+                        recordsMask = recordsMask or 16
+                    }
+
+                    if (!gs.isAutoPilotActive) recordsMask = recordsMask or 64 // NO AUTOPILOT
+
+                    val stars = when {
+                        isHard && noDamage && underPar -> 5
+                        isHard -> 4
+                        underPar -> 3
+                        noDamage -> 2
+                        else -> 1
+                    }
+
+                    SaveManager.saveLevelStats(gs.currentLevel, duration, stars, recordsMask, isHard)
+                    EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 500)
+
+                    onChangeState?.invoke(12)
+                    return
                 }
-
-                if (!gs.isAutoPilotActive) recordsMask = recordsMask or 64 // NO AUTOPILOT
-
-                val stars = when {
-                    isHard && noDamage && underPar -> 5
-                    isHard -> 4
-                    underPar -> 3
-                    noDamage -> 2
-                    else -> 1
-                }
-
-                SaveManager.saveLevelStats(gs.currentLevel, duration, stars, recordsMask, isHard)
-                EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 500)
-                onChangeState?.invoke(12)
-                return
             }
         }
 

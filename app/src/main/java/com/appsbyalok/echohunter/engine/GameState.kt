@@ -164,6 +164,21 @@ class GameState {
     var isLevelCleared = false // Flag indicating if the level objective is complete
         set(value) {
             if (value && !field) {
+                winDelayTimer = 1.5f // Delay victory screen to let the player see the final moment
+                slowMoTimer = 2.0f   // Add cinematic slow-mo effect
+                whiteFlash = 0.5f    // Screen flash on win
+                sectorFlash = 0.6f   // Greenish system success flash
+                chromaticIntensity = 1.2f 
+                
+                // Trigger a celebratory shockwave
+                shockwaveActive = true
+                shockwaveX = px
+                shockwaveY = py
+                shockwaveR = 0f
+
+                showGlobalMessage(">>> MISSION ACCOMPLISHED: SYSTEM SECURED <<<", 2.5f)
+                EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP2, 200)
+
                 levelClearTime = timeSinceStart - levelStartTime
                 val totalDurationSeconds = levelClearTime
                 val minutes = (totalDurationSeconds / 60).toInt()
@@ -246,6 +261,7 @@ class GameState {
     var bombTargetX = -9999f
     var bombTargetY = -9999f
     var whiteFlash = 0f // Intensity of the screen-clearing white flash effect
+    var winDelayTimer = 0f // Delay before showing victory screen
 
     val tutorialSkipStepRect = android.graphics.RectF()
     val tutorialSkipAllRect = android.graphics.RectF()
@@ -518,11 +534,16 @@ class GameState {
         if (cooldownTimer > 0f) cooldownTimer -= dt
         if (empFlashTimer > 0f) empFlashTimer -= dt
         if (slowMoTimer > 0f) slowMoTimer -= dt
+        if (whiteFlash > 0f) whiteFlash = max(0f, whiteFlash - dt)
         if (bossDeathTimer > 0f) bossDeathTimer -= dt
         if (bossLockTimer > 0f) bossLockTimer -= dt
         if (attackCooldown > 0f) attackCooldown -= dt
         if (sonarTimer > 0f) sonarTimer -= dt
-        if (shakeAmount > 0f) shakeAmount -= dt * scale * 0.5f
+        if (winDelayTimer > 0f) winDelayTimer -= dt
+        if (shakeAmount > 0f) {
+            if (state == 12) shakeAmount = 0f // Stop shaking in Victory state
+            else shakeAmount -= dt * scale * 0.5f
+        }
 
         val target = targetClarity
         val visionUpdateRate = if (difficulty == 1) 0.04f else 0.8f
