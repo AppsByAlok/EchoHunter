@@ -29,8 +29,19 @@ class UIMainFrame {
 
     // Screen State
     // 0: Main Hub (3 Cards), 1: Cyber-Heist Act Selection (6 Memory Cards), 2: Act Details View
-    private var screenMode = 0
-    private var selectedActIndex = -1
+    var screenMode = 0
+    var selectedActIndex = -1
+
+    fun reset() {
+        screenMode = 0
+        selectedActIndex = -1
+        scroller.scrollY = 0f
+    }
+
+    fun openActDetails(actIndex: Int) {
+        screenMode = 2
+        selectedActIndex = actIndex
+    }
 
     // Main Hub Cards
     private val hubCardRects = Array(3) { RectF() }
@@ -94,7 +105,7 @@ class UIMainFrame {
         when (screenMode) {
             0 -> drawMainHub(c, width, height, scale, safeBottom, headerY)
             1 -> drawActSelection(c, width, height, scale, safeBottom, headerY, dt)
-            2 -> drawActDetails(c, width, height, scale, safeBottom, headerY)
+            2 -> drawActDetails(c, width, height, scale, headerY)
         }
     }
 
@@ -109,14 +120,13 @@ class UIMainFrame {
             val rect = hubCardRects[i]
             rect.set(startX, startY + i * (cardH + gap), startX + contentW, startY + i * (cardH + gap) + cardH)
 
+            val isLocked = (i == 2 && !SaveManager.isStoryModeUnlocked)
             val isCurrent = when (i) {
                 0 -> !SaveManager.isGameTutorialCompleted
-                1 -> SaveManager.isGameTutorialCompleted
-                2 -> SaveManager.isGameTutorialCompleted && SaveManager.unlockedStoryStreak == 0
+                1 -> SaveManager.isGameTutorialCompleted && SaveManager.unlockedStoryStreak >= 3
+                2 -> !isLocked && SaveManager.unlockedStoryStreak < 3
                 else -> false
             }
-
-
 
             menuCard.draw(
                 c = c,
@@ -125,8 +135,8 @@ class UIMainFrame {
                 paint = p,
                 active = isCurrent,
                 pressed = hitOnDown == i,
-                fillColor = 0xFF0A1520.toInt(),
-                strokeColor = 0x5500FFFF,
+                fillColor = if (isLocked) 0xFF101010.toInt() else 0xFF0A1520.toInt(),
+                strokeColor = if (isLocked) Color.DKGRAY else 0x5500FFFF,
                 activeStrokeColor = GameColors.PULSE,
                 radius = scale * 0.02f
             )
@@ -136,13 +146,18 @@ class UIMainFrame {
 
             // Title
             pText.textSize = scale * 0.042f
-            pText.color = Color.WHITE
+            pText.color = if (isLocked) Color.GRAY else Color.WHITE
             c.drawText(hubTitles[i], rect.left + padding, rect.top + scale * 0.065f, pText)
 
             // Subtitle
             pText.textSize = scale * 0.026f
-            pText.color = GameColors.TEXT
-            c.drawText(hubSubs[i], rect.left + padding, rect.top + scale * 0.11f, pText)
+            if (isLocked) {
+                pText.color = GameColors.YELLOW
+                c.drawText("LOCKED: SYSTEM LEVEL 15 REQUIRED", rect.left + padding, rect.top + scale * 0.11f, pText)
+            } else {
+                pText.color = GameColors.TEXT
+                c.drawText(hubSubs[i], rect.left + padding, rect.top + scale * 0.11f, pText)
+            }
 
             // Onboarding Indicator
             pText.textAlign = Paint.Align.RIGHT
@@ -168,8 +183,13 @@ class UIMainFrame {
                     p.alpha = 255
                 }
             } else if (i == 2) {
-                pText.color = GameColors.PULSE
-                c.drawText("6 OPERATIONS", rect.right - padding, rect.bottom - scale * 0.03f, pText)
+                if (isLocked) {
+                    pText.color = GameColors.RED
+                    c.drawText("UNAUTHORIZED", rect.right - padding, rect.bottom - scale * 0.03f, pText)
+                } else {
+                    pText.color = GameColors.PULSE
+                    c.drawText("6 OPERATIONS", rect.right - padding, rect.bottom - scale * 0.03f, pText)
+                }
             }
         }
 
@@ -197,11 +217,12 @@ class UIMainFrame {
         var currentY = gap
 
         for (i in 0..5) {
+            // Decoupling: Acts 4-6 (indices 3-5) are hidden until Act 3 is beaten
+            if (i >= 3 && SaveManager.unlockedStoryStreak < 3) continue
+
             val isUnlocked = isActUnlocked(i)
             val rect = actCardRects[i]
             rect.set(startX, currentY, startX + contentW, currentY + cardH)
-
-            val isCurrent = isActCurrent(i)
 
             val bgColor = if (isUnlocked) (if (i >= 3) 0xFF1A0A05.toInt() else 0xFF0A1520.toInt()) else 0xFF101010.toInt()
             val strokeColor = if (isUnlocked) (if (i >= 3) GameColors.RED else GameColors.PULSE) else Color.DKGRAY
@@ -211,7 +232,7 @@ class UIMainFrame {
                 rect = rect,
                 scale = scale,
                 paint = p,
-                active = isCurrent,
+                active = isUnlocked, // Highlight all unlocked acts as requested
                 pressed = hitOnDown == i,
                 fillColor = bgColor,
                 strokeColor = strokeColor,
@@ -229,17 +250,28 @@ class UIMainFrame {
 
             // Subtitle
             pText.textSize = scale * 0.026f
-            pText.color = if (isUnlocked) GameColors.TEXT else Color.DKGRAY
-            c.drawText(actSubs[i], rect.left + padding, rect.top + scale * 0.105f, pText)
+            if (isUnlocked) {
+                pText.color = GameColors.TEXT
+                c.drawText(actSubs[i], rect.left + padding, rect.top + scale * 0.105f, pText)
+            } else {
+                pText.color = GameColors.YELLOW
+                val req = when (i) {
+                    1 -> "REQUIREMENT: COMPLETE ACT I"
+                    2 -> "REQUIREMENT: COMPLETE ACT II"
+                    3 -> "REQUIREMENT: COMPLETE ACT III"
+                    4 -> "REQUIREMENT: COMPLETE ACT IV"
+                    5 -> "REQUIREMENT: COMPLETE ACT V"
+                    else -> "LOCKED"
+                }
+                c.drawText(req, rect.left + padding, rect.top + scale * 0.105f, pText)
+            }
 
             // Status Badge
             pText.textAlign = Paint.Align.RIGHT
             pText.textSize = scale * 0.022f
             val (tag, tagColor) = when {
                 !isUnlocked -> "LOCKED" to GameColors.RED
-                isCurrent -> "ACTIVE" to GameColors.HP
-                isActCompleted(i) -> "STABLE" to GameColors.COOLANT
-                else -> "NOMINAL" to GameColors.TEXT
+                else -> "ACTIVE" to GameColors.HP // Green "ACTIVE" for all playable acts
             }
             pText.color = tagColor
             c.drawText(tag, rect.right - padding, rect.bottom - scale * 0.03f, pText)
@@ -258,7 +290,7 @@ class UIMainFrame {
             0xFF1A1A1A.toInt(), Color.GRAY, Color.WHITE, scale * 0.01f, scale * 0.035f)
     }
 
-    private fun drawActDetails(c: Canvas, width: Float, height: Float, scale: Float, safeBottom: Float, headerY: Float) {
+    private fun drawActDetails(c: Canvas, width: Float, height: Float, scale: Float, headerY: Float) {
         val i = selectedActIndex
         if (i == -1) return
 
@@ -340,38 +372,23 @@ class UIMainFrame {
     }
 
     private fun isActUnlocked(index: Int): Boolean {
+        if (!SaveManager.isStoryModeUnlocked) return false
         return when (index) {
-            0 -> true // Act 1 baseline always unlocked
+            0 -> true // Act 1 baseline
             1 -> SaveManager.unlockedStoryStreak >= 1
             2 -> SaveManager.unlockedStoryStreak >= 2
-            3 -> SaveManager.unlockedStoryStreak >= 3 // Act 4 (Corrupted 1) unlocked after beating Act 3
+            3 -> SaveManager.unlockedStoryStreak >= 3 // Act 4 (Hard 1)
             4 -> SaveManager.unlockedStoryStreak >= 3 && SaveManager.unlockedHardStreak >= 1
             5 -> SaveManager.unlockedStoryStreak >= 3 && SaveManager.unlockedHardStreak >= 2
             else -> false
         }
     }
 
-    private fun isActCurrent(index: Int): Boolean {
-        return when (index) {
-            0 -> SaveManager.currentStoryStreak == 0
-            1 -> SaveManager.currentStoryStreak == 1
-            2 -> SaveManager.currentStoryStreak == 2
-            3 -> SaveManager.unlockedStoryStreak >= 3 && SaveManager.currentHardStreak == 0
-            4 -> SaveManager.unlockedStoryStreak >= 3 && SaveManager.currentHardStreak == 1
-            5 -> SaveManager.unlockedStoryStreak >= 3 && SaveManager.currentHardStreak == 2
-            else -> false
-        }
-    }
-
-    private fun isActCompleted(index: Int): Boolean {
-        return when {
-            index < 3 -> SaveManager.unlockedStoryStreak > index
-            else -> SaveManager.unlockedHardStreak > (index - 3)
-        }
-    }
-
-    fun onTouch(x: Float, y: Float, action: Int, scale: Float, onRoute: (Int) -> Unit, onBack: () -> Unit): Boolean {
-        if (screenMode == 1 && scroller.onTouch(x, y, action, scale)) {
+    fun onTouch(x: Float, y: Float, action: Int, scale: Float, gs: GameState, onRoute: (Int) -> Unit, onBack: () -> Unit): Boolean {
+        // Only let scroller consume if it's already dragging or confirmed movement.
+        val scrollerResult = if (screenMode == 1) scroller.onTouch(x, y, action, scale) else false
+        
+        if (screenMode == 1 && (scroller.isDragging || scroller.isDraggingScrollbar)) {
             hitOnDown = -1
             return true
         }
@@ -401,13 +418,13 @@ class UIMainFrame {
                             closeButton.contains(x, y) -> 10
                             else -> {
                                 var hit = -1
-                                val localY = y - (scroller.viewport.top + scroller.scrollY)
-                                for (i in 0..5) {
-                                    if (actCardRects[i].contains(x, localY)) {
-                                        hit = i
-                                        break
+                                    val localY = (y - scroller.viewport.top) - scroller.scrollY
+                                    for (i in 0..5) {
+                                        if (actCardRects[i].contains(x, localY)) {
+                                            hit = i
+                                            break
+                                        }
                                     }
-                                }
                                 hit
                             }
                         }
@@ -423,6 +440,12 @@ class UIMainFrame {
                 }
             }
             MotionEvent.ACTION_UP -> {
+                // If scroller moved significantly during this touch, ignore the click
+                if (screenMode == 1 && (scroller.hasMovedSignificantly || scrollerResult)) {
+                    hitOnDown = -1
+                    return true
+                }
+
                 if (hitOnDown != -1) {
                     val hitOnUp = when (screenMode) {
                         0 -> {
@@ -445,13 +468,13 @@ class UIMainFrame {
                                 closeButton.contains(x, y) -> 10
                                 else -> {
                                     var hit = -1
-                                    val localY = y - (scroller.viewport.top + scroller.scrollY)
-                                    for (i in 0..5) {
-                                        if (actCardRects[i].contains(x, localY)) {
-                                            hit = i
-                                            break
-                                        }
-                                    }
+                        val localY = (y - scroller.viewport.top) - scroller.scrollY
+                        for (i in 0..5) {
+                            if (actCardRects[i].contains(x, localY)) {
+                                hit = i
+                                break
+                            }
+                        }
                                     hit
                                 }
                             }
@@ -467,7 +490,7 @@ class UIMainFrame {
                     }
 
                     if (hitOnUp == hitOnDown) {
-                        handleSelection(hitOnUp, onRoute, onBack)
+                        handleSelection(hitOnUp, gs, onRoute, onBack)
                     }
                 }
                 hitOnDown = -1
@@ -476,7 +499,7 @@ class UIMainFrame {
         return true
     }
 
-    private fun handleSelection(hitId: Int, onRoute: (Int) -> Unit, onBack: () -> Unit) {
+    private fun handleSelection(hitId: Int, gs: GameState, onRoute: (Int) -> Unit, onBack: () -> Unit) {
         when (screenMode) {
             0 -> {
                 when (hitId) {
@@ -489,8 +512,13 @@ class UIMainFrame {
                         onRoute(0) // 0 goes to Archives in GameView
                     }
                     2 -> { // Story Act selection menu
-                        EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
-                        screenMode = 1
+                        if (SaveManager.isStoryModeUnlocked) {
+                            EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
+                            screenMode = 1
+                        } else {
+                            EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
+                            gs.showGlobalMessage("UNAUTHORIZED: SYSTEM LEVEL 15 REQUIRED", 2f)
+                        }
                     }
                     10 -> { // Disconnect back to Nano-OS
                         EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)

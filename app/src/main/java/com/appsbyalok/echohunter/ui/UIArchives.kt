@@ -1184,7 +1184,6 @@ class UIArchives {
                 hitOnDown = -1
             }
         }
-        val returnValue = true
-        return returnValue
+        return true
     }
 }

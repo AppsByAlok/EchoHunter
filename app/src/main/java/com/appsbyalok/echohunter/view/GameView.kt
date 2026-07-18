@@ -115,11 +115,17 @@ class GameView(context: Context) : View(context) {
             1 -> {
                 // Route 1 now goes to Mainframe/Simulations Hub
                 menuReturnState = callerState
+                uiMainFrame.reset()
                 changeState(15) // State 15: UIMainFrame
             }
             2 ->{// 2 = Nano-OS -> OS Menu
                 menuReturnState = callerState
                 changeState(14)
+            }
+            151 -> { // Deep link to Act selection details
+                menuReturnState = callerState
+                uiMainFrame.openActDetails(0) // Act 1
+                changeState(15)
             }
             100 -> { // 100 = Training Route
                 gs.gameMode = 2 // TrainingMode
@@ -127,7 +133,7 @@ class GameView(context: Context) : View(context) {
             }
             101 -> { // 101 = Story Route (Act 1)
                 gs.selectedStoryAct = 0
-                startGame(1, 1)
+                startGame(1, 1) // Start at Level 1
             }
             102 -> { // Act 2
                 gs.selectedStoryAct = 1
@@ -235,6 +241,7 @@ class GameView(context: Context) : View(context) {
         
         // Return to Hub (15) if Story/Training, else Archives (11)
         if (gs.gameMode == 1 || gs.gameMode == 2) {
+            uiMainFrame.reset()
             changeState(15)
         } else {
             changeState(11)

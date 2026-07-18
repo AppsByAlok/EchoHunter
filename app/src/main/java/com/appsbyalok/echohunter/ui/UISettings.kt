@@ -239,8 +239,7 @@ class UISettings {
                     hitOnDown = -1
                 }
             }
-            val returnValue = true
-            return returnValue
+            return true
         }
 
         scroller.onTouch(vx, vy, action, scale)

@@ -29,17 +29,19 @@ class UIMainMenu(private val context: Context) {
         typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
     }
 
-
     private val stringCache = SparseArray<String>()
     private val cablePath = Path()
 
-    // --- NAYA: 3 Ports System ---
+    // --- 3 Ports System ---
     private val menuTitles = arrayOf("SANDBOX", "MAINFRAME", "NANO-OS")
     private val menuSubs = arrayOf("Archives & Sandbox", "Simulations Hub", "System Dashboard")
 
-    private var plugX = 0f; private var plugY = 0f
-    private var targetPlugX = 0f; private var targetPlugY = 0f
-    private var plugRestX = 0f; private var plugRestY = 0f
+    private var plugX = 0f
+    private var plugY = 0f
+    private var targetPlugX = 0f
+    private var targetPlugY = 0f
+    private var plugRestX = 0f
+    private var plugRestY = 0f
     private var isDraggingPlug = false
     private var connectedMode = -1
     private var animatingToPort = -1
@@ -49,14 +51,18 @@ class UIMainMenu(private val context: Context) {
     private val portY = FloatArray(3)
     private val helpBtnRect = RectF()
     private val hardModeBtnRect = RectF()
-    private var touchDownX = 0f; private var touchDownY = 0f
+
+    private var touchDownX = 0f
+    private var touchDownY = 0f
     private var wasSwitchHitOnDown = false
     private var hitPortOnDown = -1
     private var hitButtonOnDown = -1 // 1: Help, 2: HardMode
 
     private fun getCachedString(resId: Int): String {
         var str = stringCache.get(resId)
-        if (str == null) { str = context.getString(resId); stringCache.put(resId, str) }
+        if (str == null) {
+            str = context.getString(resId); stringCache.put(resId, str)
+        }
         return str
     }
 
@@ -92,7 +98,15 @@ class UIMainMenu(private val context: Context) {
         isDraggingPlug = false
     }
 
-    fun update(dt: Float, targetW: Float, targetH: Float, view: View, effectSys: EffectSystem, gs: GameState, onRouteConnection: (Int) -> Unit) {
+    fun update(
+        dt: Float,
+        targetW: Float,
+        targetH: Float,
+        view: View,
+        effectSys: EffectSystem,
+        gs: GameState,
+        onRouteConnection: (Int) -> Unit,
+    ) {
         if (!isDraggingPlug && connectedMode == -1) {
             plugX += (targetPlugX - plugX) * 12f * dt
             plugY += (targetPlugY - plugY) * 12f * dt
@@ -108,7 +122,9 @@ class UIMainMenu(private val context: Context) {
 
                     view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                     EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 100)
-                    effectSys.spawnParticles(portX[connectedMode], portY[connectedMode], 8, min(targetW, targetH))
+                    effectSys.spawnParticles(
+                        portX[connectedMode], portY[connectedMode], 8, min(targetW, targetH)
+                    )
 
                     if (isSwitchOn) {
                         view.postDelayed({
@@ -125,7 +141,14 @@ class UIMainMenu(private val context: Context) {
         }
     }
 
-    fun draw(c: Canvas, scale: Float, gs: GameState, targetW: Float, targetH: Float, effectSys: EffectSystem) {
+    fun draw(
+        c: Canvas,
+        scale: Float,
+        gs: GameState,
+        targetW: Float,
+        targetH: Float,
+        effectSys: EffectSystem,
+    ) {
         val pw = scale * 0.08f
         val ph = scale * 0.045f
         val isPortrait = targetW < targetH
@@ -135,24 +158,36 @@ class UIMainMenu(private val context: Context) {
         pText.textSize = scale * 0.035f
         c.drawText("HIGH SCORE: ${SaveManager.highScore}", scale * 0.05f, scale * 0.08f, pText)
         pText.color = GameColors.CLARITY
-        c.drawText("DATA: ${SaveManager.formatDataString(SaveManager.dataCoinsKB)}", scale * 0.05f, scale * 0.13f, pText)
+        c.drawText(
+            "DATA: ${SaveManager.formatDataString(SaveManager.dataCoinsKB)}",
+            scale * 0.05f,
+            scale * 0.13f,
+            pText
+        )
 
         // Add Progress Summary
         val stats = SaveManager.getGlobalStats()
         pText.textSize = scale * 0.025f
         pText.color = GameColors.TEXT
-        c.drawText("NODES: ${stats.first} | STARS: ${stats.second}", scale * 0.05f, scale * 0.17f, pText)
+        c.drawText(
+            "NODES: ${stats.first} | STARS: ${stats.second}", scale * 0.05f, scale * 0.17f, pText
+        )
 
         if (SaveManager.isHardModeUnlocked) {
             pText.color = if (gs.difficulty == 0) GameColors.TEXT else GameColors.RED
             pText.textAlign = Paint.Align.LEFT; pText.textSize = scale * 0.045f
-            pText.setShadowLayer(15f, 0f, 0f, (if (gs.difficulty == 0) GameColors.PULSE else GameColors.RED))
-            val modeText = getCachedString(if (gs.difficulty == 0) R.string.ui_mode_easy else R.string.ui_mode_hard)
+            pText.setShadowLayer(
+                15f, 0f, 0f, (if (gs.difficulty == 0) GameColors.PULSE else GameColors.RED)
+            )
+            val modeText =
+                getCachedString(if (gs.difficulty == 0) R.string.ui_mode_easy else R.string.ui_mode_hard)
             c.drawText(modeText, scale * 0.05f, targetH - scale * 0.05f, pText)
             pText.clearShadowLayer()
 
             val modeW = pText.measureText(modeText)
-            hardModeBtnRect.set(scale * 0.05f, targetH - scale * 0.12f, scale * 0.05f + modeW, targetH)
+            hardModeBtnRect.set(
+                scale * 0.05f, targetH - scale * 0.12f, scale * 0.05f + modeW, targetH
+            )
         }
 
         pText.color = GameColors.TEXT; pText.textAlign = Paint.Align.RIGHT
@@ -242,7 +277,9 @@ class UIMainMenu(private val context: Context) {
                 }
             } else {
                 pText.color = GameColors.HP
-                c.drawText(getCachedString(R.string.ui_hint_initializing), targetW / 2f, hintY, pText)
+                c.drawText(
+                    getCachedString(R.string.ui_hint_initializing), targetW / 2f, hintY, pText
+                )
             }
         }
         pText.letterSpacing = 0f
@@ -251,11 +288,13 @@ class UIMainMenu(private val context: Context) {
             val pinTipX = plugX - pw - scale * 0.04f
             val dxHover = pinTipX - portX[i]
             val dyHover = plugY - portY[i]
-            val isHovered = isDraggingPlug && (dxHover * dxHover + dyHover * dyHover) < (scale * 0.15f) * (scale * 0.15f)
+            val isHovered =
+                isDraggingPlug && (dxHover * dxHover + dyHover * dyHover) < (scale * 0.15f) * (scale * 0.15f)
 
             p.style = Paint.Style.STROKE
             p.strokeWidth = if (isHovered) scale * 0.02f else scale * 0.015f
-            p.color = if (connectedMode == i) GameColors.PULSE else if (isHovered) GameColors.CLARITY else 0xFF444444.toInt()
+            p.color =
+                if (connectedMode == i) GameColors.PULSE else if (isHovered) GameColors.CLARITY else 0xFF444444.toInt()
             c.drawCircle(portX[i], portY[i], scale * 0.045f, p)
 
             p.style = Paint.Style.FILL
@@ -263,14 +302,25 @@ class UIMainMenu(private val context: Context) {
             c.drawCircle(portX[i], portY[i], scale * 0.035f, p)
 
             p.color = if (connectedMode == i && isSwitchOn) GameColors.PULSE else 0xFF000000.toInt()
-            c.drawRect(portX[i] - scale*0.02f, portY[i] - scale*0.008f, portX[i] + scale*0.02f, portY[i] + scale*0.008f, p)
+            c.drawRect(
+                portX[i] - scale * 0.02f,
+                portY[i] - scale * 0.008f,
+                portX[i] + scale * 0.02f,
+                portY[i] + scale * 0.008f,
+                p
+            )
 
             p.color = 0xFF333333.toInt()
-            c.drawRect(portX[i] - scale*0.015f, portY[i] - scale*0.004f, portX[i] + scale*0.015f, portY[i] + scale*0.004f, p)
+            c.drawRect(
+                portX[i] - scale * 0.015f,
+                portY[i] - scale * 0.004f,
+                portX[i] + scale * 0.015f,
+                portY[i] + scale * 0.004f,
+                p
+            )
 
-            val isLocked = (i == 1 && !SaveManager.isStoryModeUnlocked)
             val titleStr = menuTitles[i]
-            val subStr = if (isLocked) "Reach Ring 15" else menuSubs[i]
+            val subStr = menuSubs[i]
             val textColor = if (connectedMode == i) GameColors.CLARITY else GameColors.TEXT
 
             var portTitleSize = if (connectedMode == i) scale * 0.05f else scale * 0.04f
@@ -283,7 +333,7 @@ class UIMainMenu(private val context: Context) {
 
             pText.textAlign = Paint.Align.CENTER
             pText.color = textColor
-            pText.setShadowLayer(if(connectedMode == i) 15f else 0f, 0f, 0f, GameColors.PULSE)
+            pText.setShadowLayer(if (connectedMode == i) 15f else 0f, 0f, 0f, GameColors.PULSE)
             c.drawText(titleStr, portX[i], portY[i] + scale * 0.11f, pText)
             pText.clearShadowLayer()
 
@@ -316,17 +366,25 @@ class UIMainMenu(private val context: Context) {
         if (connectedMode == -1) {
             p.style = Paint.Style.FILL
             p.color = 0xFF999999.toInt()
-            c.drawRect(plugX - pw - scale * 0.04f, plugY - scale * 0.015f, plugX - pw, plugY + scale * 0.015f, p)
+            c.drawRect(
+                plugX - pw - scale * 0.04f,
+                plugY - scale * 0.015f,
+                plugX - pw,
+                plugY + scale * 0.015f,
+                p
+            )
 
             p.color = 0xFF222222.toInt()
-            c.drawRoundRect(plugX - pw, plugY - ph, plugX + pw, plugY + ph, scale * 0.015f, scale * 0.015f, p)
+            c.drawRoundRect(
+                plugX - pw, plugY - ph, plugX + pw, plugY + ph, scale * 0.015f, scale * 0.015f, p
+            )
 
             p.color = 0xFF111111.toInt()
             p.strokeWidth = scale * 0.005f
             p.style = Paint.Style.STROKE
-            for(i in -1..1) {
+            for (i in -1..1) {
                 val gx = plugX + (i * scale * 0.02f)
-                c.drawLine(gx, plugY - ph + scale*0.01f, gx, plugY + ph - scale*0.01f, p)
+                c.drawLine(gx, plugY - ph + scale * 0.01f, gx, plugY + ph - scale * 0.01f, p)
             }
 
             val swSize = scale * 0.025f
@@ -336,37 +394,95 @@ class UIMainMenu(private val context: Context) {
 
             p.style = Paint.Style.FILL
             p.color = 0xFF050505.toInt()
-            c.drawRoundRect(swX - swSize * 0.8f, plugY - swSize * 1.5f, swX + swSize * 0.8f, plugY + swSize * 1.5f, scale*0.01f, scale*0.01f, p)
+            c.drawRoundRect(
+                swX - swSize * 0.8f,
+                plugY - swSize * 1.5f,
+                swX + swSize * 0.8f,
+                plugY + swSize * 1.5f,
+                scale * 0.01f,
+                scale * 0.01f,
+                p
+            )
 
             p.color = swColor
-            c.drawRoundRect(swX - swSize, plugY - swSize + swOffset, swX + swSize, plugY + swSize + swOffset, scale*0.01f, scale*0.01f, p)
+            c.drawRoundRect(
+                swX - swSize,
+                plugY - swSize + swOffset,
+                swX + swSize,
+                plugY + swSize + swOffset,
+                scale * 0.01f,
+                scale * 0.01f,
+                p
+            )
 
             p.style = Paint.Style.STROKE
             p.color = 0x55FFFFFF
             p.strokeWidth = scale * 0.003f
-            c.drawRoundRect(swX - swSize, plugY - swSize + swOffset, swX + swSize, plugY + swSize + swOffset, scale*0.01f, scale*0.01f, p)
+            c.drawRoundRect(
+                swX - swSize,
+                plugY - swSize + swOffset,
+                swX + swSize,
+                plugY + swSize + swOffset,
+                scale * 0.01f,
+                scale * 0.01f,
+                p
+            )
         } else {
             p.style = Paint.Style.FILL
             p.color = 0xFF1B1B1B.toInt()
-            c.drawRoundRect(plugX - pw, plugY - ph, plugX + pw, plugY + ph, scale * 0.015f, scale * 0.015f, p)
+            c.drawRoundRect(
+                plugX - pw, plugY - ph, plugX + pw, plugY + ph, scale * 0.015f, scale * 0.015f, p
+            )
 
             p.color = 0xFF222222.toInt()
-            c.drawRoundRect(plugX - pw * 0.8f, plugY - ph * 0.8f, plugX + pw * 0.8f, plugY + ph * 0.8f, scale * 0.01f, scale * 0.01f, p)
+            c.drawRoundRect(
+                plugX - pw * 0.8f,
+                plugY - ph * 0.8f,
+                plugX + pw * 0.8f,
+                plugY + ph * 0.8f,
+                scale * 0.01f,
+                scale * 0.01f,
+                p
+            )
 
             val swSize = scale * 0.025f
             val swColor = if (isSwitchOn) GameColors.HP else GameColors.RED
             val swOffset = if (isSwitchOn) -scale * 0.01f else scale * 0.01f
 
             p.color = 0xFF050505.toInt()
-            c.drawRoundRect(plugX - swSize * 1.5f, plugY - swSize * 0.8f, plugX + swSize * 1.5f, plugY + swSize * 0.8f, scale*0.01f, scale*0.01f, p)
+            c.drawRoundRect(
+                plugX - swSize * 1.5f,
+                plugY - swSize * 0.8f,
+                plugX + swSize * 1.5f,
+                plugY + swSize * 0.8f,
+                scale * 0.01f,
+                scale * 0.01f,
+                p
+            )
 
             p.color = swColor
-            c.drawRoundRect(plugX - swSize + swOffset, plugY - swSize, plugX + swSize + swOffset, plugY + swSize, scale*0.01f, scale*0.01f, p)
+            c.drawRoundRect(
+                plugX - swSize + swOffset,
+                plugY - swSize,
+                plugX + swSize + swOffset,
+                plugY + swSize,
+                scale * 0.01f,
+                scale * 0.01f,
+                p
+            )
 
             p.style = Paint.Style.STROKE
             p.color = 0x55FFFFFF
             p.strokeWidth = scale * 0.003f
-            c.drawRoundRect(plugX - swSize + swOffset, plugY - swSize, plugX + swSize + swOffset, plugY + swSize, scale*0.01f, scale*0.01f, p)
+            c.drawRoundRect(
+                plugX - swSize + swOffset,
+                plugY - swSize,
+                plugX + swSize + swOffset,
+                plugY + swSize,
+                scale * 0.01f,
+                scale * 0.01f,
+                p
+            )
         }
 
         effectSys.drawParticles(c, 0f, 0f, scale)
@@ -383,7 +499,7 @@ class UIMainMenu(private val context: Context) {
         val t = (System.currentTimeMillis() % 1000) / 1000f
         val arrowX = plugRestX + (portX[1] - plugRestX) * t
         val arrowY = plugRestY + (portY[1] - plugRestY) * t
-        
+
         p.style = Paint.Style.FILL
         p.color = GameColors.YELLOW
         c.drawCircle(arrowX, arrowY, scale * 0.01f, p)
@@ -415,7 +531,7 @@ class UIMainMenu(private val context: Context) {
     fun onTouch(
         vx: Float, vy: Float, action: Int, scale: Float,
         view: View, gs: GameState, onDifficultyToggle: () -> Unit, onHelpOpen: () -> Unit,
-        onRouteConnection: (Int) -> Unit
+        onRouteConnection: (Int) -> Unit,
     ): Boolean {
         val pw = scale * 0.08f
         val ph = scale * 0.045f
@@ -426,12 +542,16 @@ class UIMainMenu(private val context: Context) {
         if (connectedMode == -1) {
             val swSize = scale * 0.025f
             val swX = plugX + pw * 0.4f
-            hitSwitch = vx in (swX - swSize * 2.5f)..(swX + swSize * 2.5f) && vy in (plugY - ph * 1.5f)..(plugY + ph * 1.5f)
-            hitPlug = vx in (plugX - pw - scale*0.06f)..(plugX + pw + scale*0.06f) && vy in (plugY - ph - scale*0.06f)..(plugY + ph + scale*0.06f)
+            hitSwitch =
+                vx in (swX - swSize * 2.5f)..(swX + swSize * 2.5f) && vy in (plugY - ph * 1.5f)..(plugY + ph * 1.5f)
+            hitPlug =
+                vx in (plugX - pw - scale * 0.06f)..(plugX + pw + scale * 0.06f) && vy in (plugY - ph - scale * 0.06f)..(plugY + ph + scale * 0.06f)
         } else {
             val swSize = scale * 0.025f
-            hitSwitch = vx in (plugX - swSize * 2.5f)..(plugX + swSize * 2.5f) && vy in (plugY - swSize * 2.5f)..(plugY + swSize * 2.5f)
-            hitPlug = vx in (plugX - pw - scale*0.06f)..(plugX + pw + scale*0.06f) && vy in (plugY - ph - scale*0.06f)..(plugY + ph + scale*0.06f)
+            hitSwitch =
+                vx in (plugX - swSize * 2.5f)..(plugX + swSize * 2.5f) && vy in (plugY - swSize * 2.5f)..(plugY + swSize * 2.5f)
+            hitPlug =
+                vx in (plugX - pw - scale * 0.06f)..(plugX + pw + scale * 0.06f) && vy in (plugY - ph - scale * 0.06f)..(plugY + ph + scale * 0.06f)
         }
 
         when (action) {
@@ -460,6 +580,7 @@ class UIMainMenu(private val context: Context) {
                     }
                 }
             }
+
             MotionEvent.ACTION_MOVE -> {
                 if (isDraggingPlug) {
                     val dx = vx - touchDownX
@@ -485,6 +606,7 @@ class UIMainMenu(private val context: Context) {
                     }
                 }
             }
+
             MotionEvent.ACTION_UP -> {
                 if (hitButtonOnDown != -1) {
                     when (hitButtonOnDown) {
@@ -564,12 +686,12 @@ class UIMainMenu(private val context: Context) {
                 }
                 hitPortOnDown = -1
             }
+
             MotionEvent.ACTION_CANCEL -> {
                 isDraggingPlug = false
                 hitPortOnDown = -1
             }
         }
-        val returnValue = true
-        return returnValue
+        return true
     }
 }

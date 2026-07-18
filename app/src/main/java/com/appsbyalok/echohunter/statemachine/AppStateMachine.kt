@@ -375,7 +375,7 @@ class SubMenuState(private val manager: AppStateManager) : IAppState {
                     4 -> manager.view.changeState(16)
                 }
             }, manager.view.onDisconnect)
-            15 -> manager.view.uiMainFrame.onTouch(vx, vy, action, scale, { route -> manager.view.onMenuRoute(route) }, { manager.view.onAppClose() })
+            15 -> manager.view.uiMainFrame.onTouch(vx, vy, action, scale, gs, { route -> manager.view.onMenuRoute(route) }, { manager.view.onAppClose() })
             17 -> manager.view.uiTerminal.onTouch(e, scale, gs, manager.view.context, manager.view.onAppClose)
             16 -> manager.view.uiSettings.onTouch(e, vx, vy, action, scale, targetW, targetH, gs, manager.view.onAppClose, manager.view.onWipeData, manager.view.onOrientationChange) { manager.view.resolveHudLayout() }
             else -> true
