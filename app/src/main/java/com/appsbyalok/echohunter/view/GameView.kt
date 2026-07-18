@@ -271,6 +271,10 @@ class GameView(context: Context) : View(context) {
     }
 
     fun changeState(newState: Int) {
+        // Safety: Reset touch controller whenever state changes to prevent hardlocked HUD elements
+        if (gs.state != newState) {
+            touchController.reset()
+        }
         gs.state = newState
         gs.stateTimer = 0f
         syncStateToManager()

@@ -121,7 +121,7 @@ class GameplayState(private val manager: AppStateManager) : IAppState {
         if (gs.showOverclockTextTimer > 0f) manager.view.hudRenderer.renderOverclockText(c, scale, width, height)
     }
     override fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean {
-        return manager.view.touchController.handleTouch(e, 0f, 0f, targetW, targetH, scale)
+        return manager.view.touchController.handleTouch(e, 0f, 0f)
     }
     override fun onBackPressed(gs: GameState): Boolean {
         manager.view.pauseGame()

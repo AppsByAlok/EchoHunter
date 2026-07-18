@@ -13,13 +13,8 @@ class TouchController(private val gs: GameState) {
     fun handleTouch(
         e: MotionEvent,
         offsetX: Float,
-        offsetY: Float,
-        targetW: Float,
-        targetH: Float,
-        scale: Float
+        offsetY: Float
     ): Boolean {
-        if (gs.state != 1 && gs.state != 8) return true
-
         val action = e.actionMasked
         val pointerIndex = e.actionIndex
         val pointerId = e.getPointerId(pointerIndex)
@@ -29,11 +24,42 @@ class TouchController(private val gs: GameState) {
         gs.touch.lastTouchY = vy
 
         when (action) {
-            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> onDown(pointerId, vx, vy)
-            MotionEvent.ACTION_MOVE -> onMove(e, offsetX, offsetY)
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_CANCEL -> onUp(pointerId, action, vx, vy)
+            MotionEvent.ACTION_DOWN -> {
+                reset() // Force clear ghost touches on fresh start
+                if (gs.state == 1 || gs.state == 8) onDown(pointerId, vx, vy)
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                if (gs.state == 1 || gs.state == 8) onDown(pointerId, vx, vy)
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (gs.state == 1 || gs.state == 8) onMove(e, offsetX, offsetY)
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> onUp(pointerId, action, vx, vy)
+            MotionEvent.ACTION_CANCEL -> reset()
         }
         return true
+    }
+
+    fun reset() {
+        gs.touch.moveTouchId = -1
+        gs.touch.attackTouchId = -1
+        gs.touch.manualAimTouchId = -1
+        gs.touch.trapTouchId = -1
+        gs.touch.sonarTouchId = -1
+
+        gs.controls.isMoveJoyActive = false
+        gs.controls.moveDirX = 0f
+        gs.controls.moveDirY = 0f
+        gs.controls.isAttackTouching = false
+        gs.controls.manualAimActive = false
+        gs.controls.isTrapPressed = false
+        gs.controls.isSonarPressed = false
+        gs.controls.isOverclockPressed = false
+        gs.controls.attackTapQueued = false
+        
+        gs.controls.isWeaponMenuOpen = false
+        gs.controls.isTrapMenuOpen = false
+        gs.controls.isSonarMenuOpen = false
     }
 
     private fun onDown(pointerId: Int, x: Float, y: Float) {
@@ -151,11 +177,8 @@ class TouchController(private val gs: GameState) {
         if (gs.gameMode == 2) {
             if (gs.tutorialSkipStepRect.contains(x, y)) {
                 (gs.activeObjective as? com.appsbyalok.echohunter.modes.TrainingObjective)?.skipStep(gs)
-                return
-            }
-            if (gs.tutorialSkipAllRect.contains(x, y)) {
+            } else if (gs.tutorialSkipAllRect.contains(x, y)) {
                 (gs.activeObjective as? com.appsbyalok.echohunter.modes.TrainingObjective)?.skipAll(gs)
-                return
             }
         }
 
@@ -182,12 +205,8 @@ class TouchController(private val gs: GameState) {
             gs.touch.sonarTouchId = -1
             gs.controls.isSonarPressed = false
         }
-        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
-            gs.controls.isAttackTouching = false
-            gs.controls.isOverclockPressed = false
-            gs.touch.attackTouchId = -1
-            gs.touch.trapTouchId = -1
-            gs.touch.sonarTouchId = -1
+        if (action == MotionEvent.ACTION_UP) {
+            reset() // Global cleanup on last finger up
         }
     }
 }
