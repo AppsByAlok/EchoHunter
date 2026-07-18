@@ -40,7 +40,7 @@ object SaveManager {
 
     // --- ORIENTATION SETTINGS ---
     // 0: Auto-Rotate, 1: Portrait, 2: Landscape, 3: Device Default
-    var screenOrientation: Int = 0
+    var screenOrientation: Int = 3
         private set
 
     // --- TERMINAL SETTINGS ---
