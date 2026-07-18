@@ -67,6 +67,7 @@ class GameView(context: Context) : View(context) {
     internal val uiArchives = UIArchives()
     internal val uiTerminal = UITerminal()
     internal val uiSettings = com.appsbyalok.echohunter.ui.UISettings()
+    internal val uiMainFrame = com.appsbyalok.echohunter.ui.UIMainFrame()
     internal val touchController = TouchController(gs)
 
     internal var storyStep = 0
@@ -81,7 +82,10 @@ class GameView(context: Context) : View(context) {
     var menuReturnState = 0
 
     // --- Callbacks for State Machine & UI ---
-    internal val onAppClose: () -> Unit = { changeState(menuReturnState) }
+    internal val onAppClose: () -> Unit = {
+        if (menuReturnState == 0) disconnectCable()
+        else changeState(menuReturnState)
+    }
     internal val onArchiveSelect: (Int) -> Unit = { lvl -> startGame(0, lvl) }
     internal val onHelpOpen: () -> Unit = { changeState(3) }
     internal val onHelpClose: () -> Unit = { changeState(0) }
@@ -101,24 +105,52 @@ class GameView(context: Context) : View(context) {
         }
     }
     internal val onMenuRoute: (Int) -> Unit = { route ->
+        val callerState = gs.state
         when (route) {
             0 -> { // 0 = Sandbox -> Campaign Archives
                 gs.gameMode = 0
-                menuReturnState = 0
+                menuReturnState = callerState
                 changeState(11)
             }
             1 -> {
-                if (SaveManager.isStoryModeUnlocked) {
-                    startGame(1, 1)
-                } else {
-                    gs.showGlobalMessage("ADMIN: \"MAINFRAME ACCESS DENIED.\"", 2f)
-                    uiMainMenu.turnOffSwitch()
-                    EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
-                }
+                // Route 1 now goes to Mainframe/Simulations Hub
+                menuReturnState = callerState
+                changeState(15) // State 15: UIMainFrame
             }
             2 ->{// 2 = Nano-OS -> OS Menu
-                menuReturnState = 0
+                menuReturnState = callerState
                 changeState(14)
+            }
+            100 -> { // 100 = Training Route
+                gs.gameMode = 2 // TrainingMode
+                startGame(2, 1) // Mode 2, Level 1
+            }
+            101 -> { // 101 = Story Route (Act 1)
+                gs.selectedStoryAct = 0
+                startGame(1, 1)
+            }
+            102 -> { // Act 2
+                gs.selectedStoryAct = 1
+                startGame(1, 16) // Starts from level 16
+            }
+            103 -> { // Act 3
+                gs.selectedStoryAct = 2
+                startGame(1, 31) // Starts from level 31
+            }
+            104 -> { // Act 1 (Corrupted)
+                gs.selectedStoryAct = 0
+                gs.difficulty = 1
+                startGame(1, 1)
+            }
+            105 -> { // Act 2 (Corrupted)
+                gs.selectedStoryAct = 1
+                gs.difficulty = 1
+                startGame(1, 16)
+            }
+            106 -> { // Act 3 (Corrupted)
+                gs.selectedStoryAct = 2
+                gs.difficulty = 1
+                startGame(1, 31)
             }
         }
     }
@@ -199,7 +231,14 @@ class GameView(context: Context) : View(context) {
 
     fun returnToArchives() {
         cleanupLevelEffects()
-        changeState(11) // State 11 is UIArchives
+        gs.isLevelCleared = false
+        
+        // Return to Hub (15) if Story/Training, else Archives (11)
+        if (gs.gameMode == 1 || gs.gameMode == 2) {
+            changeState(15)
+        } else {
+            changeState(11)
+        }
         EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
     }
 
@@ -239,7 +278,7 @@ class GameView(context: Context) : View(context) {
             3 -> stateManager.helpState
             4, 5, 6, 7 -> stateManager.storyState
             12 -> stateManager.victoryState
-            10, 11, 13, 14, 15, 16 -> stateManager.subMenuState
+            10, 11, 13, 14, 15, 16, 17 -> stateManager.subMenuState
             else -> stateManager.mainMenuState
         }
         if (stateManager.currentState != newStateObj) {
@@ -248,6 +287,7 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun takeDamage(scale: Float) {
+        if (gs.gameMode == 2) return
         if (gs.modGodMode && gs.hp <= 1) {
             StoryProtocol.showIngameMessage("MOD: GOD MODE PREVENTED DEATH", 1.5f)
             return

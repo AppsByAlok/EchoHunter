@@ -242,6 +242,34 @@ object SaveManager {
     var previousScore: Long = 0L
         private set
 
+    // --- TUTORIAL SETTINGS ---
+    var isUiTutorialSeen: Boolean = false
+        private set
+    var isGameTutorialCompleted: Boolean = false
+        private set
+    var tutorialStep: Int = 0 // For tracking specific steps in game tutorial
+
+    fun setUiTutorialSeen(seen: Boolean) {
+        isUiTutorialSeen = seen
+        prefs.edit().putBoolean("isUiTutorialSeen", seen).apply()
+    }
+
+    fun setGameTutorialCompleted(completed: Boolean) {
+        isGameTutorialCompleted = completed
+        prefs.edit().putBoolean("isGameTutorialCompleted", completed).apply()
+    }
+
+    fun resetTutorials() {
+        isUiTutorialSeen = false
+        isGameTutorialCompleted = false
+        tutorialStep = 0
+        prefs.edit()
+            .putBoolean("isUiTutorialSeen", false)
+            .putBoolean("isGameTutorialCompleted", false)
+            .putInt("tutorialStep", 0)
+            .apply()
+    }
+
     fun init(context: Context) {
         prefs = context.getSharedPreferences("EchoSaveInfo", Context.MODE_PRIVATE)
 
@@ -262,6 +290,11 @@ object SaveManager {
         activeWeapon = prefs.getInt("activeWeapon", 1)
         activeTrap = prefs.getInt("activeTrap", 2)
         isAutoPilotEnabled = prefs.getBoolean("isAutoPilotEnabled", false)
+
+        // Load Tutorials
+        isUiTutorialSeen = prefs.getBoolean("isUiTutorialSeen", false)
+        isGameTutorialCompleted = prefs.getBoolean("isGameTutorialCompleted", false)
+        tutorialStep = prefs.getInt("tutorialStep", 0)
 
         // Load Streaks
         currentStoryStreak = prefs.getInt("currStory", 0)

@@ -31,15 +31,20 @@ class TouchController(private val gs: GameState) {
         when (action) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> onDown(pointerId, vx, vy)
             MotionEvent.ACTION_MOVE -> onMove(e, offsetX, offsetY)
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_CANCEL -> onUp(pointerId, action)
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_CANCEL -> onUp(pointerId, action, vx, vy)
         }
         return true
     }
 
     private fun onDown(pointerId: Int, x: Float, y: Float) {
+        if (gs.gameMode == 2) {
+            if (gs.tutorialSkipStepRect.contains(x, y)) return
+            if (gs.tutorialSkipAllRect.contains(x, y)) return
+        }
         val layout = gs.hudLayout
         layout.controlAt(x, y)?.takeUnless {
-            gs.controls.activeAttackMode == AttackMode.MANUAL_AIM && it.control.action == HudAction.ATTACK
+            (gs.gameMode == 2 && it.control.action !in gs.tutorialEnabledActions) ||
+                (gs.controls.activeAttackMode == AttackMode.MANUAL_AIM && it.control.action == HudAction.ATTACK)
         }?.let { resolved ->
             layout.setActionAnchor(resolved)
             when (resolved.control.action) {
@@ -101,7 +106,8 @@ class TouchController(private val gs: GameState) {
             return
         }
 
-        if (gs.controls.activeAttackMode == AttackMode.MANUAL_AIM &&
+        if ((gs.gameMode != 2 || HudAction.ATTACK in gs.tutorialEnabledActions) &&
+            gs.controls.activeAttackMode == AttackMode.MANUAL_AIM &&
             layout.isManualAimHit(x, y) && gs.touch.manualAimTouchId == -1) {
             gs.touch.manualAimTouchId = pointerId
             gs.controls.manualAimActive = true
@@ -141,7 +147,18 @@ class TouchController(private val gs: GameState) {
         }
     }
 
-    private fun onUp(pointerId: Int, action: Int) {
+    private fun onUp(pointerId: Int, action: Int, x: Float, y: Float) {
+        if (gs.gameMode == 2) {
+            if (gs.tutorialSkipStepRect.contains(x, y)) {
+                (gs.activeObjective as? com.appsbyalok.echohunter.modes.TrainingObjective)?.skipStep(gs)
+                return
+            }
+            if (gs.tutorialSkipAllRect.contains(x, y)) {
+                (gs.activeObjective as? com.appsbyalok.echohunter.modes.TrainingObjective)?.skipAll(gs)
+                return
+            }
+        }
+
         if (pointerId == gs.touch.manualAimTouchId) {
             gs.controls.manualAimActive = false
             gs.touch.manualAimTouchId = -1

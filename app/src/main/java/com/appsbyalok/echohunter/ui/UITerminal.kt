@@ -31,6 +31,7 @@ import com.appsbyalok.echohunter.ui.terminal.LevelCommand
 import com.appsbyalok.echohunter.ui.terminal.MarketCommand
 import com.appsbyalok.echohunter.ui.terminal.OutputMode
 import com.appsbyalok.echohunter.ui.terminal.RebootCommand
+import com.appsbyalok.echohunter.ui.terminal.ResetTutorialCommand
 import com.appsbyalok.echohunter.ui.terminal.ScanCommand
 import com.appsbyalok.echohunter.ui.terminal.StoryLogCommand
 import com.appsbyalok.echohunter.ui.terminal.SudoCommand
@@ -84,6 +85,7 @@ class UITerminal {
 
     private val files = mapOf(
         "ROOT_TERM.SH" to "1.2 KB",
+        "MAINFRAME.SYS" to "8.4 KB",
         "ECHO_PROTOCOL.CFG" to "4.0 KB",
         "USER_DATA.LOG" to "128 KB",
         "PROJECT_ECHO.DOC" to "64 KB",
@@ -175,6 +177,7 @@ class UITerminal {
         CommandRegistry.register(FixCommand())
         CommandRegistry.register(GlitchCommand())
         CommandRegistry.register(UICommand())
+        CommandRegistry.register(ResetTutorialCommand())
 
         addLines("NANO-OS [Version 4.2.0-ROOT]")
         addLines("(c) $currentYear ECHO CORP. ALL RIGHTS RESERVED.")

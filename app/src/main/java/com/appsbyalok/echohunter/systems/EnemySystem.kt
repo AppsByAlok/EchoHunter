@@ -227,6 +227,14 @@ class EnemySystem {
 
         for (i in 0 until n) {
             if (ex[i] < -1000f) continue
+
+            // Training targets stay at their briefing position and never attack the player.
+            if (gs.gameMode == 2 && gs.tutorialHighlightedEnemyIndex == i) {
+                evx[i] = 0f
+                evy[i] = 0f
+                vis[i] = 1f
+                continue
+            }
             
             // --- ANTI-STUCK LOGIC ---
             // If already in a wall, try to push out to the center of the current tile or a neighbor
@@ -677,6 +685,16 @@ class EnemySystem {
                             c.drawText("?", screenEx, screenEy - entitySize - scale * 0.01f, pText)
                         }
                     }
+                }
+
+                if (gs.gameMode == 2 && gs.tutorialHighlightedEnemyIndex == i) {
+                    p.style = Paint.Style.STROKE
+                    p.strokeWidth = scale * 0.006f
+                    p.color = GameColors.YELLOW
+                    c.drawCircle(screenEx, screenEy, entitySize * 1.8f, p)
+                    pText.color = GameColors.YELLOW
+                    pText.textSize = scale * 0.022f
+                    c.drawText("TRAINING TARGET", screenEx, screenEy - entitySize * 2.2f, pText)
                 }
 
                 // --- NEW: DRAW HEALTH BAR (When HP > 1 and visible) ---

@@ -228,6 +228,7 @@ class UISettings {
                 MotionEvent.ACTION_UP -> {
                     if (hitOnDown == 20 && confirmYesRect.contains(vx, vy)) {
                         SaveManager.clearAllData()
+                        SaveManager.resetTutorials()
                         EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 200)
                         showWipeConfirm = false
                         onWipe()

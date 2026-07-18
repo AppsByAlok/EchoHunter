@@ -45,7 +45,8 @@ class HUDRenderer(private val context: Context) {
         }
 
         // --- 3. MANUAL AIM TOUCHPAD (Visual Boundary) ---
-        if (gs.controls.activeAttackMode == AttackMode.MANUAL_AIM) {
+        if (gs.controls.activeAttackMode == AttackMode.MANUAL_AIM &&
+            (gs.gameMode != 2 || HudAction.ATTACK in gs.tutorialEnabledActions)) {
             p.style = Paint.Style.STROKE; p.strokeWidth = scale * 0.001f; p.color = 0x11FF0000
             if (gs.hudLayout.manualAimMode == com.appsbyalok.echohunter.input.MovementMode.STATIC) {
                 c.drawCircle(gs.hudLayout.manualAimX, gs.hudLayout.manualAimY, gs.hudLayout.manualAimRadius, p)
@@ -56,6 +57,7 @@ class HUDRenderer(private val context: Context) {
 
         // --- 4. ACTION BUTTONS ---
         gs.hudLayout.controls.forEach { resolved ->
+            if (gs.gameMode == 2 && resolved.control.action !in gs.tutorialEnabledActions) return@forEach
             when (resolved.control.action) {
                 HudAction.ATTACK -> drawAttackUI(c, scale, gs, resolved)
                 HudAction.OVERCLOCK -> drawOverclockButton(c, gs, resolved)
@@ -66,19 +68,19 @@ class HUDRenderer(private val context: Context) {
         }
 
         // --- 5. RADIAL MENUS (Upper Arc Distribution) ---
-        if (gs.controls.isWeaponMenuOpen) {
+        if (gs.controls.isWeaponMenuOpen && (gs.gameMode != 2 || HudAction.ATTACK in gs.tutorialEnabledActions)) {
             drawRadialMenu(c, scale, gs.hudLayout.atkX, gs.hudLayout.atkY, 
                 arrayOf("SPIKE", "BLAST", "SLUG"), 
                 intArrayOf(GameColors.TEXT, GameColors.YELLOW, GameColors.PULSE),
                 gs.controls.selectedWeaponIdx)
         }
-        if (gs.controls.isTrapMenuOpen) {
+        if (gs.controls.isTrapMenuOpen && (gs.gameMode != 2 || HudAction.TRAP in gs.tutorialEnabledActions)) {
             drawRadialMenu(c, scale, gs.hudLayout.trapX, gs.hudLayout.trapY, 
                 arrayOf("CAMO", "DECOY", "EMP"), 
                 intArrayOf(GameColors.TEXT, GameColors.OVERCLOCK, GameColors.SHIELD), 
                 gs.controls.selectedTrapIdx)
         }
-        if (gs.controls.isSonarMenuOpen) {
+        if (gs.controls.isSonarMenuOpen && (gs.gameMode != 2 || HudAction.SONAR in gs.tutorialEnabledActions)) {
             drawRadialMenu(c, scale, gs.hudLayout.pulseX, gs.hudLayout.pulseY, arrayOf("MANUAL", "LOCK"), intArrayOf(GameColors.TEXT, GameColors.SHIELD), gs.controls.selectedSonarIdx)
         }
 

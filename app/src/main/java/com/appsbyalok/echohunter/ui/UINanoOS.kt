@@ -35,14 +35,14 @@ class UINanoOS {
     private val titles = arrayOf(
         "</> EXPLOIT.exe",
         "[+] LOADOUT.sys",
-        "[■] ARCHIVES.dir",
+        "[Σ] MAINFRAME.sys",
         ">_ ROOT_TERM.sh",
         "[*] SETTINGS.cfg"
     )
     private val subs = arrayOf(
         "Firmware Upgrades",
         "Hardware Weapons",
-        "Simulation Memory",
+        "Simulation Control",
         "System Control & Logs",
         "System Configuration"
     )

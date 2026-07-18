@@ -14,6 +14,8 @@
     <string name="ui_hint_connect">&gt; CONNECT CABLE TO PROTOCOL PORT &lt;</string>
     <string name="ui_hint_toggle">&gt; TOGGLE PLUG SWITCH TO INITIALIZE &lt;</string>
     <string name="ui_hint_initializing">&gt; INITIALIZING… &lt;</string>
+    <string name="ui_hint_tutorial_drag">DRAG THE CABLE PLUG TO A PORT</string>
+    <string name="ui_hint_tutorial_switch">TOGGLE THE RED SWITCH TO CONNECT</string>
 
     <!-- Help Screen -->
     <string name="ui_system_repaired">SYSTEM REPAIRED</string>

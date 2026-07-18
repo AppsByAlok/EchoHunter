@@ -43,6 +43,7 @@ class GameEngine(
         gs.timeSinceStart += dt
         gs.stateTimer += dt
         StoryProtocol.update(dt)
+        gs.isBlackoutActive = StoryProtocol.isBlackoutActive
 
         if (gs.state == 0) {
             effectSys.update(dt, targetH)
@@ -121,60 +122,67 @@ class GameEngine(
         gs.updatePulseRadius(simDt, maxSonarRad)
 
 
-        if (gs.isLevelCleared && gs.state == 1 && gs.gameMode == 0) {
-            gs.isLevelCleared = false
-            val config = LevelEngine.getLevelConfig(gs.currentLevel)
-            var finalReward = config.clearRewardKB
-            if (gs.currentLevel < SaveManager.maxCampaignLevel) finalReward /= 2
-            finalReward += (finalReward * UpgradeSystem.getRewardBonusPercent()).toLong()
-
-            gs.collectedDataKB += finalReward
-            SaveManager.addData(finalReward)
-            
-            if (gs.currentLevel == Int.MAX_VALUE) {
-                gs.showGlobalMessage("LIMIT REACHED: \"YOU HAVE EXHAUSTED THE MULTIVERSE.\"\nADMIN: \"REST IN BITS, LEGEND.\"", 10f)
-            } else {
-                SaveManager.updateCampaignProgress(gs.currentLevel)
+        if (gs.isLevelCleared && gs.state == 1) {
+            if (gs.gameMode == 2) {
+                // Training Mode Completion: Redirect to Mainframe
+                onChangeState?.invoke(15)
+                return
             }
 
-            // Calculate Stars based on specific achievements
-            // * - just finish game
-            // ** - finish without taking damage
-            // *** - finish in time
-            // **** - hard mode finish
-            // ***** - hard mode no damage or on time
+            if (gs.gameMode == 0) {
+                gs.isLevelCleared = false
+                val config = LevelEngine.getLevelConfig(gs.currentLevel)
+                var finalReward = config.clearRewardKB
+                if (gs.currentLevel < SaveManager.maxCampaignLevel) finalReward /= 2
+                finalReward += (finalReward * UpgradeSystem.getRewardBonusPercent()).toLong()
 
-            val duration = gs.timeSinceStart - gs.levelStartTime
-            val isHard = gs.difficulty == 1
-            val noDamage = !gs.tookDamageInLevel
-            val underPar = duration <= config.parTime
-            
-            // Record achievements (masks)
-            var recordsMask = 0
-            if (noDamage) recordsMask = recordsMask or 1 // NO DAMAGE
-            if (noDamage && underPar) recordsMask = recordsMask or 2 // PERFECT CLEAR
-            if (gs.sonarTimer == 0f && !gs.pulse) recordsMask = recordsMask or 8 // NO SONAR
-            
-            // MANUAL AIM logic: Award if NOT using AUTO_AIM
-            if (gs.controls.activeAttackMode != com.appsbyalok.echohunter.input.AttackMode.AUTO_AIM) {
-                recordsMask = recordsMask or 16 
+                gs.collectedDataKB += finalReward
+                SaveManager.addData(finalReward)
+
+                if (gs.currentLevel == Int.MAX_VALUE) {
+                    gs.showGlobalMessage("LIMIT REACHED: \"YOU HAVE EXHAUSTED THE MULTIVERSE.\"\nADMIN: \"REST IN BITS, LEGEND.\"", 10f)
+                } else {
+                    SaveManager.updateCampaignProgress(gs.currentLevel)
+                }
+
+                // Calculate Stars based on specific achievements
+                // * - just finish game
+                // ** - finish without taking damage
+                // *** - finish in time
+                // **** - hard mode finish
+                // ***** - hard mode no damage or on time
+
+                val duration = gs.timeSinceStart - gs.levelStartTime
+                val isHard = gs.difficulty == 1
+                val noDamage = !gs.tookDamageInLevel
+                val underPar = duration <= config.parTime
+
+                // Record achievements (masks)
+                var recordsMask = 0
+                if (noDamage) recordsMask = recordsMask or 1 // NO DAMAGE
+                if (noDamage && underPar) recordsMask = recordsMask or 2 // PERFECT CLEAR
+                if (gs.sonarTimer == 0f && !gs.pulse) recordsMask = recordsMask or 8 // NO SONAR
+
+                // MANUAL AIM logic: Award if NOT using AUTO_AIM
+                if (gs.controls.activeAttackMode != com.appsbyalok.echohunter.input.AttackMode.AUTO_AIM) {
+                    recordsMask = recordsMask or 16
+                }
+
+                if (!gs.isAutoPilotActive) recordsMask = recordsMask or 64 // NO AUTOPILOT
+
+                val stars = when {
+                    isHard && noDamage && underPar -> 5
+                    isHard -> 4
+                    underPar -> 3
+                    noDamage -> 2
+                    else -> 1
+                }
+
+                SaveManager.saveLevelStats(gs.currentLevel, duration, stars, recordsMask, isHard)
+                EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 500)
+                onChangeState?.invoke(12)
+                return
             }
-            
-            if (!gs.isAutoPilotActive) recordsMask = recordsMask or 64 // NO AUTOPILOT
-            
-            val stars = when {
-                isHard && noDamage && underPar -> 5
-                isHard -> 4
-                underPar -> 3
-                noDamage -> 2
-                else -> 1
-            }
-
-            SaveManager.saveLevelStats(gs.currentLevel, duration, stars, recordsMask, isHard)
-
-            EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 500)
-            onChangeState?.invoke(12)
-            return
         }
 
         effectSys.recordTrail(gs.px, gs.py)
@@ -191,13 +199,13 @@ class GameEngine(
                 gs.isLevelCleared = true
             }
 
-            spawnerSys.update(simDt, gs, viewportW, viewportH, scale)
+            if (gs.gameMode != 2) spawnerSys.update(simDt, gs, viewportW, viewportH, scale)
             enemySys.updateEnemies(simDt, gs, effectSys, viewportW, viewportH, scale)
             enemySys.updateBoss(simDt, gs, effectSys, scale)
             enemySys.updatePowerups(simDt, gs, effectSys, viewportW, viewportH)
 
             collisionSys.checkCollisions(scale, onDamage!!, onScore!!, onCoreUnlock!!)
-            
+
             // Boss Spawns & Sector Story triggers only in main gameplay
             if (gs.state == 1) gs.modeStrategy.checkProgression(context, gs, scale, onBossTrigger!!, onStoryState!!)
 
@@ -229,7 +237,7 @@ class GameEngine(
 
         val columns = gs.gridMap!!.size
         val rows = gs.gridMap!![0].size
-        
+
         // NAYA: Initialize wall visibility map
         gs.wallVisMap = Array(columns) { FloatArray(rows) }
 
@@ -261,9 +269,9 @@ class GameEngine(
         gs.activeObjective.setupObjective(gs, enemySys, spawnerSys, targetW, targetH, scale)
 
         // NAYA: Physically spawn enemies immediately so the map isn't empty
-        if (gs.spawnerNodes.isNotEmpty()) {
+        if (gs.gameMode != 2 && gs.spawnerNodes.isNotEmpty()) {
             val preSpawnCount = if (gs.difficulty == 1) 10 else 7
-            for (i in 0 until preSpawnCount) {
+            repeat(preSpawnCount) {
                 val node = gs.spawnerNodes.random()
                 for (j in 0 until enemySys.n) {
                     if (enemySys.ex[j] < -1000f) {

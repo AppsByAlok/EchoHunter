@@ -75,7 +75,8 @@ class MainMenuState(private val manager: AppStateManager) : IAppState {
         manager.view.uiMainMenu.draw(c, scale, gs, width, height, manager.view.effectSys)
     }
     override fun onTouch(e: MotionEvent, vx: Float, vy: Float, action: Int, gs: GameState, scale: Float, targetW: Float, targetH: Float): Boolean {
-        return manager.view.uiMainMenu.onTouch(vx, vy, action, scale, targetW, targetH, manager.view, gs, manager.view.onDifficultyToggle, manager.view.onHelpOpen,
+        return manager.view.uiMainMenu.onTouch(vx, vy, action, scale,
+            manager.view, gs, manager.view.onDifficultyToggle, manager.view.onHelpOpen,
             manager.view.onMenuRoute)
     }
     override fun onBackPressed(gs: GameState): Boolean = false
@@ -353,7 +354,8 @@ class SubMenuState(private val manager: AppStateManager) : IAppState {
             11 -> manager.view.uiArchives.draw(c, width, height, gs, scale, dt)
             13 -> manager.view.uiArsenal.draw(c, width, height, scale, gs, dt)
             14 -> manager.view.uiNanoOS.draw(c, width, height, scale, gs.timeSinceStart)
-            15 -> manager.view.uiTerminal.draw(c, width, height, scale)
+            15 -> manager.view.uiMainFrame.draw(c, width, height, gs, scale, dt)
+            17 -> manager.view.uiTerminal.draw(c, width, height, scale)
             16 -> manager.view.uiSettings.draw(c, width, height, scale, gs)
         }
     }
@@ -368,12 +370,13 @@ class SubMenuState(private val manager: AppStateManager) : IAppState {
                 when (appIndex) {
                     0 -> manager.view.changeState(10)
                     1 -> manager.view.changeState(13)
-                    2 -> manager.view.changeState(11)
-                    3 -> manager.view.changeState(15)
+                    2 -> manager.view.changeState(15) // State 15: UIMainFrame (Simulation Control)
+                    3 -> manager.view.changeState(17)
                     4 -> manager.view.changeState(16)
                 }
             }, manager.view.onDisconnect)
-            15 -> manager.view.uiTerminal.onTouch(e, scale, gs, manager.view.context, manager.view.onAppClose)
+            15 -> manager.view.uiMainFrame.onTouch(vx, vy, action, scale, { route -> manager.view.onMenuRoute(route) }, { manager.view.onAppClose() })
+            17 -> manager.view.uiTerminal.onTouch(e, scale, gs, manager.view.context, manager.view.onAppClose)
             16 -> manager.view.uiSettings.onTouch(e, vx, vy, action, scale, targetW, targetH, gs, manager.view.onAppClose, manager.view.onWipeData, manager.view.onOrientationChange) { manager.view.resolveHudLayout() }
             else -> true
         }
@@ -381,8 +384,12 @@ class SubMenuState(private val manager: AppStateManager) : IAppState {
     override fun onBackPressed(gs: GameState): Boolean {
         if (gs.state == 13 && manager.view.uiArsenal.handleBack()) return true
         if (gs.state == 16 && manager.view.uiSettings.handleBack { manager.view.resolveHudLayout() }) return true
-        if (gs.state == 10 || gs.state == 11 || gs.state == 13 || gs.state == 15 || gs.state == 16) manager.view.onAppClose()
-        else if (gs.state == 14) manager.view.disconnectCable()
+        if (gs.state == 15 && manager.view.uiMainFrame.handleBackPressed()) return true
+        if (gs.state == 10 || gs.state == 11 || gs.state == 13 || gs.state == 15 || gs.state == 17 || gs.state == 16) {
+            manager.view.onAppClose()
+        } else if (gs.state == 14) {
+            manager.view.disconnectCable()
+        }
         return true
     }
 }

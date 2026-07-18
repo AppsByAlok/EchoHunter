@@ -12,6 +12,7 @@ object StoryProtocol {
     var isGlitchActive: Boolean = false
     var areControlsInverted: Boolean = false
     var isBlackoutActive: Boolean = false
+    var blackoutAlpha: Float = 0.8f // NAYA: Controls depth of tutorial darkness
 
     // --- Typewriter Effect ---
     var typewriterText: String? = null

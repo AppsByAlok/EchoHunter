@@ -97,7 +97,8 @@ class WorldRenderer(
 
             // Calculate node visibility for darkness levels
             var nodeAlpha = 1.0f
-            if (gs.isDarknessLevel && !gs.modFullVisibility) {
+            val applyDarkness = gs.isDarknessLevel || StoryProtocol.isBlackoutActive
+            if (applyDarkness && !gs.modFullVisibility) {
                 val dx = node.x - gs.px
                 val dy = node.y - gs.py
                 val d2 = dx * dx + dy * dy
@@ -158,9 +159,9 @@ class WorldRenderer(
             if (node.state == com.appsbyalok.echohunter.systems.SpawnState.SELF_DESTROYING) {
                 p.style = Paint.Style.STROKE
                 p.color = GameColors.OVERCLOCK
-                p.alpha = (alphaInt * (0.7f + 0.3f * kotlin.math.sin(gs.timeSinceStart * 25f))).toInt()
+                p.alpha = (alphaInt * (0.7f + 0.3f * sin(gs.timeSinceStart * 25f))).toInt()
                 p.strokeWidth = scale * 0.008f
-                val jitter = scale * 0.005f * kotlin.math.sin(gs.timeSinceStart * 50f)
+                val jitter = scale * 0.005f * sin(gs.timeSinceStart * 50f)
                 c.drawRect(nx - r - jitter, ny - r - jitter, nx + r + jitter, ny + r + jitter, p)
             }
 
@@ -197,9 +198,9 @@ class WorldRenderer(
             if (node.state == com.appsbyalok.echohunter.systems.SpawnState.SELF_DESTROYING) {
                 p.style = Paint.Style.STROKE
                 p.color = GameColors.OVERCLOCK
-                p.alpha = (alphaInt * (0.7f + 0.3f * kotlin.math.sin(gs.timeSinceStart * 25f))).toInt()
+                p.alpha = (alphaInt * (0.7f + 0.3f * sin(gs.timeSinceStart * 25f))).toInt()
                 p.strokeWidth = scale * 0.008f
-                val jitter = scale * 0.005f * kotlin.math.sin(gs.timeSinceStart * 50f)
+                val jitter = scale * 0.005f * sin(gs.timeSinceStart * 50f)
                 c.drawRect(nx - r - jitter, ny - r - jitter, nx + r + jitter, ny + r + jitter, p)
             }
 
@@ -315,7 +316,8 @@ class WorldRenderer(
                 val d2 = dx * dx + dy * dy
 
                 var wallAlpha = 0f
-                if (!gs.isDarknessLevel || gs.modFullVisibility) {
+                val applyDarkness = gs.isDarknessLevel || StoryProtocol.isBlackoutActive
+                if (!applyDarkness || gs.modFullVisibility) {
                     wallAlpha = 1.0f // Normal levels have full scan visibility
                 } else {
                     // 1. Reveal by Passive Aura (Player's close range light)
@@ -394,7 +396,7 @@ class WorldRenderer(
                 if (nearest != null) {
                     val dx = nearest.x - gs.px
                     val dy = nearest.y - gs.py
-                    val dist = kotlin.math.sqrt(dx * dx + dy * dy)
+                    val dist = sqrt(dx * dx + dy * dy)
                     if (dist > scale * 0.2f) {
                         val lineLen = scale * 0.2f
                         val dirX = dx / dist
@@ -432,15 +434,15 @@ class WorldRenderer(
             config.features.contains(com.appsbyalok.echohunter.data.LevelFeature.ESCAPE) && gs.gameMode == 0
 
         // Now Escape level also triggers drawCore!
-        if (isDefense || isEscape || gs.state == 8 || gs.state == 9) {
-            drawCore(c, scale, gs, viewportW, viewportH, screenPlayerX, screenPlayerY)
+        if (isDefense || isEscape || gs.state == 8 || gs.state == 9 || (gs.gameMode == 2 && gs.tutorialGateOpen)) {
+            drawCore(c, scale, gs, viewportW, screenPlayerX, screenPlayerY)
         }
 
         // 6. RENDER DECOYS / MINES / TRAPS
         for (trap in gs.activeTraps) {
             val tx = trap.x - gs.cameraX
             val ty = trap.y - gs.cameraY
-            val alpha = (kotlin.math.min(1f, trap.timer / 0.5f) * 255).toInt()
+            val alpha = (min(1f, trap.timer / 0.5f) * 255).toInt()
             
             p.style = Paint.Style.STROKE
             p.strokeWidth = scale * 0.005f
@@ -448,7 +450,7 @@ class WorldRenderer(
             when (trap.type) {
                 1 -> { // DECOY
                     p.color = (alpha shl 24) or (GameColors.PULSE and 0xFFFFFF)
-                    val holoPulse = kotlin.math.sin(gs.timeSinceStart * 20f) * scale * 0.005f
+                    val holoPulse = sin(gs.timeSinceStart * 20f) * scale * 0.005f
                     c.drawCircle(tx, ty, scale * 0.02f + holoPulse, p)
                     c.drawCircle(tx, ty, scale * 0.035f - holoPulse, p)
                 }
@@ -460,8 +462,8 @@ class WorldRenderer(
                     p.style = Paint.Style.STROKE
                     p.strokeWidth = scale * 0.003f
                     p.color = (alpha shl 24) or (GameColors.YELLOW and 0xFFFFFF)
-                    val pulse = kotlin.math.sin(gs.timeSinceStart * 10f) * scale * 0.015f
-                    c.drawCircle(tx, ty, scale * 0.03f + kotlin.math.max(0f, pulse), p)
+                    val pulse = sin(gs.timeSinceStart * 10f) * scale * 0.015f
+                    c.drawCircle(tx, ty, scale * 0.03f + max(0f, pulse), p)
                 }
                 3 -> { // STASIS PULSE
                     p.color = (alpha shl 24) or (0xFF00FFFF.toInt() and 0xFFFFFF)
@@ -612,7 +614,6 @@ class WorldRenderer(
         scale: Float,
         gs: GameState,
         targetW: Float,
-        targetH: Float,
         screenPlayerX: Float,
         screenPlayerY: Float,
     ) {
@@ -737,7 +738,7 @@ class WorldRenderer(
                 }
 
                 // B. ESCAPE MODE VISUALS (Exit Portal Portal Logic)
-                isEscape && gs.state != 8 -> {
+                (isEscape || (gs.gameMode == 2 && gs.tutorialGateOpen)) && gs.state != 8 -> {
                     if (gs.escapeGateActive) {
                         // Active Portal (Green Neon Pulse)
                         p.style = Paint.Style.STROKE

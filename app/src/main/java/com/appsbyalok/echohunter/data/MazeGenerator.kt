@@ -29,6 +29,7 @@ object MazeGenerator {
 
         // Map LevelFeatures dynamically to spatial layouts
         val type = when {
+            gameMode == 2 -> MazeType.LABYRINTH // Training concludes with a sonar-guided maze escape.
             config.features.contains(LevelFeature.ADMIN_BONUS) -> MazeType.ARENA
             config.features.contains(LevelFeature.ESCAPE) -> MazeType.LABYRINTH   // Escape/Maze take priority for layout
             config.features.contains(LevelFeature.CLEAN_SWEEP) -> MazeType.LABYRINTH // Intense hunt in complex paths

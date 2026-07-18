@@ -9,12 +9,14 @@ import com.appsbyalok.echohunter.data.StoryProtocol
 import com.appsbyalok.echohunter.data.UpgradeSystem
 import com.appsbyalok.echohunter.input.ControlsState
 import com.appsbyalok.echohunter.input.HUDLayout
+import com.appsbyalok.echohunter.input.HudAction
 import com.appsbyalok.echohunter.input.TouchState
 import com.appsbyalok.echohunter.modes.CampaignMode
 import com.appsbyalok.echohunter.modes.GameModeStrategy
 import com.appsbyalok.echohunter.modes.IGameObjective
 import com.appsbyalok.echohunter.modes.StandardObjective
 import com.appsbyalok.echohunter.modes.StoryMode
+import com.appsbyalok.echohunter.modes.TrainingMode
 import com.appsbyalok.echohunter.utils.EchoAudioManager
 import kotlin.math.max
 import kotlin.math.min
@@ -22,11 +24,12 @@ import kotlin.math.min
 class GameState {
     var activeObjective: IGameObjective = StandardObjective() // Current goal the player needs to fulfill
     var modeStrategy: GameModeStrategy = CampaignMode() // Logic handler for the active game mode
-    var gameMode = 0 // Identifier for current game mode (0: Campaign/Archives, 1: Story)
+    var gameMode = 0 // Identifier for current game mode (0: Campaign/Archives, 1: Story, 2: Training)
         set(value) {
             field = value
             modeStrategy = when (value) {
                 1 -> StoryMode()
+                2 -> TrainingMode()
                 else -> CampaignMode()
             }
         }
@@ -228,6 +231,10 @@ class GameState {
 
     var hitStopTimer = 0f // Duration to freeze the game momentarily for impact feedback
 
+    var isBlackoutActive = false
+    var tutorialEnabledActions: Set<HudAction> = HudAction.entries.toSet()
+    var tutorialHighlightedEnemyIndex = -1
+    var tutorialGateOpen = false
     var isPerfectEnd = false // Flag if the level was completed without taking damage
     var tookDamageInLevel = false // Track if any damage was taken in the current level
     var coreX = 0f // Target X position for the end-level core sequence
@@ -239,6 +246,9 @@ class GameState {
     var bombTargetX = -9999f
     var bombTargetY = -9999f
     var whiteFlash = 0f // Intensity of the screen-clearing white flash effect
+
+    val tutorialSkipStepRect = android.graphics.RectF()
+    val tutorialSkipAllRect = android.graphics.RectF()
 
     var chromaticIntensity = 0f // Intensity of the chromatic aberration post-processing effect
     var shockwaveR = 0f // Current radius of a visual shockwave effect
@@ -346,6 +356,10 @@ class GameState {
     fun resetGame() {
         score = 0; combo = 0; wave = 1
         hp = maxHp
+        isBlackoutActive = false
+        tutorialEnabledActions = HudAction.entries.toSet()
+        tutorialHighlightedEnemyIndex = -1
+        tutorialGateOpen = false
         tookDamageInLevel = false
         collectedDataKB = 0L
         isLevelCleared = false
@@ -377,6 +391,7 @@ class GameState {
 
         val config = LevelEngine.getLevelConfig(currentLevel)
         activeObjective = when {
+            gameMode == 2 -> com.appsbyalok.echohunter.modes.TrainingObjective()
             gameMode == 1 -> com.appsbyalok.echohunter.modes.StoryObjective()
             config.features.contains(LevelFeature.BOMB) -> com.appsbyalok.echohunter.modes.BombObjective()
             config.features.contains(LevelFeature.ESCAPE) -> com.appsbyalok.echohunter.modes.EscapeObjective()

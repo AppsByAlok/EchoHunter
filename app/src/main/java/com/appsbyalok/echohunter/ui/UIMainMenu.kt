@@ -35,7 +35,7 @@ class UIMainMenu(private val context: Context) {
 
     // --- NAYA: 3 Ports System ---
     private val menuTitles = arrayOf("SANDBOX", "MAINFRAME", "NANO-OS")
-    private val menuSubs = arrayOf("Simulation Ring", "Core Access", "System Dashboard")
+    private val menuSubs = arrayOf("Archives & Sandbox", "Simulations Hub", "System Dashboard")
 
     private var plugX = 0f; private var plugY = 0f
     private var targetPlugX = 0f; private var targetPlugY = 0f
@@ -45,7 +45,6 @@ class UIMainMenu(private val context: Context) {
     private var animatingToPort = -1
     private var isSwitchOn = false
 
-    // NAYA: Array size 4 kar diya
     private val portX = FloatArray(3)
     private val portY = FloatArray(3)
     private val helpBtnRect = RectF()
@@ -53,8 +52,7 @@ class UIMainMenu(private val context: Context) {
     private var touchDownX = 0f; private var touchDownY = 0f
     private var wasSwitchHitOnDown = false
     private var hitPortOnDown = -1
-    private var hitCardOnDown = -1
-    private var hitButtonOnDown = -1 // 1: Help, 2: HardMode, 3: ModMenu
+    private var hitButtonOnDown = -1 // 1: Help, 2: HardMode
 
     private fun getCachedString(resId: Int): String {
         var str = stringCache.get(resId)
@@ -81,10 +79,6 @@ class UIMainMenu(private val context: Context) {
             portX[1] = targetW * 0.50f; portY[1] = targetH * 0.65f
             portX[2] = targetW * 0.75f; portY[2] = targetH * 0.65f
         }
-    }
-
-    fun turnOffSwitch() {
-        isSwitchOn = false
     }
 
     fun disconnect() {
@@ -119,7 +113,7 @@ class UIMainMenu(private val context: Context) {
                     if (isSwitchOn) {
                         view.postDelayed({
                             if (isSwitchOn && connectedMode != -1 && gs.state == 0) {
-                                if (connectedMode != 1 || !SaveManager.isStoryModeUnlocked) onRouteConnection(connectedMode)
+                                onRouteConnection(connectedMode)
                             }
                         }, 250)
                     }
@@ -231,16 +225,21 @@ class UIMainMenu(private val context: Context) {
         pText.textSize = scale * 0.035f
         val hintY = if (isPortrait) targetH * 0.46f else targetH * 0.48f
 
-        // NAYA: Drawing the Memory Cards if plugged into Mainframe
-        if (connectedMode == 1 && isSwitchOn && SaveManager.isStoryModeUnlocked) {
-            drawMemoryCards(c, scale, hintY - scale * 0.05f, targetW, gs)
-        } else if (connectedMode == -1) {
-            pText.color = GameColors.YELLOW
-            c.drawText(getCachedString(R.string.ui_hint_connect), targetW / 2f, hintY, pText)
+        if (connectedMode == -1) {
+            if (!SaveManager.isUiTutorialSeen) {
+                drawTutorialOverlay(c, scale, targetW, targetH)
+            } else {
+                pText.color = GameColors.YELLOW
+                c.drawText(getCachedString(R.string.ui_hint_connect), targetW / 2f, hintY, pText)
+            }
         } else {
             if (!isSwitchOn) {
-                pText.color = GameColors.RED
-                c.drawText(getCachedString(R.string.ui_hint_toggle), targetW / 2f, hintY, pText)
+                if (!SaveManager.isUiTutorialSeen) {
+                    drawSwitchTutorial(c, scale, targetW)
+                } else {
+                    pText.color = GameColors.RED
+                    c.drawText(getCachedString(R.string.ui_hint_toggle), targetW / 2f, hintY, pText)
+                }
             } else {
                 pText.color = GameColors.HP
                 c.drawText(getCachedString(R.string.ui_hint_initializing), targetW / 2f, hintY, pText)
@@ -270,9 +269,9 @@ class UIMainMenu(private val context: Context) {
             c.drawRect(portX[i] - scale*0.015f, portY[i] - scale*0.004f, portX[i] + scale*0.015f, portY[i] + scale*0.004f, p)
 
             val isLocked = (i == 1 && !SaveManager.isStoryModeUnlocked)
-            val titleStr = if (isLocked) "LOCKED" else menuTitles[i]
+            val titleStr = menuTitles[i]
             val subStr = if (isLocked) "Reach Ring 15" else menuSubs[i]
-            val textColor = if (isLocked) GameColors.RED else (if (connectedMode == i) GameColors.CLARITY else GameColors.TEXT)
+            val textColor = if (connectedMode == i) GameColors.CLARITY else GameColors.TEXT
 
             var portTitleSize = if (connectedMode == i) scale * 0.05f else scale * 0.04f
             pText.textSize = portTitleSize
@@ -284,12 +283,12 @@ class UIMainMenu(private val context: Context) {
 
             pText.textAlign = Paint.Align.CENTER
             pText.color = textColor
-            pText.setShadowLayer(if(connectedMode == i && !isLocked) 15f else 0f, 0f, 0f, if(isLocked) GameColors.RED else GameColors.PULSE)
+            pText.setShadowLayer(if(connectedMode == i) 15f else 0f, 0f, 0f, GameColors.PULSE)
             c.drawText(titleStr, portX[i], portY[i] + scale * 0.11f, pText)
             pText.clearShadowLayer()
 
             pText.textSize = scale * 0.025f
-            pText.color = if (isLocked) 0xFF550000.toInt() else (if (connectedMode == i) GameColors.PULSE else 0xFF888888.toInt())
+            pText.color = if (connectedMode == i) GameColors.PULSE else 0xFF888888.toInt()
             c.drawText(subStr, portX[i], portY[i] + scale * 0.15f, pText)
         }
 
@@ -373,56 +372,48 @@ class UIMainMenu(private val context: Context) {
         effectSys.drawParticles(c, 0f, 0f, scale)
     }
 
-    private fun drawMemoryCards(c: Canvas, scale: Float, startY: Float, targetW: Float, gs: GameState) {
-        val cardW = scale * 0.15f
-        val cardH = scale * 0.22f
-        val gap = scale * 0.05f
-        val totalW = (cardW * 3) + (gap * 2)
-        var startX = (targetW - totalW) / 2f
+    private fun drawTutorialOverlay(c: Canvas, scale: Float, targetW: Float, targetH: Float) {
+        pText.color = GameColors.YELLOW
+        pText.textSize = scale * 0.035f
+        pText.textAlign = Paint.Align.CENTER
+        val hintY = if (targetW < targetH) targetH * 0.46f else targetH * 0.48f
+        c.drawText(getCachedString(R.string.ui_hint_tutorial_drag), targetW / 2f, hintY, pText)
 
-        val currentStreak = if (gs.difficulty == 1) SaveManager.currentHardStreak else SaveManager.currentStoryStreak
-        val unlockedStreak = if (gs.difficulty == 1) SaveManager.unlockedHardStreak else SaveManager.unlockedStoryStreak
+        // Draw animated arrow from plug to port 1 (Mainframe)
+        val t = (System.currentTimeMillis() % 1000) / 1000f
+        val arrowX = plugRestX + (portX[1] - plugRestX) * t
+        val arrowY = plugRestY + (portY[1] - plugRestY) * t
+        
+        p.style = Paint.Style.FILL
+        p.color = GameColors.YELLOW
+        c.drawCircle(arrowX, arrowY, scale * 0.01f, p)
+    }
 
-        val isFullyBeatenCurrent = currentStreak >= 3
+    private fun drawSwitchTutorial(c: Canvas, scale: Float, targetW: Float) {
+        pText.color = GameColors.YELLOW
+        pText.textSize = scale * 0.035f
+        pText.textAlign = Paint.Align.CENTER
 
-        for (i in 0..2) {
-            val pCard = Paint().apply { isAntiAlias = true; style = Paint.Style.STROKE; strokeWidth = scale * 0.005f }
-            val pFill = Paint().apply { isAntiAlias = true; style = Paint.Style.FILL }
-            val pText = Paint().apply { isAntiAlias = true; textAlign = Paint.Align.CENTER; typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD); textSize = scale * 0.05f }
+        val text = getCachedString(R.string.ui_hint_tutorial_switch)
+        val textWidth = pText.measureText(text)
+        val margin = scale * 0.05f
+        val minX = textWidth / 2f + margin
+        val maxX = targetW - textWidth / 2f - margin
+        val safeX = plugX.coerceIn(minX, maxX)
+        c.drawText(text, safeX, plugY - scale * 0.1f, pText)
 
-            val rect = RectF(startX, startY, startX + cardW, startY + cardH)
-
-            if (isFullyBeatenCurrent || i == currentStreak) {
-                // NEXT TARGET: FULL GLOW
-                pCard.color = GameColors.PULSE
-                pCard.setShadowLayer(15f, 0f, 0f, GameColors.PULSE)
-                pFill.color = 0x4400FFFF
-                pText.color = GameColors.CLARITY
-            } else if (i <= unlockedStreak) {
-                // BEATEN: DIM GLOW
-                pCard.color = 0xAA00FFFF.toInt()
-                pFill.color = 0x1100FFFF
-                pText.color = 0xAAFFFFFF.toInt()
-            } else {
-                // LOCKED
-                pCard.color = 0x55FFFFFF
-                pFill.color = 0x22000000
-                pText.color = 0x55FFFFFF
-            }
-
-            c.drawRoundRect(rect, scale * 0.02f, scale * 0.02f, pFill)
-            c.drawRoundRect(rect, scale * 0.02f, scale * 0.02f, pCard)
-            pCard.clearShadowLayer()
-
-            c.drawText("ACT", startX + cardW/2f, startY + cardH * 0.4f, pText)
-            c.drawText("${i+1}", startX + cardW/2f, startY + cardH * 0.7f, pText)
-
-            startX += cardW + gap
-        }
+        // Pulse circle around the switch
+        val pulse = (System.currentTimeMillis() % 1000) / 1000f
+        p.style = Paint.Style.STROKE
+        p.strokeWidth = scale * 0.005f
+        p.color = GameColors.YELLOW
+        p.alpha = (255 * (1f - pulse)).toInt()
+        c.drawCircle(plugX, plugY, scale * 0.05f + pulse * scale * 0.05f, p)
+        p.alpha = 255
     }
 
     fun onTouch(
-        vx: Float, vy: Float, action: Int, scale: Float, targetW: Float, targetH: Float,
+        vx: Float, vy: Float, action: Int, scale: Float,
         view: View, gs: GameState, onDifficultyToggle: () -> Unit, onHelpOpen: () -> Unit,
         onRouteConnection: (Int) -> Unit
     ): Boolean {
@@ -448,7 +439,6 @@ class UIMainMenu(private val context: Context) {
                 touchDownX = vx
                 touchDownY = vy
                 hitPortOnDown = -1
-                hitCardOnDown = -1
                 hitButtonOnDown = -1
                 wasSwitchHitOnDown = false
 
@@ -460,32 +450,12 @@ class UIMainMenu(private val context: Context) {
                 } else if (hardModeBtnRect.contains(vx, vy)) {
                     hitButtonOnDown = 2
                 } else {
-                    // Check for port taps or card taps
                     for (i in 0..2) {
                         val dx = vx - portX[i]
                         val dy = vy - portY[i]
                         if (dx * dx + dy * dy < (scale * 0.15f) * (scale * 0.15f)) {
                             hitPortOnDown = i
                             break
-                        }
-                    }
-
-                    if (connectedMode == 1 && isSwitchOn && SaveManager.isStoryModeUnlocked) {
-                        val cardW = scale * 0.15f
-                        val cardH = scale * 0.22f
-                        val gap = scale * 0.05f
-                        val totalW = (cardW * 3) + (gap * 2)
-                        var startX = (targetW - totalW) / 2f
-                        val isPortrait = targetW < targetH
-                        val hintY = if (isPortrait) targetH * 0.46f else targetH * 0.48f
-                        val startY = hintY - scale * 0.05f
-
-                        for (i in 0..2) {
-                            if (vx in startX..(startX + cardW) && vy in startY..(startY + cardH)) {
-                                hitCardOnDown = i
-                                break
-                            }
-                            startX += cardW + gap
                         }
                     }
                 }
@@ -511,7 +481,6 @@ class UIMainMenu(private val context: Context) {
                     val dy = vy - touchDownY
                     if (dx * dx + dy * dy > scale * scale * 0.05f) {
                         hitPortOnDown = -1
-                        hitCardOnDown = -1
                         hitButtonOnDown = -1
                     }
                 }
@@ -526,35 +495,6 @@ class UIMainMenu(private val context: Context) {
                     return true
                 }
 
-                // TOUCH CARDS LOGIC
-                if (connectedMode == 1 && isSwitchOn && SaveManager.isStoryModeUnlocked) {
-                    val cardW = scale * 0.15f
-                    val cardH = scale * 0.22f
-                    val gap = scale * 0.05f
-                    val totalW = (cardW * 3) + (gap * 2)
-                    var startX = (targetW - totalW) / 2f
-                    val isPortrait = targetW < targetH
-                    val hintY = if (isPortrait) targetH * 0.46f else targetH * 0.48f
-                    val startY = hintY - scale * 0.05f
-
-                    for (i in 0..2) {
-                        if (vx in startX..(startX + cardW) && vy in startY..(startY + cardH)) {
-                            if (i == hitCardOnDown) {
-                                val unlocked = if (gs.difficulty == 1) SaveManager.unlockedHardStreak else SaveManager.unlockedStoryStreak
-                                if (i <= unlocked) {
-                                    gs.selectedStoryAct = i
-                                    EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 50)
-                                    onRouteConnection(1)
-                                } else {
-                                    EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 50)
-                                }
-                            }
-                            return true
-                        }
-                        startX += cardW + gap
-                    }
-                }
-
                 if (isDraggingPlug) {
                     isDraggingPlug = false
 
@@ -564,13 +504,16 @@ class UIMainMenu(private val context: Context) {
 
                     if (isTap && wasSwitchHitOnDown) {
                         isSwitchOn = !isSwitchOn
+                        if (isSwitchOn && connectedMode != -1) {
+                            SaveManager.setUiTutorialSeen(true)
+                        }
                         view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                         EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 50)
 
                         if (isSwitchOn && connectedMode != -1) {
                             view.postDelayed({
                                 if (isSwitchOn && connectedMode != -1 && gs.state == 0) {
-                                    if (connectedMode != 1 || !SaveManager.isStoryModeUnlocked) onRouteConnection(connectedMode)
+                                    onRouteConnection(connectedMode)
                                 }
                             }, 250)
                         }
@@ -620,12 +563,10 @@ class UIMainMenu(private val context: Context) {
                     }
                 }
                 hitPortOnDown = -1
-                hitCardOnDown = -1
             }
             MotionEvent.ACTION_CANCEL -> {
                 isDraggingPlug = false
                 hitPortOnDown = -1
-                hitCardOnDown = -1
             }
         }
         val returnValue = true

@@ -253,6 +253,16 @@ class CatCommand : TerminalCommand {
                 MESSAGE: DON'T BELIEVE THE OS.
                 THE ECHO IS NOT THE ENEMY.
             """.trimIndent()
+            "MAINFRAME.SYS" -> """
+                [SYSTEM_MANIFEST]
+                ID: MH-9000
+                STATUS: ACTIVE
+                NODES: 4
+                - TRAINING_PORT [ACTIVE]
+                - STORY_ACT_1   [DECRYPTED]
+                - STORY_ACT_2   [LOCKED]
+                - STORY_ACT_3   [LOCKED]
+            """.trimIndent()
             "KERNEL_DUMP.BIN" -> "ERR: CANNOT READ BINARY DATA"
             else -> "ERR: FILE '$filename' NOT FOUND"
         }
@@ -655,6 +665,21 @@ class LevelCommand : TerminalCommand {
         
         context.gameState.currentLevel = level
         return CommandResult("SECTOR LOCKED. RING $level READY FOR INITIALIZATION.", OutputMode.TYPEWRITER)
+    }
+}
+
+class ResetTutorialCommand : TerminalCommand {
+    override val name = "SYSTEM.RESET_TUTORIAL"
+    override val description = "Resets all onboarding and tutorial flags"
+    override val aliases = listOf("RESET_TUTORIAL", "TUTORIAL_RESET")
+    override val manual = "Wipes tutorial completion flags, restoring the initial UI hints and gameplay guides for a fresh start."
+    override fun execute(args: List<String>, context: CommandContext): CommandResult {
+        SaveManager.resetTutorials()
+        return CommandResult("""
+            RESTORING ONBOARDING MODULES...
+            CLEANING USER_GUIDE CACHE...
+            TUTORIAL FLAGS RESET SUCCESSFUL.
+        """.trimIndent(), OutputMode.TYPEWRITER)
     }
 }
 
