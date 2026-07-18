@@ -178,32 +178,6 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
                     // but they will check isCamouflaged in their next updateBehavior call.
                 }
             }
-            2 -> { // EMP Mine logic (consume immediately if on spawner)
-                val nearest = gs.spawnerNodes
-                    .filter { it.state != SpawnState.DESTROYED && 
-                             it.state != SpawnState.DISABLED &&
-                             it.state != SpawnState.SELF_DESTROYING }
-                    .minByOrNull { (it.x - gs.px) * (it.x - gs.px) + (it.y - gs.py) * (it.y - gs.py) }
-                
-                if (nearest != null) {
-                    val distSq = (nearest.x - gs.px) * (nearest.x - gs.px) + (nearest.y - gs.py) * (nearest.y - gs.py)
-                    if (distSq < (gs.tileSize * 1.2f) * (gs.tileSize * 1.2f)) {
-                        // BOTH: Heavy damage + Hack
-                        spawnerSys.damageNode(nearest, 40f, gs, scale)
-                        
-                        // If it survived the damage, disable it
-                        if (nearest.state != SpawnState.DESTROYED) {
-                            nearest.state = SpawnState.DISABLED
-                            nearest.cooldownTimer = 10f 
-                            effectSys.spawnFloatingText(nearest.x, nearest.y, 0, 0xFFFFFF00.toInt(), "SYSTEM OVERLOAD")
-                        }
-
-                        EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 200)
-                        gs.controls.trapRequested = false
-                        return // Exit without adding to active traps
-                    }
-                }
-            }
         }
 
         gs.activeTraps.add(newTrap)

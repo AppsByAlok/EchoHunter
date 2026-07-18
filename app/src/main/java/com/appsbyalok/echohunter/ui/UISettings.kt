@@ -41,7 +41,7 @@ class UISettings {
         "HAPTIC FEEDBACK",
         "VISUAL EFFECTS",
         "AUTO-NEXT LEVEL",
-        "ATTACK MODE",
+        "DEFAULT ATTACK MODE",
         "SCREEN ROTATION",
         "HUD LAYOUT",
         "WIPE ALL DATA"

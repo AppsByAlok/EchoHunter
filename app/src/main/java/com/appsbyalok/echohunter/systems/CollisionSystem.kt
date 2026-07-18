@@ -103,77 +103,22 @@ class CollisionSystem(
                 }
             }
 
+            if (!mineTriggered) {
+                for (node in gs.spawnerNodes) {
+                    if (node.state == SpawnState.DESTROYED || node.state == SpawnState.INACTIVE) continue
+                    val dx = trap.x - node.x
+                    val dy = trap.y - node.y
+                    if (dx * dx + dy * dy < (scale * 0.15f) * (scale * 0.15f)) {
+                        mineTriggered = true; break
+                    }
+                }
+            }
+
             if (mineTriggered) {
                 trapIter.remove()
-                gs.shockwaveActive = true
-                gs.shockwaveX = trap.x; gs.shockwaveY = trap.y; gs.shockwaveR = 0f
-                gs.shakeAmount = max(gs.shakeAmount, scale * 0.15f)
-                EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 300)
-                effectSystem.spawnParticles(trap.x, trap.y, 1, scale * 2f)
-
-                // Destroy nearby enemies & damage boss
-                for (j in 0 until enemySystem.n) {
-                    val edx = trap.x - enemySystem.ex[j]
-                    val edy = trap.y - enemySystem.ey[j]
-                    if (edx * edx + edy * edy < (scale * 0.4f) * (scale * 0.4f)) {
-                        // EMP Deals 5 Damage!
-                        enemySystem.hp[j] -= 5
-                        if (enemySystem.hp[j] <= 0) {
-                            var rewardKB = LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
-                            // Apply Bounty Cap (15x Base Level 1 reward as safety)
-                            val cap = LevelEngine.getKillRewardKB(1, false) * 15 
-                            rewardKB = min(rewardKB, cap)
-
-                            onScoreAdd((5 * UpgradeSystem.getRewardMultiplier()).toLong())
-                            gs.collectedDataKB += rewardKB
-
-                            if (isElimination && enemySystem.type[j] == 3) {
-                                gs.elimTargetsKilled++
-                                StoryProtocol.showIngameMessage("TARGET ELIMINATED!", 1.5f)
-                            }
-                            enemySystem.killEnemy(j, gs)
-                        } else {
-                            // If not dead, apply push back
-                            enemySystem.eState[j] = 2 
-                        }
-                    }
-                }
-
-                // NAYA: EMP damage/disable spawners
-                val explosionRadiusSq = (scale * 0.5f) * (scale * 0.5f)
-                for (node in gs.spawnerNodes) {
-                    val ndx = trap.x - node.x
-                    val ndy = trap.y - node.y
-                    if (ndx * ndx + ndy * ndy < explosionRadiusSq) {
-                        if (node.state != SpawnState.DESTROYED) {
-                            val prevHp = node.hp
-                            spawnerSys.damageNode(node, 50f, gs, scale) // Heavy EMP damage
-                            
-                            if (node.hp < prevHp) {
-                                if (node.state == SpawnState.DESTROYED) {
-                                    var rewardKB = LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false) * 3
-                                    val cap = LevelEngine.getKillRewardKB(1, false) * 15 * 3
-                                    rewardKB = min(rewardKB, cap)
-                                    onScoreAdd((15 * UpgradeSystem.getRewardMultiplier()).toLong())
-                                    gs.collectedDataKB += rewardKB
-                                    StoryProtocol.showIngameMessage("COMPILER FRIED", 1f)
-                                } else {
-                                    node.state = SpawnState.DISABLED
-                                    node.cooldownTimer = 5f
-                                    effectSystem.spawnFloatingText(node.x, node.y, 0, 0xFFFFFF00.toInt(), "GLITCHED")
-                                }
-                            }
-                        }
-                    }
-                }
-                if (gs.bossActive) {
-                    val bdx = trap.x - gs.bossX
-                    val bdy = trap.y - gs.bossY
-                    if (bdx * bdx + bdy * bdy < (scale * 0.5f) * (scale * 0.5f)) {
-                        gs.bossHp -= 5 // Massive EMP damage
-                        if (gs.bossHp <= 0) triggerBossDeath(scale, onScoreAdd, onCoreUnlock)
-                    }
-                }
+                triggerExplosion(
+                    trap.x, trap.y, scale * 0.45f, 5f, scale, true, onScoreAdd, onCoreUnlock
+                )
             }
         }
 
@@ -215,29 +160,11 @@ class CollisionSystem(
                             // NEW: KINETIC OVERLOAD (AoE Damage on Crit)
                             val overloadLvl = UpgradeSystem.getLevel(UpgradeType.KINETIC_OVERLOAD)
                             if (overloadLvl > 0) {
-                                val explosionRadius = scale * (0.15f + overloadLvl * 0.15f)
-                                val explosionRadiusSq = explosionRadius * explosionRadius
-                                val splashDamage = 1 + (overloadLvl / 2) // Scales: Lvl 1-3 = 1-2, Lvl 4-5 = 3
-                                
-                                effectSystem.spawnParticles(gs.bossX, gs.bossY, 5 + overloadLvl, scale * 1.5f) // Red explosion particles
-                                
-                                // Damage nearby enemies
-                                for (j in 0 until enemySystem.n) {
-                                    if (enemySystem.ex[j] < -1000f) continue
-                                    val edx = gs.bossX - enemySystem.ex[j]
-                                    val edy = gs.bossY - enemySystem.ey[j]
-                                    if (edx * edx + edy * edy < explosionRadiusSq) {
-                                        enemySystem.hp[j] -= splashDamage
-                                        if (enemySystem.hp[j] <= 0) {
-                                            onScoreAdd((5 * UpgradeSystem.getRewardMultiplier()).toLong())
-                                            var rewardKB = LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
-                                            val cap = LevelEngine.getKillRewardKB(1, false) * 15
-                                            rewardKB = min(rewardKB, cap)
-                                            gs.collectedDataKB += rewardKB
-                                            enemySystem.killEnemy(j, gs)
-                                        }
-                                    }
-                                }
+                                val explosionRadius = scale * (0.2f + overloadLvl * 0.15f)
+                                val splashDamage = 1f + (overloadLvl / 2)
+                                triggerExplosion(
+                                    gs.bossX, gs.bossY, explosionRadius, splashDamage, scale, false, onScoreAdd, onCoreUnlock
+                                )
                             }
                         }
 
@@ -306,27 +233,11 @@ class CollisionSystem(
                                 // NEW: KINETIC OVERLOAD (Explosion on Crit)
                                 val overloadLvl = UpgradeSystem.getLevel(UpgradeType.KINETIC_OVERLOAD)
                                 if (overloadLvl > 0) {
-                                    val explosionRadius = scale * (0.1f + overloadLvl * 0.15f)
-                                    val explosionRadiusSq = explosionRadius * explosionRadius
-                                    val splashDamage = 1 + (overloadLvl / 3) // Lvl 1-2 = 1, Lvl 3-5 = 2
-
-                                    effectSystem.spawnParticles(enemySystem.ex[i], enemySystem.ey[i], 4 + overloadLvl, scale * 1.2f)
-                                    
-                                    for (j in 0 until enemySystem.n) {
-                                        if (i == j || enemySystem.ex[j] < -1000f) continue
-                                        val edx = enemySystem.ex[i] - enemySystem.ex[j]
-                                        val edy = enemySystem.ey[i] - enemySystem.ey[j]
-                                        if (edx * edx + edy * edy < explosionRadiusSq) {
-                                            enemySystem.hp[j] -= splashDamage
-                                            if (enemySystem.hp[j] <= 0) {
-                                                var rewardKB = LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
-                                                val cap = LevelEngine.getKillRewardKB(1, false) * 15
-                                                rewardKB = min(rewardKB, cap)
-                                                gs.collectedDataKB += rewardKB
-                                                enemySystem.killEnemy(j, gs)
-                                            }
-                                        }
-                                    }
+                                    val explosionRadius = scale * (0.15f + overloadLvl * 0.15f)
+                                    val splashDamage = 1f + (overloadLvl / 3)
+                                    triggerExplosion(
+                                        enemySystem.ex[i], enemySystem.ey[i], explosionRadius, splashDamage, scale, false, onScoreAdd, onCoreUnlock
+                                    )
                                 }
                             } else {
                                 EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 50)
@@ -537,6 +448,12 @@ class CollisionSystem(
                         if (gs.shieldTimer > 0f) {
                             gs.shieldTimer = 0f
                             gs.playerIframe = 1.0f + UpgradeSystem.getIframeDurationBonus()
+                            
+                            // PATCH: SHIELD BURST (EMP Wave on break)
+                            if (UpgradeSystem.hasShieldBurstPatch()) {
+                                triggerExplosion(gs.px, gs.py, scale * 0.4f, 5f, scale, true, onScoreAdd, onCoreUnlock)
+                            }
+                            
                             effectSystem.spawnParticles(enemySystem.ex[i], enemySystem.ey[i], 1, scale)
                             
                             // Hunters die on shield hit, but Guards are tanky—just bounce back
@@ -546,7 +463,7 @@ class CollisionSystem(
                                 // Guard Bounce
                                 val bdx = enemySystem.ex[i] - gs.px
                                 val bdy = enemySystem.ey[i] - gs.py
-                                val dist = kotlin.math.sqrt((bdx * bdx + bdy * bdy).toDouble()).toFloat().coerceAtLeast(0.01f)
+                                val dist = sqrt((bdx * bdx + bdy * bdy).toDouble()).toFloat().coerceAtLeast(0.01f)
                                 enemySystem.evx[i] += (bdx / dist) * scale * 2f
                                 enemySystem.evy[i] += (bdy / dist) * scale * 2f
                             }
@@ -609,12 +526,132 @@ class CollisionSystem(
 
                     if (gs.shieldTimer > 0f) {
                         gs.shieldTimer = 0f
+                        
+                        // PATCH: SHIELD BURST
+                        if (UpgradeSystem.hasShieldBurstPatch()) {
+                            triggerExplosion(gs.px, gs.py, scale * 0.45f, 5f, scale, true, onScoreAdd, onCoreUnlock)
+                        }
+
                         gs.playerIframe = 1.0f
                     } else {
                         onDamage(scale)
                         gs.chromaticIntensity = max(gs.chromaticIntensity, 1.0f)
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * UNIFIED EXPLOSION LOGIC: Handles damage to enemies, spawners, and bosses.
+     * Supports both standard Kinetic Overloads and EMP Blasts.
+     */
+    private fun triggerExplosion(
+        x: Float,
+        y: Float,
+        radius: Float,
+        damage: Float,
+        scale: Float,
+        isEmp: Boolean,
+        onScoreAdd: (Long) -> Unit,
+        onCoreUnlock: (Boolean) -> Unit
+    ) {
+        val radiusSq = radius * radius
+        val isElimination = gs.activeObjective is com.appsbyalok.echohunter.modes.EliminationObjective
+
+        // 1. Visual & Audio Feedback
+        gs.shockwaveActive = true
+        gs.shockwaveX = x
+        gs.shockwaveY = y
+        gs.shockwaveR = 0f
+        gs.shakeAmount = max(gs.shakeAmount, scale * (if (isEmp) 0.18f else 0.1f))
+        
+        if (isEmp) {
+            gs.empFlashTimer = 0.4f
+            EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_ALERT, 300)
+            effectSystem.spawnParticles(x, y, 6, scale * 2f)
+        } else {
+            EchoAudioManager.playSound(ToneGenerator.TONE_SUP_INTERCEPT, 200)
+            effectSystem.spawnParticles(x, y, 4, scale * 1.5f)
+        }
+
+        // 2. Enemy Interaction
+        for (i in 0 until enemySystem.n) {
+            if (enemySystem.ex[i] < -1000f) continue
+            val dx = x - enemySystem.ex[i]
+            val dy = y - enemySystem.ey[i]
+            if (dx * dx + dy * dy < radiusSq) {
+                enemySystem.hp[i] -= damage.toInt()
+                
+                if (enemySystem.hp[i] <= 0) {
+                    var rewardKB = LevelEngine.getKillRewardKB(gs.currentLevel, isBoss = false)
+                    val cap = LevelEngine.getKillRewardKB(1, false) * 15
+                    rewardKB = min(rewardKB, cap)
+                    
+                    onScoreAdd((5 * UpgradeSystem.getRewardMultiplier()).toLong())
+                    gs.collectedDataKB += rewardKB
+                    gs.combo++ // Explosion kills now contribute to combo
+                    gs.comboBreakTimer = 3.0f + UpgradeSystem.getComboBonusTime()
+                    
+                    if (isElimination && enemySystem.type[i] == 3) {
+                        gs.elimTargetsKilled++
+                        StoryProtocol.showIngameMessage("TARGET ELIMINATED!", 1.5f)
+                    }
+                    enemySystem.killEnemy(i, gs)
+                } else if (isEmp) {
+                    // EMP Stun/Glitch
+                    enemySystem.eState[i] = 2 
+                    effectSystem.spawnFloatingText(enemySystem.ex[i], enemySystem.ey[i], 0, 0xFF00CCFF.toInt(), "GLITCH")
+                }
+            }
+        }
+
+        // 3. Spawner Interaction
+        for (node in gs.spawnerNodes) {
+            if (node.state == SpawnState.DESTROYED || node.state == SpawnState.INACTIVE) continue
+            val dx = x - node.x
+            val dy = y - node.y
+            if (dx * dx + dy * dy < radiusSq * 1.44f) { // Spawners have larger hitbox for explosions
+                val prevHp = node.hp
+                val finalDamage = if (isEmp) 50f else damage * 5f // EMP is specialized for spawners
+                
+                spawnerSys.damageNode(node, finalDamage, gs, scale)
+
+                if (node.hp < prevHp) {
+                    if (node.state == SpawnState.DESTROYED) {
+                        var rewardKB = LevelEngine.getKillRewardKB(gs.currentLevel, false) * 3
+                        val cap = LevelEngine.getKillRewardKB(1, false) * 15 * 3
+                        rewardKB = min(rewardKB, cap)
+                        onScoreAdd((15 * UpgradeSystem.getRewardMultiplier()).toLong())
+                        gs.collectedDataKB += rewardKB
+                        StoryProtocol.showIngameMessage(if (isEmp) "COMPILER FRIED" else "COMPILER BREACHED", 1.5f)
+                    } else if (isEmp) {
+                        // EMP SPECIAL: Disable + Data Leak + Glitch Text
+                        node.state = SpawnState.DISABLED
+                        node.cooldownTimer = 6f 
+                        
+                        // Data Leak: 20% of destruction reward for EMP impact
+                        val leakReward = (LevelEngine.getKillRewardKB(gs.currentLevel, false) * 0.2f).toLong()
+                        gs.collectedDataKB += leakReward
+                        onScoreAdd((leakReward / 10).coerceAtLeast(1L)) // Sync UI score with leak
+                        
+                        effectSystem.spawnFloatingText(node.x, node.y, leakReward, 0xFF00FFCC.toInt(), "DATA LEAK")
+                        effectSystem.spawnFloatingText(node.x, node.y - scale * 0.05f, 0, 0xFFFFFF00.toInt(), "SHUTDOWN")
+                        
+                        // Extra sparking particles
+                        effectSystem.spawnParticles(node.x, node.y, 1, scale * 1.5f)
+                    }
+                }
+            }
+        }
+
+        // 4. Boss Interaction
+        if (gs.bossActive && gs.bossIframe <= 0f) {
+            val dx = x - gs.bossX
+            val dy = y - gs.bossY
+            if (dx * dx + dy * dy < radiusSq * 1.5f) {
+                gs.bossHp -= damage.toInt()
+                if (gs.bossHp <= 0) triggerBossDeath(scale, onScoreAdd, onCoreUnlock)
             }
         }
     }
