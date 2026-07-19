@@ -26,6 +26,10 @@ class ControlsState {
     var aimDirY = 0f
     var attackPullDist = 0f // For manual aim visualization
     
+    // --- SNIPER CHARGE SYSTEM ---
+    var sniperCharge = 0f    // 0.0 to 1.0 (or more if overcharged)
+    var isSniperCharging = false
+    
     // Touchpad Manual Aim
     var manualAimActive = false
 
@@ -47,8 +51,8 @@ class ControlsState {
     var isManualAimUnlocked = false
     
     // Arsenal
-    var currentWeapon = 1 
-    var currentTrap = 2 
+    var currentWeapon = 0 
+    var currentTrap = 1
     var isTrapPressed = false
     var trapRequested = false
     var isOverclockPressed = false

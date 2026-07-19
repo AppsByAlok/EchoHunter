@@ -240,6 +240,23 @@ class WorldRenderer(
                 pText.textAlign = Paint.Align.CENTER
                 c.drawText("${node.queue}", nx, ny + scale * 0.008f, pText)
             }
+
+            // --- NEW: RESONANCE OVERLOAD TIMER ---
+            if (node.overloadTimer > 0f) {
+                val barW = r * 1.6f
+                val barH = scale * 0.008f
+                val barX = nx - barW / 2f
+                val barY = ny + r + scale * 0.01f
+                
+                p.style = Paint.Style.FILL
+                p.color = 0x66000000
+                c.drawRect(barX, barY, barX + barW, barY + barH, p)
+                
+                // Pulsing yellow-white for resonance
+                val pulseAlpha = (180 + 75 * sin(gs.timeSinceStart * 15f)).toInt()
+                p.color = (pulseAlpha shl 24) or (GameColors.YELLOW and 0xFFFFFF)
+                c.drawRect(barX, barY, barX + barW * (node.overloadTimer / 8f), barY + barH, p)
+            }
         }
     }
 
@@ -479,6 +496,23 @@ class WorldRenderer(
             }
         }
 
+        // Sniper charge sight: a short dotted trajectory from the probe toward the current aim direction.
+        if (gs.controls.currentWeapon == 2 && gs.controls.isSniperCharging) {
+            val charge = (gs.controls.sniperCharge / 1.5f).coerceIn(0f, 1f)
+            p.style = Paint.Style.FILL
+            p.color = ((120 + (charge * 135).toInt()) shl 24) or (GameColors.YELLOW and 0xFFFFFF)
+            for (dot in 1..7) {
+                val distance = scale * 0.075f * dot
+                val size = scale * (0.004f + charge * 0.004f) * (1f - dot * 0.07f)
+                c.drawCircle(
+                    screenPlayerX + gs.controls.aimDirX * distance,
+                    screenPlayerY + gs.controls.aimDirY * distance,
+                    size,
+                    p
+                )
+            }
+        }
+
         pGlow.color = GameColors.PULSE
         for (i in 0 until gs.maxSpikes) {
             if (gs.spikeActive[i]) {
@@ -487,39 +521,54 @@ class WorldRenderer(
 
                 when (gs.spikeType[i]) {
                     2 -> { // SNIPER BEAM
-                        pGlow.color = GameColors.RED
-                        pGlow.strokeWidth = scale * 0.012f * (gs.spikeLife[i] / 0.6f)
-                        c.drawLine(
-                            sx,
-                            sy,
-                            sx - (gs.spikeVx[i] * 0.06f),
-                            sy - (gs.spikeVy[i] * 0.06f),
-                            pGlow
-                        )
+                        val arcRoute = com.appsbyalok.echohunter.data.SaveManager.isNodeUnlocked("sniper_arc")
+                        pGlow.color = if (arcRoute) GameColors.CLARITY else GameColors.RED
+                        pGlow.strokeWidth = scale * 0.012f * com.appsbyalok.echohunter.data.UpgradeSystem.getSniperBeamWidthMultiplier() * (gs.spikeLife[i] / 0.6f)
+                        val tailX = sx - (gs.spikeVx[i] * 0.06f)
+                        val tailY = sy - (gs.spikeVy[i] * 0.06f)
+                        if (arcRoute) {
+                            val dx = sx - tailX; val dy = sy - tailY
+                            val length = sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
+                            val px = -dy / length; val py = dx / length
+                            arrowPath.reset(); arrowPath.moveTo(tailX, tailY)
+                            for (step in 1..3) {
+                                val t = step / 4f
+                                val wobble = sin(gs.timeSinceStart * 35f + i * 4f + step) * scale * 0.018f
+                                arrowPath.lineTo(tailX + dx * t + px * wobble, tailY + dy * t + py * wobble)
+                            }
+                            arrowPath.lineTo(sx, sy)
+                            c.drawPath(arrowPath, pGlow)
+                        } else c.drawLine(sx, sy, tailX, tailY, pGlow)
+                        p.style = Paint.Style.FILL; p.color = pGlow.color
+                        c.drawCircle(sx, sy, pGlow.strokeWidth * 0.7f, p)
                     }
 
                     1 -> { // SHOTGUN SPREAD
                         pGlow.color = GameColors.OVERCLOCK
                         pGlow.strokeWidth = scale * 0.015f * (gs.spikeLife[i] / 0.4f)
-                        c.drawLine(
-                            sx,
-                            sy,
-                            sx - (gs.spikeVx[i] * 0.01f),
-                            sy - (gs.spikeVy[i] * 0.01f),
-                            pGlow
-                        )
+                        arrowPath.reset()
+                        arrowPath.moveTo(sx, sy - scale * 0.012f)
+                        arrowPath.lineTo(sx + scale * 0.01f, sy + scale * 0.012f)
+                        arrowPath.lineTo(sx - scale * 0.01f, sy + scale * 0.012f)
+                        arrowPath.close()
+                        p.style = Paint.Style.FILL; p.color = GameColors.OVERCLOCK; c.drawPath(arrowPath, p)
                     }
 
-                    else -> { // NORMAL SPIKE
+                    3 -> { // ENEMY PROJECTILE
+                        p.style = Paint.Style.FILL; p.color = GameColors.RED
+                        c.drawCircle(sx, sy, scale * 0.014f, p)
+                        pGlow.color = GameColors.RED; pGlow.strokeWidth = scale * 0.004f
+                        c.drawCircle(sx, sy, scale * 0.024f, pGlow)
+                    }
+
+                    else -> { // BLASTER BOLT
                         pGlow.color = GameColors.PULSE
                         pGlow.strokeWidth = scale * 0.008f * (gs.spikeLife[i] / 0.4f)
-                        c.drawLine(
-                            sx,
-                            sy,
-                            sx - (gs.spikeVx[i] * 0.02f),
-                            sy - (gs.spikeVy[i] * 0.02f),
-                            pGlow
-                        )
+                        val tailX = sx - (gs.spikeVx[i] * 0.02f)
+                        val tailY = sy - (gs.spikeVy[i] * 0.02f)
+                        c.drawLine(sx, sy, tailX, tailY, pGlow)
+                        p.style = Paint.Style.FILL; p.color = GameColors.PULSE
+                        c.drawCircle(sx, sy, scale * 0.009f, p)
                     }
                 }
             }
@@ -530,6 +579,7 @@ class WorldRenderer(
 
         effectSys.drawTrails(c, gs.cameraX, gs.cameraY, scale, currentPlayerColor)
         effectSys.drawSonarPings(c, gs.cameraX, gs.cameraY, scale)
+        effectSys.drawElectricArcs(c, gs.cameraX, gs.cameraY, scale)
 
         if (gs.isOverclocked) {
             effectSys.drawLightning(c, screenPlayerX, screenPlayerY, scale)

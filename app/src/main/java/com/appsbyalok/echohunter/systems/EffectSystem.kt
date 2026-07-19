@@ -44,12 +44,18 @@ class EffectSystem {
     private val spLife = FloatArray(spn)
     private val spColor = IntArray(spn)
 
+    private val arcN = 8
+    private val arcStartX = FloatArray(arcN); private val arcStartY = FloatArray(arcN)
+    private val arcEndX = FloatArray(arcN); private val arcEndY = FloatArray(arcN)
+    private val arcLife = FloatArray(arcN)
+
     fun reset() {
         trailIdx = 0
         for (i in 0 until trailLength) { trailX[i] = 0f; trailY[i] = 0f }
         for (i in 0 until pn) { pLife[i] = 0f }
         for (i in 0 until ftn) { ftLife[i] = 0f }
         for (i in 0 until spn) { spLife[i] = 0f }
+        for (i in 0 until arcN) { arcLife[i] = 0f }
     }
 
     fun recordTrail(px: Float, py: Float) {
@@ -105,6 +111,17 @@ class EffectSystem {
         }
     }
 
+    fun spawnElectricArc(fromX: Float, fromY: Float, toX: Float, toY: Float) {
+        for (i in 0 until arcN) {
+            if (arcLife[i] <= 0f) {
+                arcStartX[i] = fromX; arcStartY[i] = fromY
+                arcEndX[i] = toX; arcEndY[i] = toY
+                arcLife[i] = 0.18f
+                return
+            }
+        }
+    }
+
     fun update(dt: Float, scale: Float) {
         for (i in 0 until pn) {
             if (pLife[i] > 0) {
@@ -124,6 +141,7 @@ class EffectSystem {
                 spLife[i] -= 1.5f * dt
             }
         }
+        for (i in 0 until arcN) if (arcLife[i] > 0f) arcLife[i] -= dt
     }
 
     // FIXED: CameraY is now properly used to align trails
@@ -205,6 +223,29 @@ class EffectSystem {
                 val r = (1f - life) * scale * 0.12f
                 c.drawCircle(spX[i] - cameraX, spY[i] - cameraY, r, pGlow)
             }
+        }
+    }
+
+    fun drawElectricArcs(c: Canvas, cameraX: Float, cameraY: Float, scale: Float) {
+        pGlow.style = Paint.Style.STROKE
+        for (i in 0 until arcN) {
+            if (arcLife[i] <= 0f) continue
+            val life = (arcLife[i] / 0.18f).coerceIn(0f, 1f)
+            val sx = arcStartX[i] - cameraX; val sy = arcStartY[i] - cameraY
+            val ex = arcEndX[i] - cameraX; val ey = arcEndY[i] - cameraY
+            val dx = ex - sx; val dy = ey - sy
+            val length = kotlin.math.sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
+            val px = -dy / length; val py = dx / length
+            pGlow.color = ((life * 255).toInt() shl 24) or (GameColors.CLARITY and 0xFFFFFF)
+            pGlow.strokeWidth = scale * 0.006f * life
+            path.reset(); path.moveTo(sx, sy)
+            for (step in 1..4) {
+                val t = step / 5f
+                val wobble = sin((step * 7f) + life * 12f) * scale * 0.025f
+                path.lineTo(sx + dx * t + px * wobble, sy + dy * t + py * wobble)
+            }
+            path.lineTo(ex, ey)
+            c.drawPath(path, pGlow)
         }
     }
 

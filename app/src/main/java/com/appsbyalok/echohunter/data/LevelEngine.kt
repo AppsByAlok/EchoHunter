@@ -1,5 +1,7 @@
 package com.appsbyalok.echohunter.data
 
+import kotlin.math.pow
+
 // Represents individual gameplay components that can overlap cleanly
 enum class LevelFeature {
     CLASSIC,       // Baseline Default: Score/Data collect to win
@@ -108,8 +110,22 @@ object LevelEngine {
 
         // --- NAYA: SMOOTH REWARD SCALING (Prevents Long Overflow) ---
         val baseClear = 100f
-        val maxAddClear = 50000f // Plateau at 50k base reward
+        val maxAddClear = 50000f // Base plateau at 50k KB
         var clearReward = getSaturatedValue(level, baseClear, maxAddClear, 300f).toLong()
+
+        // --- ECONOMY BRIDGE: LATE-GAME HYPER-SCALING ---
+        // At Level 50+, rewards start scaling exponentially to reach TB-scale eventually.
+        if (level > 50) {
+            // Cap the exponent input to prevent Double.POSITIVE_INFINITY and subsequent Long overflow
+            val hyperLevel = (level - 50.0).coerceAtMost(1000.0)
+            val hyperFactor = 1.15.pow(hyperLevel) 
+            
+            // Perform multiplication in Double to detect overflow before converting to Long
+            val scaledReward = clearReward.toDouble() * hyperFactor
+            clearReward = if (scaledReward > Long.MAX_VALUE) Long.MAX_VALUE else scaledReward.toLong()
+        }
+        // Cap it at 1000 TB to prevent overflow and maintain economy balance
+        clearReward = clearReward.coerceAtMost(1000L * 1024L * 1024L * 1024L)
 
         var featureMult = 1.0
         if (features.contains(LevelFeature.BOSS)) featureMult *= 2.5
@@ -163,11 +179,20 @@ object LevelEngine {
     }
 
     fun getKillRewardKB(level: Int, isBoss: Boolean): Long {
-        val base = if (isBoss) {
+        var base = if (isBoss) {
             getSaturatedValue(level, 400f, 1600f, 200f).toLong() // Max 2000 KB for Boss
         } else {
             getSaturatedValue(level, 5f, 45f, 300f).toLong() // Max 50 KB for Normal
         }
+
+        // --- ECONOMY BRIDGE: KILL SCALING ---
+        if (level > 50) {
+            val hyperLevel = (level - 50.0).coerceAtMost(1000.0)
+            val hyperFactor = 1.12.pow(hyperLevel)
+            val scaledBase = base.toDouble() * hyperFactor
+            base = if (scaledBase > Long.MAX_VALUE) Long.MAX_VALUE else scaledBase.toLong()
+        }
+
         return base + (base * UpgradeSystem.getRewardBonusPercent()).toLong()
     }
 }

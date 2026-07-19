@@ -170,11 +170,31 @@ class PauseState(private val manager: AppStateManager) : IAppState {
                     1 -> {
                         val modes = AttackMode.entries.toTypedArray()
                         val currentIdx = gs.controls.activeAttackMode.ordinal
-                        val newMode = modes[(currentIdx + 1) % modes.size]
+                        
+                        var nextIdx = (currentIdx + 1) % modes.size
+                        
+                        // Hardware check for Logic Aim modes
+                        for (attempt in 0 until 3) {
+                            val nextMode = modes[nextIdx]
+                            val isLocked = when (nextMode) {
+                                AttackMode.AUTO_AIM -> !SaveManager.isAutoAimUnlocked
+                                AttackMode.MANUAL_AIM -> !SaveManager.isManualAimUnlocked
+                                else -> false
+                            }
+                            
+                            if (!isLocked) break
+                            nextIdx = (nextIdx + 1) % modes.size
+                        }
 
-                        gs.controls.activeAttackMode = newMode
-                        SaveManager.setAttackMode(newMode.ordinal)
-                        EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100)
+                        val finalMode = modes[nextIdx]
+                        if (finalMode != gs.controls.activeAttackMode) {
+                            gs.controls.activeAttackMode = finalMode
+                            SaveManager.setAttackMode(nextIdx)
+                            EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100)
+                        } else {
+                            gs.showGlobalMessage("LOGIC CORE UPGRADE REQUIRED.", 1.2f)
+                            EchoAudioManager.playSound(ToneGenerator.TONE_PROP_NACK, 100)
+                        }
                     }
                     2 -> manager.view.disconnectCable()
                     3 -> {

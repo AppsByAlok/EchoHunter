@@ -1,16 +1,15 @@
 package com.appsbyalok.echohunter.ui
 
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.media.ToneGenerator
 import android.view.MotionEvent
 import com.appsbyalok.echohunter.data.SaveManager
 import com.appsbyalok.echohunter.engine.GameState
-import com.appsbyalok.echohunter.input.AttackMode
-import com.appsbyalok.echohunter.ui.arsenal.ArsenalListView
-import com.appsbyalok.echohunter.ui.arsenal.ArsenalMainScreen
-import com.appsbyalok.echohunter.ui.arsenal.ProbeDetailRenderer
+import com.appsbyalok.echohunter.ui.arsenal.HardwareTreeRenderer
 import com.appsbyalok.echohunter.ui.components.UIMenuButton
 import com.appsbyalok.echohunter.ui.components.UIMenuMetrics
 import com.appsbyalok.echohunter.ui.components.UIMenuScreenChrome
@@ -22,208 +21,256 @@ class UIArsenal {
     private val pText = Paint().apply {
         isAntiAlias = true
         typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
-        textAlign = Paint.Align.CENTER
     }
 
-    private val probeRenderer = ProbeDetailRenderer()
-    private val mainScreen = ArsenalMainScreen(probeRenderer)
-    private val listView = ArsenalListView()
+    private val treeRenderer = HardwareTreeRenderer()
     private val chrome = UIMenuScreenChrome()
     private val closeButton = UIMenuButton()
+    private val actionButton = UIMenuButton()
+    private val secondaryButton = UIMenuButton()
+    private val resetButton = UIMenuButton()
+    
+    // Track hit zones for stat upgrades
+    private val statButtons = mutableMapOf<String, RectF>()
 
-    // 0 = Main OS, 1 = Weapons Folder, 2 = Traps Folder, 3 = Attack Mode Folder
-    private var currentTab = 0
-    private var hitOnDown = -1
+    private var hitOnDown: String? = null
+    private var isClosePressed = false
 
     fun draw(c: Canvas, targetW: Float, targetH: Float, scale: Float, gs: GameState, dt: Float) {
         val metrics = UIMenuMetrics(targetW, targetH, scale)
         chrome.drawBackground(c, metrics, p, bgColor = 0xEE051015.toInt())
 
-        // --- NANO OS HEADER (Responsive) ---
-        val insetT = metrics.insetTop
-        val insetL = metrics.insetLeft
-        val insetR = metrics.insetRight
+        val insetT = metrics.insetTop; val insetL = metrics.insetLeft
+        val insetR = metrics.insetRight; val insetB = metrics.insetBottom
 
+        // --- HEADER ---
         p.style = Paint.Style.FILL; p.color = GameColors.PULSE
         val headerHeight = metrics.headerHeight
         c.drawRect(0f, 0f, targetW, headerHeight, p)
+        pText.color = GameColors.BG; pText.textSize = scale * 0.045f; pText.textAlign = Paint.Align.LEFT
+        c.drawText("root@probe-7:/sys/loadout ~", scale * 0.05f + insetL, insetT + (headerHeight - insetT) * 0.65f, pText)
 
-        // Header Accents
-        p.color = 0x44000000
-        c.drawRect(0f, headerHeight - scale * 0.015f, targetW, headerHeight, p)
-
-        pText.color = GameColors.BG; pText.textSize = scale * 0.045f
-        pText.isFakeBoldText = true
-        pText.textAlign = Paint.Align.LEFT
-        val titleY = insetT + (headerHeight - insetT) * 0.65f
-        val path = when(currentTab) {
-            1 -> "arsenal/weapons"
-            2 -> "arsenal/traps"
-            3 -> "arsenal/logic_aim"
-            else -> "arsenal"
-        }
-        c.drawText("root@probe-7:/mnt/$path ~", scale * 0.05f + insetL, titleY, pText)
-        pText.isFakeBoldText = false
-
-        // Route to active tab
-        when (currentTab) {
-            0 -> {
-                mainScreen.draw(c, targetW, targetH, scale, gs, headerHeight, hitOnDown)
-            }
-            1 -> listView.draw(c, targetW, targetH, scale, "WEAPON PROTOCOLS", gs.controls.currentWeapon, 
-                arrayOf("BLASTER", "SHOTGUN", "SNIPER"),
-                arrayOf("Standard rapid-fire spike delivery.", "Wide-angle burst for crowd control.", "High-velocity armor-piercing shell."),
-                headerHeight, hitOnDown, dt, insetR)
-            2 -> listView.draw(c, targetW, targetH, scale, "TRAP MODULES", gs.controls.currentTrap, 
-                arrayOf("CAMOUFLAGE", "DECOY", "EMP MINE"),
-                arrayOf("Visual distortion; reduces detection.", "Holographic phantom; attracts sentinels.", "Localized shockwave; disables systems."),
-                headerHeight, hitOnDown, dt, insetR)
-            3 -> listView.draw(c, targetW, targetH, scale, "SELECT AIMING LOGIC", gs.controls.activeAttackMode.ordinal, 
-                arrayOf("DIRECTIONAL", "AUTO-AIM", "MANUAL-AIM"),
-                arrayOf("Classic fire in movement direction.", "Logic-assisted targeting of nearest threat.", "Touch-surface vector based targeting."),
-                headerHeight, hitOnDown, dt, insetR)
+        // --- LAYOUT ---
+        val isPortrait = targetH > targetW
+        val contentY = headerHeight + scale * 0.02f
+        val contentH = targetH - contentY - scale * 0.15f - insetB
+        
+        if (isPortrait) {
+            val schematicH = contentH * 0.5f
+            treeRenderer.draw(c, insetL + scale * 0.02f, contentY, targetW - insetL - insetR - scale * 0.04f, schematicH, scale, gs, hitOnDown)
+            drawDetails(c, insetL + scale * 0.02f, contentY + schematicH + scale * 0.02f, targetW - insetL - insetR - scale * 0.04f, contentH - schematicH - scale * 0.02f, scale, gs)
+        } else {
+            val schematicW = targetW * 0.6f
+            treeRenderer.draw(c, insetL + scale * 0.02f, contentY, schematicW - insetL - scale * 0.04f, contentH, scale, gs, hitOnDown)
+            drawDetails(c, schematicW + scale * 0.02f, contentY, targetW - schematicW - insetR - scale * 0.04f, contentH, scale, gs)
         }
 
-        // --- DISCONNECT / BACK BUTTON (Responsive Footer) ---
-        val insetB = metrics.insetBottom
-        pText.textAlign = Paint.Align.CENTER
-        val isPortrait = metrics.isPortrait
+        // --- DISCONNECT BUTTON ---
         val btnWidth = if (isPortrait) targetW * 0.7f else scale * 0.4f
         val btnHeight = scale * 0.09f
-        val btnBottomMargin = scale * 0.05f + insetB
-
-        closeButton.set(
-            targetW / 2f - btnWidth / 2f,
-            targetH - btnHeight - btnBottomMargin,
-            targetW / 2f + btnWidth / 2f,
-            targetH - btnBottomMargin
-        )
-
-        closeButton.draw(
-            c = c,
-            scale = scale,
-            paint = p,
-            textPaint = pText,
-            label = if (currentTab == 0) "DISCONNECT" else "< BACK",
-            pressed = hitOnDown == 100,
-            fillColor = 0xFF330000.toInt(),
-            strokeColor = GameColors.RED,
-            textColor = GameColors.RED,
-            radius = scale * 0.02f,
-            textSize = scale * 0.045f
-        )
+        closeButton.set(targetW / 2f - btnWidth / 2f, targetH - btnHeight - scale * 0.05f - insetB, targetW / 2f + btnWidth / 2f, targetH - scale * 0.05f - insetB)
+        closeButton.draw(c, scale, p, pText, "DISCONNECT", isClosePressed, 0xFF330000.toInt(), GameColors.RED, GameColors.RED, scale * 0.02f, scale * 0.045f)
     }
 
-    private var touchDownX = 0f
-    private var touchDownY = 0f
+    private fun drawDetails(c: Canvas, x: Float, y: Float, w: Float, h: Float, scale: Float, gs: GameState) {
+        val selected = treeRenderer.getSelectedNode() ?: return
+        statButtons.clear()
+        
+        p.color = 0x2200FFFF; p.style = Paint.Style.FILL
+        c.drawRect(x, y, x + w, y + h, p)
+        p.style = Paint.Style.STROKE; p.color = GameColors.PULSE
+        c.drawRect(x, y, x + w, y + h, p)
 
-    fun handleBack(): Boolean {
-        if (currentTab == 0) return false
-        currentTab = 0
-        hitOnDown = -1
-        listView.scroller.scrollY = 0f
-        return true
+        val tx = x + scale * 0.03f
+        var ty = y + scale * 0.05f
+
+        pText.textAlign = Paint.Align.LEFT
+        pText.color = GameColors.PULSE; pText.textSize = scale * 0.04f
+        c.drawText(selected.name, tx, ty, pText)
+        
+        ty += scale * 0.04f
+        pText.color = GameColors.CLARITY; pText.textSize = scale * 0.022f
+        val lines = wrapText(selected.description, w - scale * 0.06f, pText)
+        for (line in lines) {
+            c.drawText(line, tx, ty, pText)
+            ty += scale * 0.03f
+        }
+
+        if (selected.isUnlocked) {
+            ty += scale * 0.02f
+            val integrityColor = if (selected.integrity > 50) GameColors.HP else GameColors.RED
+            pText.color = integrityColor; pText.textSize = scale * 0.025f
+            c.drawText("INTEGRITY: ${selected.integrity.toInt()}%", tx, ty, pText)
+
+            if (selected.integrity < 100f) {
+                val rW = scale * 0.25f
+                secondaryButton.set(x + w - rW - scale * 0.03f, ty - scale * 0.035f, x + w - scale * 0.03f, ty + scale * 0.015f)
+                secondaryButton.draw(c, scale, p, pText, "REPAIR (${selected.getRepairCost()})", hitOnDown == "REPAIR", 0xFF332200.toInt(), GameColors.YELLOW, GameColors.YELLOW, scale * 0.005f, scale * 0.018f)
+            }
+
+            if (selected.exclusiveGroup != null) {
+                val resetW = scale * 0.25f
+                resetButton.set(x + w - resetW - scale * 0.03f, ty + scale * 0.02f, x + w - scale * 0.03f, ty + scale * 0.07f)
+                resetButton.draw(c, scale, p, pText, "RESET ROUTE", hitOnDown == "RESET", 0xFF330000.toInt(), GameColors.RED, GameColors.RED, scale * 0.005f, scale * 0.016f)
+            }
+
+            ty += scale * 0.05f
+            pText.color = GameColors.PULSE; pText.textSize = scale * 0.028f
+            c.drawText("SUBSYSTEM UPGRADES:", tx, ty, pText)
+            ty += scale * 0.05f
+
+            for (stat in selected.stats) {
+                pText.color = GameColors.CLARITY; pText.textSize = scale * 0.022f
+                c.drawText("${stat.name} [LVL ${stat.level}/${stat.maxLevel}]", tx, ty, pText)
+                
+                if (stat.level < stat.maxLevel) {
+                    val upW = scale * 0.22f; val upH = scale * 0.045f
+                    val btnX = x + w - upW - scale * 0.03f
+                    val r = RectF(btnX, ty - scale * 0.035f, btnX + upW, ty + scale * 0.01f)
+                    statButtons[stat.id] = r
+                    
+                    p.color = if (hitOnDown == "UP_${stat.id}") Color.WHITE else 0xFF003300.toInt()
+                    p.style = Paint.Style.FILL
+                    c.drawRect(r, p)
+                    p.style = Paint.Style.STROKE; p.color = GameColors.PULSE; p.strokeWidth = 2f
+                    c.drawRect(r, p)
+                    
+                    pText.textAlign = Paint.Align.CENTER
+                    pText.color = GameColors.PULSE; pText.textSize = scale * 0.018f
+                    c.drawText("UP (${stat.getCost()})", btnX + upW/2f, ty - scale * 0.005f, pText)
+                    pText.textAlign = Paint.Align.LEFT
+                } else {
+                    pText.color = GameColors.HP
+                    c.drawText("MAXED", x + w - scale * 0.12f, ty, pText)
+                }
+                ty += scale * 0.055f
+            }
+        } else {
+            val canUnlock = treeRenderer.canUnlock(selected)
+            ty += scale * 0.05f
+            if (canUnlock) {
+                pText.color = GameColors.YELLOW; pText.textSize = scale * 0.03f
+                c.drawText("INITIALIZATION COST: ${selected.cost} KB", tx, ty, pText)
+                
+                val abW = w * 0.8f; val abH = scale * 0.07f
+                actionButton.set(x + w/2f - abW/2f, y + h - abH - scale * 0.03f, x + w/2f + abW/2f, y + h - scale * 0.03f)
+                actionButton.draw(c, scale, p, pText, "INITIALIZE HARDWARE", hitOnDown == "INITIALIZE", 0xFF003300.toInt(), GameColors.PULSE, GameColors.PULSE, scale * 0.01f, scale * 0.035f)
+            } else {
+                pText.color = GameColors.RED; pText.textSize = scale * 0.025f
+                c.drawText("ERROR: PRE-REQUISITE SYSTEMS OFFLINE", tx, ty, pText)
+            }
+        }
+    }
+
+    private fun wrapText(text: String, maxWidth: Float, paint: Paint): List<String> {
+        val words = text.split(" ")
+        val lines = mutableListOf<String>()
+        var currentLine = StringBuilder()
+        for (word in words) {
+            val testLine = if (currentLine.isEmpty()) word else "${currentLine} $word"
+            if (paint.measureText(testLine) <= maxWidth) {
+                currentLine.append(if (currentLine.isEmpty()) word else " $word")
+            } else {
+                lines.add(currentLine.toString())
+                currentLine = StringBuilder(word)
+            }
+        }
+        if (currentLine.isNotEmpty()) lines.add(currentLine.toString())
+        return lines
     }
 
     fun onTouch(x: Float, y: Float, action: Int, scale: Float, gs: GameState, onBack: () -> Unit): Boolean {
-        if (currentTab != 0) {
-            if (listView.scroller.isDragging || listView.scroller.isDraggingScrollbar) {
-                hitOnDown = -1
-            }
-        }
-
         when (action) {
             MotionEvent.ACTION_DOWN -> {
-                touchDownX = x
-                touchDownY = y
-
-                hitOnDown = when {
-                    closeButton.contains(x, y) -> 100
-                    currentTab == 0 -> {
-                        when {
-                            mainScreen.weaponDirRect.contains(x, y) -> 1
-                            mainScreen.trapDirRect.contains(x, y) -> 2
-                            mainScreen.attackModeRect.contains(x, y) -> 3
-                            else -> -1
+                isClosePressed = closeButton.contains(x, y)
+                val node = treeRenderer.hitTest(x, y)
+                if (node != null) {
+                    hitOnDown = node.id
+                } else if (actionButton.contains(x, y)) {
+                    hitOnDown = "INITIALIZE"
+                } else if (secondaryButton.contains(x, y)) {
+                    hitOnDown = "REPAIR"
+                } else if (treeRenderer.getSelectedNode()?.exclusiveGroup != null && resetButton.contains(x, y)) {
+                    hitOnDown = "RESET"
+                } else {
+                    for ((id, rect) in statButtons) {
+                        if (rect.contains(x, y)) {
+                            hitOnDown = "UP_$id"
+                            break
                         }
                     }
-                    else -> {
-                        var hit = -1
-                        if (listView.scroller.viewport.contains(x, y)) {
-                            hit = listView.hitItem(x, y) ?: -1
-                        }
-                        hit
-                    }
-                }
-            }
-            MotionEvent.ACTION_MOVE -> {
-                val dx = x - touchDownX
-                val dy = y - touchDownY
-                val distSq = dx * dx + dy * dy
-                val threshold = scale * scale * 0.05f
-
-                if (hitOnDown != -1 && ( (currentTab != 0 && (listView.scroller.isDragging || listView.scroller.isDraggingScrollbar)) || distSq > threshold)) {
-                    hitOnDown = -1
                 }
             }
             MotionEvent.ACTION_UP -> {
-                if (hitOnDown != -1 && (currentTab == 0 || (!listView.scroller.isDragging && !listView.scroller.isDraggingScrollbar))) {
-                    val hitOnUp = when {
-                        closeButton.contains(x, y) -> 100
-                        currentTab == 0 -> {
-                            when {
-                                mainScreen.weaponDirRect.contains(x, y) -> 1
-                                mainScreen.trapDirRect.contains(x, y) -> 2
-                                mainScreen.attackModeRect.contains(x, y) -> 3
-                                else -> -1
+                if (isClosePressed && closeButton.contains(x, y)) {
+                    EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
+                    onBack()
+                } else if (hitOnDown != null) {
+                    val selected = treeRenderer.getSelectedNode()
+                    if (hitOnDown == "INITIALIZE" && actionButton.contains(x, y)) {
+                        if (selected != null && !selected.isUnlocked) {
+                            if (SaveManager.spendData(selected.cost.toLong())) {
+                                selected.isUnlocked = true
+                                SaveManager.unlockNode(selected.id)
+                                EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 150)
+                                gs.showGlobalMessage("${selected.name} ONLINE.", 1.5f)
+                            } else {
+                                EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
+                                gs.showGlobalMessage("INSUFFICIENT DATA.", 1.2f)
                             }
                         }
-                        else -> {
-                            var hit = -1
-                            if (listView.scroller.viewport.contains(x, y)) {
-                                hit = listView.hitItem(x, y) ?: -1
+                    } else if (hitOnDown == "REPAIR" && secondaryButton.contains(x, y)) {
+                        if (selected != null && selected.integrity < 100f) {
+                            val cost = selected.getRepairCost()
+                            if (SaveManager.spendData(cost.toLong())) {
+                                selected.integrity = 100f
+                                selected.isDamaged = false
+                                SaveManager.setIntegrity(selected.id, 100f)
+                                EchoAudioManager.playSound(ToneGenerator.TONE_SUP_PIP, 100)
+                                gs.showGlobalMessage("${selected.name} REPAIRED.", 1.2f)
+                            } else {
+                                EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
+                                gs.showGlobalMessage("INSUFFICIENT DATA.", 1.2f)
                             }
-                            hit
                         }
-                    }
-
-                    if (hitOnUp != -1 && hitOnUp == hitOnDown) {
-                        if (hitOnUp == 100) {
+                    } else if (hitOnDown == "RESET" && resetButton.contains(x, y)) {
+                        if (selected != null && selected.exclusiveGroup != null) {
+                            val (affected, refund) = treeRenderer.resetSubtree(selected)
+                            SaveManager.resetHardwareNodes(affected.map { it.id })
+                            SaveManager.addData(refund)
+                            treeRenderer.selectNode(null)
                             EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
-                            if (currentTab == 0) onBack() else currentTab = 0
-                        } else if (currentTab == 0) {
-                            EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
-                            currentTab = hitOnUp
-                            listView.scroller.scrollY = 0f // Reset scroll on entry
-                        } else {
-                            EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 150)
-                            when (currentTab) {
-                                1 -> {
-                                    gs.controls.currentWeapon = hitOnUp
-                                    SaveManager.setActiveWeapon(hitOnUp)
-                                    gs.showGlobalMessage("WEAPON PROTOCOL UPDATED.", 1.5f)
-                                }
-                                2 -> {
-                                    gs.controls.currentTrap = hitOnUp
-                                    SaveManager.setActiveTrap(hitOnUp)
-                                    gs.showGlobalMessage("TRAP MODULE LOADED.", 1.5f)
-                                }
-                                3 -> {
-                                    gs.controls.activeAttackMode = AttackMode.entries.toTypedArray()[hitOnUp]
-                                    SaveManager.setAttackMode(hitOnUp)
-                                    gs.showGlobalMessage("AIMING LOGIC RECONFIGURED.", 1.5f)
-                                }
+                            gs.showGlobalMessage("ROUTE RESET. ${refund} KB RECOVERED.", 1.5f)
+                        }
+                    } else if (hitOnDown!!.startsWith("UP_")) {
+                        val statId = hitOnDown!!.substring(3)
+                        val stat = selected?.stats?.find { it.id == statId }
+                        if (stat != null && statButtons[statId]?.contains(x, y) == true) {
+                            val cost = stat.getCost()
+                            if (SaveManager.spendData(cost.toLong())) {
+                                stat.level++
+                                SaveManager.setStatLevel(selected!!.id, stat.id, stat.level)
+                                EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 100)
+                                gs.showGlobalMessage("${stat.name} UPGRADED TO LVL ${stat.level}.", 1.2f)
+                            } else {
+                                EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
+                                gs.showGlobalMessage("INSUFFICIENT DATA.", 1.2f)
                             }
-                            currentTab = 0
+                        }
+                    } else {
+                        val node = treeRenderer.hitTest(x, y)
+                        if (node != null && node.id == hitOnDown) {
+                            treeRenderer.selectNode(node.id)
+                            EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
                         }
                     }
                 }
-                hitOnDown = -1
-            }
-            MotionEvent.ACTION_CANCEL -> {
-                hitOnDown = -1
+                isClosePressed = false
+                hitOnDown = null
             }
         }
         return true
     }
+
+    fun handleBack(): Boolean = false
 }

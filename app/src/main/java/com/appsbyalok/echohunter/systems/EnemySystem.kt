@@ -223,7 +223,7 @@ class EnemySystem {
         }
 
         val enemyRadius = scale * 0.02f
-        val stealthCamoMult = 1.0f - (UpgradeSystem.getLevel(UpgradeType.STEALTH_CAMO) * 0.1f)
+        val stealthCamoMult = UpgradeSystem.getStealthDetectionMultiplier()
 
         for (i in 0 until n) {
             if (ex[i] < -1000f) continue
@@ -278,10 +278,10 @@ class EnemySystem {
             // DELEGATE TO MODULAR AI BRAIN
             enemyBrains[i].updateBehavior(i, dt, gs, this, ai, width, height, scale)
 
-            // --- NEW: TRAP INFLUENCE (STASIS) ---
+            // --- NEW: TRAP INFLUENCE (STASIS / DECOY) ---
             for (trap in gs.activeTraps) {
-                if (trap.type == 3) {
-                    val r = scale * 0.25f
+                if (trap.type == 3) { // Stasis
+                    val r = scale * 0.25f * trap.rangeMultiplier
                     val dx = trap.x - ex[i]
                     val dy = trap.y - ey[i]
                     if (dx * dx + dy * dy < r * r) {
@@ -439,10 +439,10 @@ class EnemySystem {
             gs.bossVx = vx
             gs.bossVy = vy
 
-            // --- TRAP INFLUENCE (STASIS) ---
+            // --- TRAP INFLUENCE (STASIS / DECOY) ---
             for (trap in gs.activeTraps) {
-                if (trap.type == 3) {
-                    val r = scale * 0.35f
+                if (trap.type == 3) { // Stasis
+                    val r = scale * 0.35f * trap.rangeMultiplier
                     val dx = trap.x - gs.bossX
                     val dy = trap.y - gs.bossY
                     if (dx * dx + dy * dy < r * r) {

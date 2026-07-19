@@ -1,6 +1,7 @@
 package com.appsbyalok.echohunter.systems
 
 import android.media.ToneGenerator
+import com.appsbyalok.echohunter.data.SaveManager
 import com.appsbyalok.echohunter.data.UpgradeSystem
 import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.utils.EchoAudioManager
@@ -68,7 +69,6 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
 
         val baseCooldown = 0.25f
         gs.attackCooldown = baseCooldown * UpgradeSystem.getSpikeCooldownMultiplier()
-        EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_PIP, 50)
 
         // Reset attack request immediately so we don't double fire in the same frame
         gs.controls.attackRequested = false
@@ -78,34 +78,53 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
         
         when (gs.controls.currentWeapon) {
             0 -> { // STANDARD
-                fireSingle(dx, dy, scale, 0)
+                val dmg = UpgradeSystem.getWeaponDamage(0)
+                EchoAudioManager.playFireSound(dmg, 0)
+                fireSingle(dx, dy, scale, 0, dmg)
                 for (i in 1..multiShot) {
                     val spread = i * 0.15f
-                    fireSingle(dx - dy * spread, dy + dx * spread, scale, 0)
+                    fireSingle(dx - dy * spread, dy + dx * spread, scale, 0, dmg)
                 }
             }
             1 -> { // SHOTGUN
                 val extraPellets = multiShot * 2
                 val totalPellets = 3 + extraPellets
+                val dmg = UpgradeSystem.getWeaponDamage(1)
+                val spreadMult = UpgradeSystem.getShotgunSpreadMultiplier()
+                EchoAudioManager.playFireSound(dmg, 1)
                 for (i in 0 until totalPellets) {
-                    val spread = (i - totalPellets / 2f) * 0.25f
-                    fireSingle(dx - dy * spread, dy + dx * spread, scale, 1)
+                    val spread = (i - totalPellets / 2f) * 0.25f * spreadMult
+                    fireSingle(dx - dy * spread, dy + dx * spread, scale, 1, dmg)
                 }
                 gs.attackCooldown *= 1.8f
             }
             2 -> { // SNIPER
-                fireSingle(dx, dy, scale * 2.5f, 2)
+                val charge = gs.controls.sniperCharge
+                val powerBoost = 1f + charge // Up to 2.5x total power (1.0 base + 1.5 max charge)
+                val baseDmg = UpgradeSystem.getWeaponDamage(2)
+                val totalDmg = baseDmg * powerBoost
+                
+                EchoAudioManager.playFireSound(totalDmg, 2)
+
+                // Speed boost based on charge
+                val projectileScale = scale * 2.5f * powerBoost * UpgradeSystem.getSniperProjectileSpeedMultiplier()
+                fireSingle(dx, dy, projectileScale, 2, totalDmg)
+                
                 if (multiShot >= 1) {
                     // Sniper gets a trailing second shot or narrow spread
-                    fireSingle(dx - dy * 0.05f, dy + dx * 0.05f, scale * 2.5f, 2)
+                    fireSingle(dx - dy * 0.05f, dy + dx * 0.05f, projectileScale, 2, totalDmg)
                 }
                 gs.attackCooldown *= 3.0f
+                
+                // CRITICAL: Reset charge state so it doesn't keep firing
+                gs.controls.isSniperCharging = false
+                gs.controls.sniperCharge = 0f
             }
         }
         gs.localAttackAlert = true
     }
 
-    private fun fireSingle(dx: Float, dy: Float, scale: Float, type: Int) {
+    private fun fireSingle(dx: Float, dy: Float, scale: Float, type: Int, damage: Float) {
         for (i in 0 until gs.maxSpikes) {
             if (!gs.spikeActive[i]) {
                 gs.spikeActive[i] = true
@@ -113,6 +132,8 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
                 gs.spikeY[i] = gs.py
                 gs.spikeLife[i] = if (type == 2) 0.6f else 0.4f
                 gs.spikeType[i] = type
+                gs.spikeDamage[i] = damage
+                gs.spikeArcTriggered[i] = false
 
                 val speed = scale * 2.0f
                 // Add player velocity to projectile for more natural physics
@@ -146,21 +167,23 @@ class ArsenalSystem(private val gs: GameState, private val effectSys: EffectSyst
         EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
 
         // DYNAMIC TRAP DEPLOYMENT
-        val duration = when (gs.controls.currentTrap) {
-            0 -> 4f
-            1 -> 5f
-            2 -> 8f
+        val baseDuration = when (gs.controls.currentTrap) {
+            1 -> 5f + (SaveManager.getStatLevel("u_decoy", "dur") - 1) * 1.5f
+            2 -> 8f // EMP duration is handled by stun stat usually, or fixed
             3 -> 6f // Stasis Pulse
-            4 -> 5f // Sonic Decoy
+            4 -> 5f + (SaveManager.getStatLevel("u_decoy", "dur") - 1) * 1.5f
             else -> 5f
         }
+
+        val rangeMultiplier = UpgradeSystem.getTrapRangeMultiplier(gs.controls.currentTrap)
 
         val newTrap = GameState.ActiveTrap(
             gs.controls.currentTrap,
             gs.px,
             gs.py,
-            duration,
-            duration
+            baseDuration,
+            baseDuration,
+            rangeMultiplier
         )
 
         // Special handling for deployment logic

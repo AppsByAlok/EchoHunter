@@ -5,34 +5,27 @@ import android.content.SharedPreferences
 import kotlin.math.pow
 
 enum class UpgradeType {
-    // ARCHITECT (SYSTEM)
-    MAX_HP,             
-    THRUSTER_OPTIMIZE,  
+    // ARCHITECT (SYSTEM LOGIC)
     DATA_MAGNET,        
     COMPRESSION_ALGO,
-    NANITE_REPAIR,      // NEW: Passive HP Regen
-    QUANTUM_CORE,       // ELITE: Massive HP
-    DATA_SYNDICATE,     // ELITE: 10TB Data God
+    DATA_SYNDICATE,     // ELITE: Data Harvest Yield
     OVERCLOCK_DUR,      // Extends Overclock
-    OPTIC_SENSORS,      // NEW: Passive Vision Radius
+    OPTIC_SENSORS,      // Passive Vision Radius
     
-    // ENFORCER (COMBAT)
-    SPIKE_PAYLOAD,      
+    // ENFORCER (COMBAT LOGIC)
     CRIT_CHANCE,        
     MULTITHREAD_SPIKES, 
-    COMBO_EXTENDER,     // NEW: Longer combo windows
-    KINETIC_OVERLOAD,   // NEW: Mini-explosions on hit
+    COMBO_EXTENDER,     // Longer combo windows
+    KINETIC_OVERLOAD,   // Mini-explosions on hit
     
-    // GHOST (TACTICAL)
+    // GHOST (TACTICAL LOGIC)
     PULSE_FREQUENCY,    
-    STEALTH_CAMO,       
-    SHIELD_RECOVERY,    
     TRAP_COOLDOWN,      
     GHOST_PROTOCOL,      // ELITE: Massive I-Frames
-    SONAR_RANGE,        // NEW: Increased Pulse Radius
-    SILENT_SONAR,       // NEW: Reduced Enemy Alert Range
-    SONAR_DUR,           // NEW: Enemies stay visible longer
-    RESONANCE_CHAMBER,   // NEW: Clean Sweep Chain Radius
+    SONAR_RANGE,        // Increased Pulse Radius
+    SILENT_SONAR,       // Reduced Enemy Alert Range
+    SONAR_DUR,           // Enemies stay visible longer
+    RESONANCE_CHAMBER,   // Clean Sweep Chain Radius
     
     // --- FIRMWARE PATCHES (MARKET EXCLUSIVES) ---
     PATCH_OVERCLOCK_REGEN, // +25% Overclock charge rate
@@ -63,18 +56,6 @@ object UpgradeSystem {
 
     val catalog = mapOf(
         // --- ARCHITECT BRANCH ---
-        UpgradeType.MAX_HP to UpgradeConfig(
-            UpgradeType.MAX_HP, "KERNEL_HARDENING.EXE", "System Integrity +1 HP.",
-            "Increases survival time in high-density combat zones.",
-            "Old-world code recovered from a burnt-out mainframe. Crude but effective.",
-            5, 500L, 2.2f
-        ),
-        UpgradeType.THRUSTER_OPTIMIZE to UpgradeConfig(
-            UpgradeType.THRUSTER_OPTIMIZE, "CLOCK_BOOST.SYS", "Movement Velocity +5%.",
-            "Crucial for outrunning Elite Sentinels and navigating narrow corridors.",
-            "Bypassing safety limiters on the propulsion sub-routine. Watch for heat spikes.",
-            10, 100L, 1.4f
-        ),
         UpgradeType.DATA_MAGNET to UpgradeConfig(
             UpgradeType.DATA_MAGNET, "ATTRACT_LOOPS.ASM", "Data Pickup Radius +50%.",
             "Reduces risk by collecting data without needing to move close to enemy remains.",
@@ -86,18 +67,6 @@ object UpgradeSystem {
             "Essential for late-game scaling. Buy this early to save millions of KB.",
             "Efficiency is the only law in the digital void. Pack it tight.",
             5, 2000L, 2.0f
-        ),
-        UpgradeType.NANITE_REPAIR to UpgradeConfig(
-            UpgradeType.NANITE_REPAIR, "AUTO_PATCHER.BIN", "Passive Repair: 1 HP every 30-10s.",
-            "Allows recovery during stealth phases or long chases.",
-            "Microscopic bots that stitch your code back together while you run.",
-            4, ONE_TB / 2, 3.5f
-        ),
-        UpgradeType.QUANTUM_CORE to UpgradeConfig(
-            UpgradeType.QUANTUM_CORE, "QUANTUM_WALL.SYS", "[ELITE] Massive Integrity +5 HP.",
-            "Turns you into a tank. Necessary for the deepest layers of the Network.",
-            "Existential redundancy. You exist in two states: Alive and Very Alive.",
-            3, ONE_TB, 5.0f
         ),
         UpgradeType.DATA_SYNDICATE to UpgradeConfig(
             UpgradeType.DATA_SYNDICATE, "NEURAL_NET_SIPHON.EXE", "[ELITE] Data Harvest Yield +400%.",
@@ -119,12 +88,6 @@ object UpgradeSystem {
         ),
         
         // --- ENFORCER BRANCH ---
-        UpgradeType.SPIKE_PAYLOAD to UpgradeConfig(
-            UpgradeType.SPIKE_PAYLOAD, "FIREWALL_BREACHER.SH", "Spike Launch Speed +15%.",
-            "Faster projectiles mean you hit fast-moving scouts more reliably.",
-            "A script designed to punch through even the most hardened encryption.",
-            6, 300L, 1.8f
-        ),
         UpgradeType.CRIT_CHANCE to UpgradeConfig(
             UpgradeType.CRIT_CHANCE, "EXPLOIT_KIT.SH", "Crit Chance +10% (2x Damage).",
             "Significantly boosts DPS against high-health Boss units.",
@@ -150,31 +113,13 @@ object UpgradeSystem {
             5, 2000L, 2.0f
         ),
         
-        // --- GHOST BRANCH ---
-        UpgradeType.PULSE_FREQUENCY to UpgradeConfig(
-            UpgradeType.PULSE_FREQUENCY, "PING_OPTIMIZER.BAT", "Sonar Recharge Speed +10%.",
-            "Spam Sonar more often to keep enemies visible constantly.",
-            "Sending out echoes into the dark. Something always answers.",
-            5, 150L, 1.6f
-        ),
-        UpgradeType.STEALTH_CAMO to UpgradeConfig(
-            UpgradeType.STEALTH_CAMO, "PACKET_DISSOLVER.EXE", "Enemy Detection Range -10%.",
-            "Essential for Ghost runs. Move past sentries without engaging.",
-            "You are a ghost in the machine. A whisper in a hurricane.",
-            5, 1200L, 1.8f
-        ),
-        UpgradeType.TRAP_COOLDOWN to UpgradeConfig(
-            UpgradeType.TRAP_COOLDOWN, "OVERCLOCK_DECOY.SYS", "Decoy Cooldown Speed +15%.",
-            "Deploy decoys more frequently to distract pursuers.",
-            "False flags and digital phantoms. They're chasing a shadow.",
-            5, 800L, 1.7f
-        ),
-        UpgradeType.SHIELD_RECOVERY to UpgradeConfig(
-            UpgradeType.SHIELD_RECOVERY, "RECOVERY_PROTOCOL.EXE", "Shield Regen Speed +15%.",
-            "Reduces downtime between skirmishes. Keep moving.",
-            "The barrier hums with renewed energy. You are protected.",
-            5, 600L, 2.0f
-        ),
+    // --- TRAPS & UTILITY BRANCH ---
+    UpgradeType.TRAP_COOLDOWN to UpgradeConfig(
+        UpgradeType.TRAP_COOLDOWN, "OVERCLOCK_DECOY.SYS", "Decoy Cooldown Speed +15%.",
+        "Deploy decoys more frequently to distract pursuers.",
+        "False flags and digital phantoms. They're chasing a shadow.",
+        5, 800L, 1.7f
+    ),
         UpgradeType.GHOST_PROTOCOL to UpgradeConfig(
             UpgradeType.GHOST_PROTOCOL, "ZERO_DAY.VOID", "[ELITE] Post-hit I-Frames +1.5s.",
             "Provides a massive safety net after taking damage to reposition.",
@@ -290,22 +235,136 @@ object UpgradeSystem {
     }
 
     // Accessors for Systems
-    fun getBonusMaxHp(): Int = getLevel(UpgradeType.MAX_HP) + (getLevel(UpgradeType.QUANTUM_CORE) * 5)
+    fun getBonusMaxHp(): Int {
+        if (!SaveManager.isNodeUnlocked("d_plating")) return 0
+        return SaveManager.getStatLevel("d_plating", "hp") - 1
+    }
+
     fun getBonusOverclockTime(): Float = getLevel(UpgradeType.OVERCLOCK_DUR) * 1.0f
-    fun getRegenInterval(): Float = if (getLevel(UpgradeType.NANITE_REPAIR) > 0) 30f / getLevel(UpgradeType.NANITE_REPAIR) else -1f
+    fun getRegenInterval(): Float {
+        if (!SaveManager.isNodeUnlocked("d_plating")) return -1f
+        val level = SaveManager.getStatLevel("d_plating", "regen")
+        if (level <= 1) return -1f
+        // Level 2: 10s, Level 5: 4s (Slower, balanced for hardware)
+        return 12f - level * 2f
+    }
     fun getComboBonusTime(): Float = getLevel(UpgradeType.COMBO_EXTENDER) * 2.0f
     fun getRewardMultiplier(): Float = 1.0f + (getLevel(UpgradeType.DATA_SYNDICATE) * 4.0f)
     fun getMultiShotCount(): Int = getLevel(UpgradeType.MULTITHREAD_SPIKES)
     fun getCritChance(): Float = getLevel(UpgradeType.CRIT_CHANCE) * 0.10f
 
     fun getIframeDurationBonus(): Float = getLevel(UpgradeType.GHOST_PROTOCOL) * 1.5f
-    fun getSpeedMultiplier(): Float = 1.0f + (getLevel(UpgradeType.THRUSTER_OPTIMIZE) * 0.05f)
+    fun getSpeedMultiplier(): Float {
+        // Core is always unlocked. Base speed +5% per sync level.
+        return 1.0f + (SaveManager.getStatLevel("core", "speed") - 1) * 0.05f
+    }
     fun getVisionRadiusMultiplier(): Float = 1.0f + (getLevel(UpgradeType.OPTIC_SENSORS) * 0.15f)
-    fun getDataMagnetRadiusMultiplier(): Float = 1.0f + (getLevel(UpgradeType.DATA_MAGNET) * 0.5f)
-    fun getStealthDetectionMultiplier(): Float = 1.0f - (getLevel(UpgradeType.STEALTH_CAMO) * 0.15f)
-    fun getShieldRecoveryMultiplier(): Float = 1.0f / (1.0f + getLevel(UpgradeType.SHIELD_RECOVERY) * 0.15f)
+    fun getDataMagnetRadiusMultiplier(): Float = 1.0f + (getLevel(UpgradeType.DATA_MAGNET)) * 0.5f
+    fun getStealthDetectionMultiplier(): Float {
+        if (!SaveManager.isNodeUnlocked("u_cloak")) return 1.0f
+        // Reduces detection range by 10% per level.
+        return 1.0f - (SaveManager.getStatLevel("u_cloak", "efficiency") - 1) * 0.10f
+    }
+
+    fun getShieldRecoveryMultiplier(): Float {
+        if (!SaveManager.isNodeUnlocked("d_shield")) return 1.0f
+        // Base 5s. Each level reduces recharge time by 10%
+        return 1.0f - (SaveManager.getStatLevel("d_shield", "regen") - 1) * 0.10f
+    }
+
+    fun getShieldMaxDuration(): Float {
+        if (!SaveManager.isNodeUnlocked("d_shield")) return 5.0f
+        // Base 5s + 1s per capacity level
+        return 5.0f + (SaveManager.getStatLevel("d_shield", "cap") - 1) * 1.0f
+    }
     
-    fun getSpikeCooldownMultiplier(): Float = 1.0f / (1.0f + getLevel(UpgradeType.SPIKE_PAYLOAD) * 0.15f)
+    fun getSpikeCooldownMultiplier(): Float {
+        // SPIKE DRIVER (w_blaster) is always unlocked.
+        return 1.0f - (SaveManager.getStatLevel("w_blaster", "spd") - 1) * 0.05f
+    }
+
+    fun getShotgunSpreadMultiplier(): Float {
+        if (!SaveManager.isNodeUnlocked("w_shotgun")) return 1.0f
+        // Reduces spread by 10% per level (Level 5 = 60% of base spread)
+        return 1.0f - (SaveManager.getStatLevel("w_shotgun", "spread") - 1) * 0.10f
+    }
+
+    fun getSniperChargeSpeedMultiplier(): Float {
+        if (!SaveManager.isNodeUnlocked("w_sniper")) return 1.0f
+        // Increases charge speed by 20% per level
+        return 1.0f + (SaveManager.getStatLevel("w_sniper", "charge_spd") - 1) * 0.20f
+    }
+
+    fun getTrapRangeMultiplier(trapId: Int): Float {
+        return when (trapId) {
+            1, 4 -> { // Decoy / Sonic Decoy
+                if (!SaveManager.isNodeUnlocked("u_decoy")) 1.0f
+                else 1.0f + (SaveManager.getStatLevel("u_decoy", "range") - 1) * 0.15f
+            }
+            2 -> { // EMP
+                if (!SaveManager.isNodeUnlocked("u_emp")) 1.0f
+                else 1.0f + (SaveManager.getStatLevel("u_emp", "radius") - 1) * 0.20f
+            }
+            else -> 1.0f
+        }
+    }
+
+    /**
+     * Calculates the Global Combat Multiplier derived from the 'Exploit' (CRIT_CHANCE) level
+     * and a Hardware Mastery bonus that scales based on all combat-related upgrades.
+     * 
+     * Formula: (Base Exploit) * (1 + Hardware Synergy Sum)
+     * This ensures that every upgrade purchased in the Loadout provides a tangible 
+     * boost to overall combat effectiveness.
+     */
+    fun getGlobalDamageMultiplier(): Float {
+        // 1. Exploit Efficiency: EXPLOIT_KIT.SH level provides the primary multiplier.
+        val exploitLevel = getLevel(UpgradeType.CRIT_CHANCE)
+        val exploitBase = 1.0f + (exploitLevel * 0.12f) // Up to 1.6x at Level 5
+
+        // 2. Hardware Synergy: Mastery bonus from all combat-related hardware levels.
+        // We sum all 'dmg', 'spd', and 'charge' stats across weapons and traps.
+        val masteryLevels = (SaveManager.getStatLevel("w_blaster", "dmg") - 1) +
+                           (SaveManager.getStatLevel("w_blaster", "spd") - 1) +
+                           (SaveManager.getStatLevel("w_shotgun", "dmg") - 1) +
+                           (SaveManager.getStatLevel("w_sniper", "charge_dmg") - 1) +
+                           (SaveManager.getStatLevel("u_emp", "dmg") - 1)
+        
+        // 3. System Protocol Synergy: Small bonus from other Enforcer/Ghost combat upgrades.
+        val protocolLevels = getLevel(UpgradeType.MULTITHREAD_SPIKES) + 
+                            getLevel(UpgradeType.KINETIC_OVERLOAD) +
+                            getLevel(UpgradeType.RESONANCE_CHAMBER)
+
+        val synergyMult = 1.0f + (masteryLevels * 0.035f) + (protocolLevels * 0.02f)
+        
+        return exploitBase * synergyMult
+    }
+
+    fun getWeaponDamage(weaponId: Int): Float {
+        val globalMult = getGlobalDamageMultiplier()
+        val baseDamage = when (weaponId) {
+            0 -> 1.0f + (SaveManager.getStatLevel("w_blaster", "dmg") - 1) * 0.5f
+            1 -> 1.2f + (SaveManager.getStatLevel("w_shotgun", "dmg") - 1) * 0.45f
+            2 -> 3.5f + (SaveManager.getStatLevel("w_sniper", "charge_dmg") - 1) * 2.5f
+            else -> 1.0f
+        }
+        val routeMultiplier = if (weaponId == 2 && SaveManager.isNodeUnlocked("sniper_arc")) 1.15f else 1.0f
+        return baseDamage * globalMult * routeMultiplier
+    }
+
+    fun getSniperProjectileSpeedMultiplier(): Float =
+        if (SaveManager.isNodeUnlocked("sniper_rail")) 1.45f else 1.0f
+
+    fun getSniperBeamWidthMultiplier(): Float =
+        if (SaveManager.isNodeUnlocked("sniper_arc")) 1.8f else if (SaveManager.isNodeUnlocked("sniper_rail")) 0.8f else 1.0f
+
+    fun getTrapPower(trapId: Int): Float {
+        val globalMult = getGlobalDamageMultiplier()
+        return when (trapId) {
+            2 -> (5.0f + (SaveManager.getStatLevel("u_emp", "dmg") - 1) * 2.5f) * globalMult // EMP Damage
+            else -> 0f
+        }
+    }
     
     // SONAR COOLDOWN: Base 3s, -10% per level (Level 5 = 1.5s)
     fun getPulseCooldownMultiplier(): Float = 1.0f - (getLevel(UpgradeType.PULSE_FREQUENCY) * 0.10f)

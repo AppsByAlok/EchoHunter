@@ -56,10 +56,6 @@ class TouchController(private val gs: GameState) {
         gs.controls.isSonarPressed = false
         gs.controls.isOverclockPressed = false
         gs.controls.attackTapQueued = false
-        
-        gs.controls.isWeaponMenuOpen = false
-        gs.controls.isTrapMenuOpen = false
-        gs.controls.isSonarMenuOpen = false
     }
 
     private fun onDown(pointerId: Int, x: Float, y: Float) {
@@ -69,8 +65,7 @@ class TouchController(private val gs: GameState) {
         }
         val layout = gs.hudLayout
         layout.controlAt(x, y)?.takeUnless {
-            (gs.gameMode == 2 && it.control.action !in gs.tutorialEnabledActions) ||
-                (gs.controls.activeAttackMode == AttackMode.MANUAL_AIM && it.control.action == HudAction.ATTACK)
+            gs.gameMode == 2 && it.control.action !in gs.tutorialEnabledActions
         }?.let { resolved ->
             layout.setActionAnchor(resolved)
             when (resolved.control.action) {
@@ -106,7 +101,7 @@ class TouchController(private val gs: GameState) {
                     }
                     if (gs.controls.activeAttackMode == AttackMode.MANUAL_AIM) {
                         gs.touch.manualAimTouchId = pointerId
-                        gs.controls.manualAimActive = resolved.control.inputBehavior == HudInputBehavior.HOLD
+                        gs.controls.manualAimActive = true // Force active in manual mode if touching button
                         gs.touch.manualAimBaseX = resolved.x
                         gs.touch.manualAimBaseY = resolved.y
                         gs.touch.manualAimCurrentX = x
@@ -193,15 +188,21 @@ class TouchController(private val gs: GameState) {
             gs.controls.moveDirY = 0f
         }
         if (pointerId == gs.touch.attackTouchId) {
+            gs.controls.attackTouchX = x
+            gs.controls.attackTouchY = y
             gs.touch.attackTouchId = -1
             gs.controls.isAttackTouching = false
         }
         if (pointerId == gs.touch.trapTouchId) {
+            gs.controls.trapTouchX = x
+            gs.controls.trapTouchY = y
             gs.touch.trapTouchId = -1
             if (gs.controls.isTrapPressed && !gs.controls.isTrapMenuOpen && gs.trapCooldownTimer <= 0f) gs.controls.trapRequested = true
             gs.controls.isTrapPressed = false
         }
         if (pointerId == gs.touch.sonarTouchId) {
+            gs.controls.sonarTouchX = x
+            gs.controls.sonarTouchY = y
             gs.touch.sonarTouchId = -1
             gs.controls.isSonarPressed = false
         }

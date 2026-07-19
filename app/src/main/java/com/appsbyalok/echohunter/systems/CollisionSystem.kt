@@ -61,7 +61,7 @@ class CollisionSystem(
                     when (enemySystem.pwType[i]) {
                         0 -> gs.hp = min(gs.maxHp, gs.hp + 1)
                         1 -> gs.visionClarity = 1.5f
-                        2 -> gs.shieldTimer = 5f
+                        2 -> gs.shieldTimer = UpgradeSystem.getShieldMaxDuration()
                         4 -> {
                             // BOSS EMP TRAP: Damaging/Slow
                             if (gs.playerIframe <= 0f) {
@@ -116,8 +116,9 @@ class CollisionSystem(
 
             if (mineTriggered) {
                 trapIter.remove()
+                val trapPower = UpgradeSystem.getTrapPower(2)
                 triggerExplosion(
-                    trap.x, trap.y, scale * 0.45f, 5f, scale, true, onScoreAdd, onCoreUnlock
+                    trap.x, trap.y, scale * 0.45f, trapPower, scale, true, onScoreAdd, onCoreUnlock
                 )
             }
         }
@@ -141,7 +142,8 @@ class CollisionSystem(
                         
                         // CRITICAL EXPLOIT vs BOSS
                         val isCrit = kotlin.random.Random.nextFloat() < UpgradeSystem.getCritChance()
-                        val damage = if (isCrit) UpgradeSystem.getCritDamageMultiplier() else 1
+                        val critMult = if (isCrit) UpgradeSystem.getCritDamageMultiplier() else 1
+                        val damage = (gs.spikeDamage[s] * critMult).toInt().coerceAtLeast(1)
                         gs.bossHp -= damage
 
                         if (isCrit) {
@@ -212,10 +214,16 @@ class CollisionSystem(
                             
                             // CRITICAL EXPLOIT LOGIC
                             val isCrit = kotlin.random.Random.nextFloat() < UpgradeSystem.getCritChance()
-                            val damage = if (isCrit) UpgradeSystem.getCritDamageMultiplier() else 1
+                            val critMult = if (isCrit) UpgradeSystem.getCritDamageMultiplier() else 1
+                            val damage = (gs.spikeDamage[s] * critMult).toInt().coerceAtLeast(1)
                             
                             enemySystem.hp[i] -= damage
                             effectSystem.spawnParticles(enemySystem.ex[i], enemySystem.ey[i], if (isCrit) 3 else 1, scale)
+
+                            if (gs.spikeType[s] == 2 && UpgradeSystem.getSniperBeamWidthMultiplier() > 1f && !gs.spikeArcTriggered[s]) {
+                                gs.spikeArcTriggered[s] = true
+                                chainArcToNearestEnemy(i, damage, scale, onScoreAdd)
+                            }
                             
                             if (isCrit) {
                                 effectSystem.spawnFloatingText(enemySystem.ex[i], enemySystem.ey[i], damage.toLong(), GameColors.RED)
@@ -271,8 +279,8 @@ class CollisionSystem(
 
                                 // PATCH: COMBO SHIELD (Shield recharge on Combo x10)
                                 if (UpgradeSystem.hasComboShieldPatch() && gs.combo % 10 == 0) {
-                                    // Recharge existing timer by 2 seconds, max 5s
-                                    gs.shieldTimer = min(5f, gs.shieldTimer + 2f)
+                                    // Recharge existing timer by 2 seconds, max capacity
+                                    gs.shieldTimer = min(UpgradeSystem.getShieldMaxDuration(), gs.shieldTimer + 2f)
                                     effectSystem.spawnFloatingText(gs.px, gs.py, 100L, GameColors.SHIELD) // 100 for "100%" boost feel
                                 }
 
@@ -304,7 +312,8 @@ class CollisionSystem(
                             spikeHit = true
                             
                             val isCrit = kotlin.random.Random.nextFloat() < UpgradeSystem.getCritChance()
-                            val damage = (if (isCrit) UpgradeSystem.getCritDamageMultiplier() else 1) * 10f // Spawners take more damage from spikes
+                            val critMult = if (isCrit) UpgradeSystem.getCritDamageMultiplier() else 1
+                            val damage = gs.spikeDamage[s] * critMult * 10f // Spawners take more damage from spikes
                             
                             val prevHp = node.hp
                             spawnerSys.damageNode(node, damage, gs, scale)
@@ -517,7 +526,7 @@ class CollisionSystem(
                     EchoAudioManager.playSound(ToneGenerator.TONE_SUP_INTERCEPT, 150)
                     gs.shakeAmount = max(gs.shakeAmount, scale * 0.08f)
                     gs.chromaticIntensity = max(gs.chromaticIntensity, 0.6f)
-                    gs.hitStopTimer = max(gs.hitStopTimer, 0.15f)
+                    gs.hitStopTimer = max(gs.hitStopTimer, 0.12f)
 
                     if (gs.bossHp <= 0) triggerBossDeath(scale, onScoreAdd, onCoreUnlock)
 
@@ -539,6 +548,47 @@ class CollisionSystem(
                     }
                 }
             }
+        }
+
+        // --- NEW: PASSIVE REGEN SYSTEM ---
+        val regenInterval = UpgradeSystem.getRegenInterval()
+        if (regenInterval > 0f && gs.hp < gs.maxHp && gs.state == 1) {
+            gs.regenTimer += 0.016f // Fixed update step assumed
+            if (gs.regenTimer >= regenInterval) {
+                gs.hp++
+                gs.regenTimer = 0f
+                effectSystem.spawnFloatingText(gs.px, gs.py, 1L, GameColors.HP)
+                EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 50)
+            }
+        }
+    }
+
+    private fun chainArcToNearestEnemy(sourceIndex: Int, sourceDamage: Int, scale: Float, onScoreAdd: (Long) -> Unit) {
+        var targetIndex = -1
+        var bestDistSq = (scale * 0.55f) * (scale * 0.55f)
+        val sourceX = enemySystem.ex[sourceIndex]
+        val sourceY = enemySystem.ey[sourceIndex]
+        for (i in 0 until enemySystem.n) {
+            if (i == sourceIndex || enemySystem.ex[i] < -1000f) continue
+            val dx = enemySystem.ex[i] - sourceX
+            val dy = enemySystem.ey[i] - sourceY
+            val distSq = dx * dx + dy * dy
+            if (distSq < bestDistSq) {
+                bestDistSq = distSq
+                targetIndex = i
+            }
+        }
+        if (targetIndex == -1) return
+
+        val chainDamage = (sourceDamage * 0.5f).toInt().coerceAtLeast(1)
+        enemySystem.hp[targetIndex] -= chainDamage
+        effectSystem.spawnElectricArc(sourceX, sourceY, enemySystem.ex[targetIndex], enemySystem.ey[targetIndex])
+        effectSystem.spawnParticles(enemySystem.ex[targetIndex], enemySystem.ey[targetIndex], 0, scale * 1.5f)
+        effectSystem.spawnFloatingText(enemySystem.ex[targetIndex], enemySystem.ey[targetIndex], chainDamage.toLong(), GameColors.CLARITY, "ARC $chainDamage")
+        if (enemySystem.hp[targetIndex] <= 0) {
+            gs.combo++
+            onScoreAdd((2 * UpgradeSystem.getRewardMultiplier()).toLong())
+            enemySystem.killEnemy(targetIndex, gs)
         }
     }
 

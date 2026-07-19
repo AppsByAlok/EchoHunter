@@ -16,24 +16,57 @@ class InputSystem(private val gs: GameState) {
             val ady = gs.controls.attackTouchY - gs.hudLayout.atkY
             val aDist = sqrt(adx * adx + ady * ady)
 
+            // Sniper Menu Block: If charging the sniper, we prevent the menu from popping up
+            // unless the user really drags it out far (intentional cancel/switch).
+            val isChargingSniper = gs.controls.currentWeapon == 2 && gs.controls.isSniperCharging
+            val menuTriggerThreshold = if (isChargingSniper) scale * 0.55f else menuThreshold
+
             // FIX: Very large threshold in manual/directional modes to prevent accidental weapon menu triggers during aiming swipes
             val dynamicThreshold = if (gs.controls.activeAttackMode == AttackMode.MANUAL_AIM || 
-                                       gs.controls.activeAttackMode == AttackMode.DIRECTIONAL) scale * 0.60f else menuThreshold
+                                       gs.controls.activeAttackMode == AttackMode.DIRECTIONAL) scale * 0.65f else menuTriggerThreshold
 
             if (aDist > dynamicThreshold) {
-                gs.controls.isWeaponMenuOpen = true
-                gs.controls.selectedWeaponIdx = getIndexByAngle(adx, ady, 3)
+                val unlocked = com.appsbyalok.echohunter.data.SaveManager.unlockedWeapons
+                if (unlocked.size > 1) {
+                    gs.controls.isWeaponMenuOpen = true
+                    gs.controls.selectedWeaponIdx = getIndexByAngle(adx, ady, unlocked.size)
+                    // Cancel sniper charge if menu opens
+                    gs.controls.isSniperCharging = false
+                    gs.controls.sniperCharge = 0f
+                }
             } else {
                 if (!gs.controls.isWeaponMenuOpen) gs.controls.selectedWeaponIdx = -1
             }
+
+            // SNIPER CHARGE LOGIC (Hold to charge)
+            if (gs.controls.currentWeapon == 2 && !gs.controls.isWeaponMenuOpen) {
+                gs.controls.isSniperCharging = true
+                val chargeSpeed = 1.3f * com.appsbyalok.echohunter.data.UpgradeSystem.getSniperChargeSpeedMultiplier()
+                gs.controls.sniperCharge = (gs.controls.sniperCharge + dt * chargeSpeed).coerceAtMost(1.5f) // Max 1.5x boost
+            }
         } else {
             if (gs.controls.isWeaponMenuOpen) {
+                val unlocked = com.appsbyalok.echohunter.data.SaveManager.unlockedWeapons
                 val idx = gs.controls.selectedWeaponIdx
-                if (idx != -1) {
-                    gs.controls.currentWeapon = idx
+                if (idx != -1 && idx < unlocked.size) {
+                    gs.controls.currentWeapon = unlocked[idx]
+                    com.appsbyalok.echohunter.data.SaveManager.setActiveWeapon(gs.controls.currentWeapon)
                 }
                 gs.controls.isWeaponMenuOpen = false
                 gs.controls.selectedWeaponIdx = -1
+            } else if (gs.controls.attackTapQueued) {
+                // QUICK SWITCH: Tap to cycle weapons if multiple are unlocked
+                val unlocked = com.appsbyalok.echohunter.data.SaveManager.unlockedWeapons
+                if (unlocked.size > 1) {
+                    val currIdx = unlocked.indexOf(gs.controls.currentWeapon)
+                    val nextIdx = (currIdx + 1) % unlocked.size
+                    gs.controls.currentWeapon = unlocked[nextIdx]
+                    com.appsbyalok.echohunter.data.SaveManager.setActiveWeapon(gs.controls.currentWeapon)
+                    gs.controls.attackTapQueued = false 
+                    // Reset sniper charge on switch
+                    gs.controls.isSniperCharging = false
+                    gs.controls.sniperCharge = 0f
+                }
             }
         }
 
@@ -44,16 +77,21 @@ class InputSystem(private val gs: GameState) {
             val tDist = sqrt(tdx * tdx + tdy * tdy)
 
             if (tDist > menuThreshold) {
-                gs.controls.isTrapMenuOpen = true
-                gs.controls.selectedTrapIdx = getIndexByAngle(tdx, tdy, 3)
-                gs.controls.trapRequested = false // Cancel deploy if we are selecting from menu
+                val unlocked = com.appsbyalok.echohunter.data.SaveManager.unlockedTraps
+                if (unlocked.size > 1) {
+                    gs.controls.isTrapMenuOpen = true
+                    gs.controls.selectedTrapIdx = getIndexByAngle(tdx, tdy, unlocked.size)
+                    gs.controls.trapRequested = false // Cancel deploy if we are selecting from menu
+                }
             } else {
                 gs.controls.selectedTrapIdx = -1
             }
         } else {
             if (gs.controls.isTrapMenuOpen) {
-                if (gs.controls.selectedTrapIdx != -1) {
-                    gs.controls.currentTrap = gs.controls.selectedTrapIdx
+                val idx = gs.controls.selectedTrapIdx
+                val unlocked = com.appsbyalok.echohunter.data.SaveManager.unlockedTraps
+                if (idx != -1 && idx < unlocked.size) {
+                    gs.controls.currentTrap = unlocked[idx]
                     gs.controls.trapRequested = false // Safety: prevent trigger on release
                 }
                 gs.controls.isTrapMenuOpen = false
@@ -131,23 +169,31 @@ class InputSystem(private val gs: GameState) {
         // Convert angle to 0-360 range
         val normalized = (angle + 360) % 360
         
-        // Shifted Arc distribution: 160 to 280 degrees (Safe for Right Edge)
-        val startArc = 160f
-        val arcRange = 120f
+        // Shifted Arc distribution: 140 to 310 degrees (Top-Left quadrant to Top-Right)
+        val startArc = 140f
+        val arcRange = 170f
         
-        // Exclude the right/bottom area
-        if (normalized !in 100.0..340.0) return -1
+        // Exclude the right/bottom area (Dead zone for thumb placement)
+        if (normalized !in 110.0..340.0) return -1
         
-        // Map 160...280 to 0...count-1
+        // Map 140...310 to 0...count-1
         var relativeAngle = normalized - startArc
         if (relativeAngle < 0) relativeAngle += 360
         
-        val idx = (relativeAngle / (arcRange / (count - 0.5f))).toInt().coerceIn(0, count - 1)
+        val idx = (relativeAngle / (arcRange / (count))).toInt().coerceIn(0, count - 1)
         return idx
     }
 
     private fun handleDirectionalAttack(scale: Float) {
-        gs.controls.attackRequested = (gs.controls.isAttackTouching || gs.controls.attackTapQueued) && !gs.controls.isWeaponMenuOpen
+        val isSniper = gs.controls.currentWeapon == 2
+        
+        if (isSniper) {
+            // Sniper: Release to fire if charged or Tap
+            gs.controls.attackRequested = (!gs.controls.isAttackTouching && gs.controls.isSniperCharging) || gs.controls.attackTapQueued
+        } else {
+            // Others: Hold to fire
+            gs.controls.attackRequested = (gs.controls.isAttackTouching || gs.controls.attackTapQueued) && !gs.controls.isWeaponMenuOpen
+        }
         
         val dx = gs.touch.manualAimCurrentX - gs.touch.manualAimBaseX
         val dy = gs.touch.manualAimCurrentY - gs.touch.manualAimBaseY
@@ -195,7 +241,12 @@ class InputSystem(private val gs: GameState) {
     }
 
     private fun handleAutoAim(enemySys: EnemySystem?) {
-        gs.controls.attackRequested = (gs.controls.isAttackTouching || gs.controls.attackTapQueued) && !gs.controls.isWeaponMenuOpen
+        val isSniper = gs.controls.currentWeapon == 2
+        if (isSniper) {
+            gs.controls.attackRequested = (!gs.controls.isAttackTouching && gs.controls.isSniperCharging) || gs.controls.attackTapQueued
+        } else {
+            gs.controls.attackRequested = (gs.controls.isAttackTouching || gs.controls.attackTapQueued) && !gs.controls.isWeaponMenuOpen
+        }
         gs.controls.attackPullDist = 0f
 
         if (enemySys != null) {
@@ -321,6 +372,7 @@ class InputSystem(private val gs: GameState) {
         val dy = gs.touch.manualAimCurrentY - gs.touch.manualAimBaseY
         val dist = sqrt(dx * dx + dy * dy)
         val joyMaxRadius = scale * 0.15f
+        val isSniper = gs.controls.currentWeapon == 2
 
         if (gs.controls.manualAimActive) {
             // Lower deadzone for manual mode
@@ -333,8 +385,16 @@ class InputSystem(private val gs: GameState) {
                 gs.controls.aimDirY = dy / dist
                 gs.controls.attackPullDist = (dist / joyMaxRadius).coerceIn(0f, 1f)
                 
-                // Fire when pulled past 15%
-                gs.controls.attackRequested = dist > (joyMaxRadius * 0.15f)
+                // Fire Logic
+                if (isSniper) {
+                    // Release is handled in onUp usually, but here we track if it *should* fire
+                    // Manual aim is a bit tricky with release-to-fire.
+                    // For now, let's keep it simple: Release to fire is handled by the !isAttackTouching check in update.
+                    gs.controls.attackRequested = false // Will be set by release logic
+                } else {
+                    // Fire when pulled past 15% (Hold to fire)
+                    gs.controls.attackRequested = dist > (joyMaxRadius * 0.15f)
+                }
                 
                 // Update facing
                 gs.lastFacingX = gs.controls.aimDirX
@@ -351,7 +411,13 @@ class InputSystem(private val gs: GameState) {
         } else {
             gs.touch.manualAimKnobX = gs.touch.manualAimBaseX
             gs.touch.manualAimKnobY = gs.touch.manualAimBaseY
-            gs.controls.attackRequested = gs.controls.attackTapQueued
+            
+            if (isSniper) {
+                // Sniper in manual mode: ONLY fire on release (if it was charging) or tap
+                gs.controls.attackRequested = (gs.controls.isSniperCharging && !gs.controls.isAttackTouching) || gs.controls.attackTapQueued
+            } else {
+                gs.controls.attackRequested = gs.controls.attackTapQueued
+            }
             gs.controls.attackPullDist = 0f
             
             // Always sync aimDir with lastFacing when idle

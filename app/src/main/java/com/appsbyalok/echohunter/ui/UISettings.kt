@@ -26,7 +26,7 @@ class UISettings {
     private var layoutEditorOpen = false
     private val layoutEditor = UILayoutEditor()
     private val optionCard = UIMenuCard()
-    private val optionRects = Array(8) { RectF() }
+    private val optionRects = Array(10) { RectF() }
     private var hitOnDown = -1
 
     private val scroller = UIScrollView()
@@ -42,6 +42,8 @@ class UISettings {
         "VISUAL EFFECTS",
         "AUTO-NEXT LEVEL",
         "DEFAULT ATTACK MODE",
+        "DEFAULT WEAPON",
+        "DEFAULT TRAP",
         "SCREEN ROTATION",
         "HUD LAYOUT",
         "WIPE ALL DATA"
@@ -93,7 +95,14 @@ class UISettings {
             val top = i * (itemH + gap) + gap
             rect.set(startX, top, startX + itemW, top + itemH)
 
-            val isPressed = (hitOnDown == i) && !scroller.isDragging && !scroller.isDraggingScrollbar
+            val isLocked = when(i) {
+                4 -> !SaveManager.isNodeUnlocked("sys_aim_manual") && !SaveManager.isNodeUnlocked("sys_aim_auto")
+                5 -> !SaveManager.isNodeUnlocked("sys_carry_w") && SaveManager.unlockedWeapons.size <= 1
+                6 -> !SaveManager.isNodeUnlocked("sys_carry_t") && SaveManager.unlockedTraps.size <= 1
+                else -> false
+            }
+
+            val isPressed = (hitOnDown == i) && !scroller.isDragging && !scroller.isDraggingScrollbar && !isLocked
             optionCard.draw(
                 c = c,
                 rect = rect,
@@ -101,35 +110,37 @@ class UISettings {
                 paint = p,
                 pressed = isPressed,
                 fillColor = 0xFF0A1520.toInt(),
-                strokeColor = if (i == 7) GameColors.RED else GameColors.PULSE,
-                activeStrokeColor = if (i == 7) GameColors.RED else GameColors.PULSE,
+                strokeColor = if (isLocked) 0x44AAAAAA else if (i == 9) GameColors.RED else GameColors.PULSE,
+                activeStrokeColor = if (isLocked) 0x44AAAAAA else if (i == 9) GameColors.RED else GameColors.PULSE,
                 radius = scale * 0.02f
             )
 
             pText.textAlign = Paint.Align.LEFT
             pText.textSize = scale * 0.038f
-            pText.color = GameColors.CLARITY
+            pText.color = if (isLocked) 0x88AAAAAA.toInt() else GameColors.CLARITY
             c.drawText(options[i], rect.left + scale * 0.04f, rect.centerY() + scale * 0.015f, pText)
 
             // Value / Toggle State
             pText.textAlign = Paint.Align.RIGHT
-            val valueText = when (i) {
+            val valueText = if (isLocked) "LOCKED" else when (i) {
                 0 -> if (SaveManager.isSoundEnabled) "ON" else "OFF"
                 1 -> if (SaveManager.isVibrationEnabled) "ON" else "OFF"
                 2 -> if (SaveManager.isEffectsEnabled) "ON" else "OFF"
                 3 -> if (SaveManager.isAutoNextLevelEnabled) "ON" else "OFF"
                 4 -> gs.controls.activeAttackMode.name.replace("_", " ")
-                5 -> when(SaveManager.screenOrientation) {
+                5 -> when(gs.controls.currentWeapon) { 1 -> "SHOTGUN"; 2 -> "SNIPER"; else -> "SPIKE DRIVER" }
+                6 -> when(gs.controls.currentTrap) { 0 -> "CAMOUFLAGE"; 1 -> "DECOY"; 2 -> "EMP MINE"; else -> "NONE" }
+                7 -> when(SaveManager.screenOrientation) {
                     0 -> "AUTO ROTATE"
                     1 -> "PORTRAIT"
                     2 -> "LANDSCAPE"
                     else -> "DEVICE DEFAULT"
                 }
-                6 -> "EDIT"
-                7 -> "DANGER"
+                8 -> "EDIT"
+                9 -> "DANGER"
                 else -> ""
             }
-            pText.color = if (valueText == "OFF" || i == 7) GameColors.RED else GameColors.PULSE
+            pText.color = if (isLocked) 0x88AAAAAA.toInt() else if (valueText == "OFF" || i == 9) GameColors.RED else GameColors.PULSE
             c.drawText(valueText, rect.right - scale * 0.04f, rect.centerY() + scale * 0.015f, pText)
         }
         scroller.end(c, totalContentHeight + gap, scale, insetR)
@@ -277,19 +288,52 @@ class UISettings {
                                 3 -> SaveManager.setAutoNextLevel(!SaveManager.isAutoNextLevelEnabled)
                                 4 -> {
                                     val modes = AttackMode.entries.toTypedArray()
-                                    val next = (gs.controls.activeAttackMode.ordinal + 1) % modes.size
-                                    gs.controls.activeAttackMode = modes[next]
-                                    SaveManager.setAttackMode(next)
+                                    var nextIdx = (gs.controls.activeAttackMode.ordinal + 1) % modes.size
+                                    
+                                    // Hardware check for Logic Aim modes
+                                    // Loop at most 3 times to find an unlocked mode
+                                    for (attempt in 0 until 3) {
+                                        val nextMode = modes[nextIdx]
+                                        val isLocked = when (nextMode) {
+                                            AttackMode.AUTO_AIM -> !SaveManager.isAutoAimUnlocked
+                                            AttackMode.MANUAL_AIM -> !SaveManager.isManualAimUnlocked
+                                            else -> false
+                                        }
+                                        
+                                        if (!isLocked) break
+                                        nextIdx = (nextIdx + 1) % modes.size
+                                    }
+
+                                    gs.controls.activeAttackMode = modes[nextIdx]
+                                    SaveManager.setAttackMode(nextIdx)
                                 }
                                 5 -> {
+                                    val unlocked = SaveManager.unlockedWeapons
+                                    if (unlocked.size > 1) {
+                                        val currentIndex = unlocked.indexOf(gs.controls.currentWeapon)
+                                        val next = unlocked[(currentIndex + 1) % unlocked.size]
+                                        gs.controls.currentWeapon = next
+                                        SaveManager.setActiveWeapon(next)
+                                    }
+                                }
+                                6 -> {
+                                    val unlocked = SaveManager.unlockedTraps
+                                    if (unlocked.size > 1) {
+                                        val currentIndex = unlocked.indexOf(gs.controls.currentTrap)
+                                        val next = unlocked[(currentIndex + 1) % unlocked.size]
+                                        gs.controls.currentTrap = next
+                                        SaveManager.setActiveTrap(next)
+                                    }
+                                }
+                                7 -> {
                                     val next = (SaveManager.screenOrientation + 1) % 4
                                     SaveManager.setScreenOrientation(next)
                                     onOrientChange()
                                 }
-                                6 -> {
+                                8 -> {
                                     layoutEditorOpen = true
                                 }
-                                7 -> {
+                                9 -> {
                                     showWipeConfirm = true
                                 }
                             }

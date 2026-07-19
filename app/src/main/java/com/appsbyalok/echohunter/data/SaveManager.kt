@@ -60,14 +60,112 @@ object SaveManager {
             prefs.edit().putString("fontSize", value).apply()
         }
 
-    var activeAttackMode: Int = 1 // Default to AUTO_AIM (index 1)
+    var activeAttackMode: Int = 0 // Default to DIRECTIONAL (index 0)
         private set
-    var activeWeapon: Int = 1
+    var activeWeapon: Int = 0
         private set
-    var activeTrap: Int = 2
+    var activeTrap: Int = 1
         private set
     var isAutoPilotEnabled: Boolean = false
         private set
+
+    // --- HARDWARE EVOLUTION (LOADOUT.sys) ---
+    private val unlockedNodes = mutableSetOf<String>()
+    private val nodeStatLevels = mutableMapOf<String, MutableMap<String, Int>>()
+    private val nodeIntegrity = mutableMapOf<String, Float>()
+
+    fun isNodeUnlocked(id: String): Boolean = unlockedNodes.contains(id)
+    
+    fun unlockNode(id: String) {
+        unlockedNodes.add(id)
+        saveHardwareState()
+    }
+
+    fun resetHardwareNodes(ids: Collection<String>) {
+        ids.forEach { id ->
+            unlockedNodes.remove(id)
+            nodeStatLevels.remove(id)
+            nodeIntegrity.remove(id)
+        }
+        saveHardwareState()
+    }
+
+    fun getStatLevel(nodeId: String, statId: String): Int {
+        return nodeStatLevels[nodeId]?.get(statId) ?: 1
+    }
+
+    fun setStatLevel(nodeId: String, statId: String, level: Int) {
+        val stats = nodeStatLevels.getOrPut(nodeId) { mutableMapOf() }
+        stats[statId] = level
+        saveHardwareState()
+    }
+
+    fun getIntegrity(nodeId: String): Float = nodeIntegrity[nodeId] ?: 100f
+
+    fun setIntegrity(nodeId: String, value: Float) {
+        nodeIntegrity[nodeId] = value.coerceIn(0f, 100f)
+        saveHardwareState()
+    }
+
+    fun damageRandomUnlockedNode(amount: Float): String? {
+        if (unlockedNodes.isEmpty()) return null
+        val targetId = unlockedNodes.toList().random()
+        val current = getIntegrity(targetId)
+        setIntegrity(targetId, current - amount)
+        return targetId
+    }
+
+    private fun saveHardwareState() {
+        val editor = prefs.edit()
+        editor.putStringSet("hardware_unlocked", unlockedNodes)
+        
+        val statsJson = JSONObject()
+        nodeStatLevels.forEach { (nodeId, stats) ->
+            val nodeObj = JSONObject()
+            stats.forEach { (statId, level) -> nodeObj.put(statId, level) }
+            statsJson.put(nodeId, nodeObj)
+        }
+        editor.putString("hardware_stats", statsJson.toString())
+
+        val integrityJson = JSONObject()
+        nodeIntegrity.forEach { (nodeId, value) -> integrityJson.put(nodeId, value.toDouble()) }
+        editor.putString("hardware_integrity", integrityJson.toString())
+        
+        editor.apply()
+    }
+
+    private fun loadHardwareState() {
+        val saved = prefs.getStringSet("hardware_unlocked", null)
+        unlockedNodes.clear()
+        if (saved == null) {
+            // Initial hardware for new save
+            unlockedNodes.add("core")
+            unlockedNodes.add("w_blaster")
+            unlockedNodes.add("u_decoy")
+            saveHardwareState()
+        } else {
+            unlockedNodes.addAll(saved)
+            // Safety: core should always be unlocked
+            if (unlockedNodes.isEmpty()) unlockedNodes.add("core")
+        }
+        
+        val statsRaw = prefs.getString("hardware_stats", "{}") ?: "{}"
+        nodeStatLevels.clear()
+        val statsJson = JSONObject(statsRaw)
+        statsJson.keys().forEach { nodeId ->
+            val nodeObj = statsJson.getJSONObject(nodeId)
+            val statsMap = mutableMapOf<String, Int>()
+            nodeObj.keys().forEach { statId -> statsMap[statId] = nodeObj.getInt(statId) }
+            nodeStatLevels[nodeId] = statsMap
+        }
+
+        val integrityRaw = prefs.getString("hardware_integrity", "{}") ?: "{}"
+        nodeIntegrity.clear()
+        val integrityJson = JSONObject(integrityRaw)
+        integrityJson.keys().forEach { nodeId ->
+            nodeIntegrity[nodeId] = integrityJson.getDouble(nodeId).toFloat()
+        }
+    }
 
     // Temporary session cache for UI layout (Notch handling)
     var lastInsetTop = 0f
@@ -229,8 +327,33 @@ object SaveManager {
     val isHardModeUnlocked: Boolean
         get() = unlockedStoryStreak >= 3
 
+    val weaponSlots: Int
+        get() = if (isNodeUnlocked("sys_carry_w")) 3 else 1
+
+    val trapSlots: Int
+        get() = if (isNodeUnlocked("sys_carry_t")) 2 else 1
+
     val isManualAimUnlocked: Boolean
-        get() = unlockedStoryStreak >= 1 || maxCampaignLevel > 20
+        get() = isNodeUnlocked("sys_aim_manual")
+
+    val isAutoAimUnlocked: Boolean
+        get() = isNodeUnlocked("sys_aim_auto")
+
+    val unlockedWeapons: List<Int>
+        get() {
+            val list = mutableListOf(0) // Blaster always unlocked
+            if (isNodeUnlocked("w_shotgun")) list.add(1)
+            if (isNodeUnlocked("w_sniper")) list.add(2)
+            return list
+        }
+
+    val unlockedTraps: List<Int>
+        get() {
+            val list = mutableListOf(1) // Decoy always unlocked (ID 1)
+            if (isNodeUnlocked("u_emp")) list.add(2)
+            if (isNodeUnlocked("u_cloak")) list.add(0) // 0 = Void Shadow / Camouflage
+            return list
+        }
 
     var highScore: Long = 0L
         private set
@@ -281,9 +404,9 @@ object SaveManager {
         typewriterSpeed = prefs.getInt("typewriterSpeed", 3)
         fontSize = prefs.getString("fontSize", "NORMAL") ?: "NORMAL"
 
-        activeAttackMode = prefs.getInt("attackMode", 1) // Default to AUTO_AIM
-        activeWeapon = prefs.getInt("activeWeapon", 1)
-        activeTrap = prefs.getInt("activeTrap", 2)
+        activeAttackMode = prefs.getInt("attackMode", 0) // Default to DIRECTIONAL
+        activeWeapon = prefs.getInt("activeWeapon", 0)
+        activeTrap = prefs.getInt("activeTrap", 1)
         isAutoPilotEnabled = prefs.getBoolean("isAutoPilotEnabled", false)
 
         // Load Tutorials
@@ -296,6 +419,8 @@ object SaveManager {
         unlockedStoryStreak = prefs.getInt("unlockStory", 0)
         currentHardStreak = prefs.getInt("currHard", 0)
         unlockedHardStreak = prefs.getInt("unlockHard", 0)
+
+        loadHardwareState()
 
         highScore = getLongSafe("highScore")
         previousScore = getLongSafe("previousScore")
@@ -506,6 +631,14 @@ object SaveManager {
         unlockedHardStreak = 3
         dataCoinsKB = 999_999_999_999L // ~1 PB (Petabyte)
         totalData = (dataCoinsKB / 1024L)
+
+        // Unlock all hardware nodes for debugging
+        val allNodeIds = listOf(
+            "sys_aim_manual", "sys_aim_auto", "w_blaster", "w_shotgun", 
+            "w_sniper", "sys_carry_w", "u_decoy", "u_emp", "sys_carry_t", 
+            "u_cloak", "d_plating", "d_shield", "sniper_arc", "sniper_rail"
+        )
+        allNodeIds.forEach { unlockNode(it) }
         
         prefs.edit()
             .putInt("maxCampaignLevel", maxCampaignLevel)
@@ -523,8 +656,9 @@ object SaveManager {
         totalData = 0L
         maxCampaignLevel = 1
         isAutoNextLevelEnabled = false
-        activeWeapon = 1
-        activeTrap = 2
+        activeAttackMode = 0 // Directional
+        activeWeapon = 0 // Blaster
+        activeTrap = 1   // Decoy
         isAutoPilotEnabled = false
         currentStoryStreak = 0
         unlockedStoryStreak = 0
@@ -532,9 +666,29 @@ object SaveManager {
         unlockedHardStreak = 0
         highScore = 0L
         previousScore = 0L
+        
+        // --- Wipe Hardware Evolution Data ---
+        unlockedNodes.clear()
+        unlockedNodes.add("core") 
+        unlockedNodes.add("w_blaster")
+        unlockedNodes.add("u_decoy")
+        nodeStatLevels.clear()
+        nodeIntegrity.clear()
 
         prefs.edit().clear().apply()
+        
+        // Save defaults back to prefs after clear
+        prefs.edit()
+            .putLong("dataCoinsKB", dataCoinsKB)
+            .putLong("totalData", totalData)
+            .putInt("maxCampaignLevel", maxCampaignLevel)
+            .putInt("attackMode", activeAttackMode)
+            .putInt("activeWeapon", activeWeapon)
+            .putInt("activeTrap", activeTrap)
+            .apply()
+
         UpgradeSystem.clearAllData()
+        saveHardwareState()
     }
 
     private const val HUD_LAYOUT_PORTRAIT_KEY = "hud_layout_v1_portrait"

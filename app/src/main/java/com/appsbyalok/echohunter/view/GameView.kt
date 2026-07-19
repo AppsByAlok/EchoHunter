@@ -313,6 +313,13 @@ class GameView(context: Context) : View(context) {
         gs.damageFlash = 1.0f
         gs.shakeAmount = scale * 0.08f
         gs.chromaticIntensity = 1.0f
+        
+        // --- Damage Hardware Integrity ---
+        val damagedNodeId = SaveManager.damageRandomUnlockedNode(10f)
+        if (damagedNodeId != null && Math.random() < 0.3) {
+            StoryProtocol.showIngameMessage("SYSTEM_ERROR: $damagedNodeId INTEGRITY DROP", 1.2f)
+        }
+
         EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 150)
         StoryProtocol.showIngameMessage(R.string.msg_damage_detected, 1.5f)
 

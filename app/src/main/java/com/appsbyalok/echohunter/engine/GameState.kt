@@ -89,6 +89,8 @@ class GameState {
     val spikeLife = FloatArray(maxSpikes) // Remaining life/duration of projectiles
     val spikeActive = BooleanArray(maxSpikes) // Active status of projectile slots
     val spikeType = IntArray(maxSpikes) // Type identifier for different projectile effects
+    val spikeDamage = FloatArray(maxSpikes) // Base damage of each projectile
+    val spikeArcTriggered = BooleanArray(maxSpikes) // Arc Conduit chains once per sniper shot
 
     var elimTargetsKilled = 0
     var elimTargetsRequired = 0
@@ -119,7 +121,8 @@ class GameState {
         var x: Float,
         var y: Float,
         var timer: Float,
-        val duration: Float
+        val duration: Float,
+        val rangeMultiplier: Float = 1.0f
     )
     val activeTraps = mutableListOf<ActiveTrap>()
 
@@ -202,7 +205,7 @@ class GameState {
         }
 
     var comboBreakTimer = 0f // Grace period before the combo counter resets
-    private var regenTimer = 0f // NAYA: Passive Regen Timer
+    var regenTimer = 0f // NAYA: Passive Regen Timer
     var currentSector = 1 // Current subsection of the level (e.g., Sector 1 of 3)
     var sectorTarget = 30 // Objective target required to clear the current sector
 
@@ -517,6 +520,15 @@ class GameState {
             regenTimer = 0f
         }
 
+        // --- NAYA: COMBO DECAY LOGIC ---
+        if (combo > 0 && comboBreakTimer <= 0f && state == 1) {
+            // Decays combo slowly if not in action, but doesn't drop to 0 instantly if it's very high
+            if (combo > 50) combo -= 1 else combo = 0
+            
+            // Short grace period before next decay
+            comboBreakTimer = 0.5f
+        }
+
         if (showOverclockTextTimer > 0f) showOverclockTextTimer -= dt
         if (comboBreakTimer > 0f) comboBreakTimer -= dt
         if (shieldTimer > 0f) shieldTimer -= dt
@@ -524,7 +536,7 @@ class GameState {
             shieldRechargeTimer += dt
             val targetTime = 5f * UpgradeSystem.getShieldRecoveryMultiplier()
             if (shieldRechargeTimer >= targetTime) {
-                shieldTimer = 5f
+                shieldTimer = UpgradeSystem.getShieldMaxDuration()
                 shieldRechargeTimer = 0f
             }
         } else {

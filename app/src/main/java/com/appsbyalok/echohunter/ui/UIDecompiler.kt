@@ -41,31 +41,24 @@ class UIDecompiler {
 
     private val branches = listOf(
         Triple(
-            "--- [ ARCHITECT ] ---", "CORE SYSTEMS & SURVIVAL", listOf(
-                UpgradeType.MAX_HP,
-                UpgradeType.THRUSTER_OPTIMIZE,
+            "--- [ ARCHITECT ] ---", "CORE LOGIC & SYSTEM DATA", listOf(
                 UpgradeType.DATA_MAGNET,
                 UpgradeType.COMPRESSION_ALGO,
-                UpgradeType.NANITE_REPAIR,
-                UpgradeType.QUANTUM_CORE,
                 UpgradeType.DATA_SYNDICATE,
                 UpgradeType.OVERCLOCK_DUR,
                 UpgradeType.OPTIC_SENSORS
             )
         ), Triple(
             "--- [ ENFORCER ] ---", "TACTICAL COMBAT & OFFENSE", listOf(
-                UpgradeType.SPIKE_PAYLOAD,
                 UpgradeType.CRIT_CHANCE,
                 UpgradeType.KINETIC_OVERLOAD,
                 UpgradeType.MULTITHREAD_SPIKES,
                 UpgradeType.COMBO_EXTENDER
             )
         ), Triple(
-            "--- [ GHOST ] ---", "STEALTH & SONAR RECON", listOf(
+            "--- [ GHOST ] ---", "TACTICAL & SONAR RECON", listOf(
                 UpgradeType.PULSE_FREQUENCY,
-                UpgradeType.STEALTH_CAMO,
                 UpgradeType.TRAP_COOLDOWN,
-                UpgradeType.SHIELD_RECOVERY,
                 UpgradeType.GHOST_PROTOCOL,
                 UpgradeType.SONAR_RANGE,
                 UpgradeType.SILENT_SONAR,

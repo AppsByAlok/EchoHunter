@@ -29,6 +29,9 @@ class HUDRenderer(private val context: Context) {
     fun drawHUD(c: Canvas, scale: Float, gs: GameState, targetW: Float, targetH: Float) {
         gs.modeStrategy.drawModeSpecificHUD(context, c, gs, targetW, targetH, scale, pText)
 
+        // --- GLITCH OVERLAY (Low Integrity) ---
+        drawIntegrityGlitches(c, targetW, targetH, scale)
+
         // --- 0. TOP OVERLAY (Gradient & HP Bar) ---
         drawTopOverlay(c, scale, gs, targetW)
 
@@ -45,7 +48,8 @@ class HUDRenderer(private val context: Context) {
         }
 
         // --- 3. MANUAL AIM TOUCHPAD (Visual Boundary) ---
-        if (gs.controls.activeAttackMode == AttackMode.MANUAL_AIM &&
+        val manualAimUnlocked = SaveManager.isNodeUnlocked("sys_aim_manual")
+        if (manualAimUnlocked && gs.controls.activeAttackMode == AttackMode.MANUAL_AIM &&
             (gs.gameMode != 2 || HudAction.ATTACK in gs.tutorialEnabledActions)) {
             p.style = Paint.Style.STROKE; p.strokeWidth = scale * 0.001f; p.color = 0x11FF0000
             if (gs.hudLayout.manualAimMode == com.appsbyalok.echohunter.input.MovementMode.STATIC) {
@@ -56,32 +60,83 @@ class HUDRenderer(private val context: Context) {
         }
 
         // --- 4. ACTION BUTTONS ---
+        var resolvedAtk: ResolvedHudControl? = null
+        var resolvedTrap: ResolvedHudControl? = null
+        var resolvedSonar: ResolvedHudControl? = null
+
         gs.hudLayout.controls.forEach { resolved ->
             if (gs.gameMode == 2 && resolved.control.action !in gs.tutorialEnabledActions) return@forEach
             when (resolved.control.action) {
-                HudAction.ATTACK -> drawAttackUI(c, scale, gs, resolved)
+                HudAction.ATTACK -> {
+                    resolvedAtk = resolved
+                    drawAttackUI(c, scale, gs, resolved)
+                }
                 HudAction.OVERCLOCK -> drawOverclockButton(c, gs, resolved)
-                HudAction.TRAP -> drawTrapButton(c, gs, resolved)
-                HudAction.SONAR -> if (gs.isDarknessLevel || StoryProtocol.isBlackoutActive) drawSonarButton(c, gs, resolved)
+                HudAction.TRAP -> {
+                    resolvedTrap = resolved
+                    drawTrapButton(c, gs, resolved)
+                }
+                HudAction.SONAR -> if (gs.isDarknessLevel || StoryProtocol.isBlackoutActive) {
+                    resolvedSonar = resolved
+                    drawSonarButton(c, gs, resolved)
+                }
                 HudAction.PAUSE -> drawPauseButton(c, resolved)
             }
         }
 
         // --- 5. RADIAL MENUS (Upper Arc Distribution) ---
         if (gs.controls.isWeaponMenuOpen && (gs.gameMode != 2 || HudAction.ATTACK in gs.tutorialEnabledActions)) {
-            drawRadialMenu(c, scale, gs.hudLayout.atkX, gs.hudLayout.atkY, 
-                arrayOf("SPIKE", "BLAST", "SLUG"), 
-                intArrayOf(GameColors.TEXT, GameColors.YELLOW, GameColors.PULSE),
-                gs.controls.selectedWeaponIdx)
+            if (SaveManager.isNodeUnlocked("sys_carry_w")) {
+                val weapons = SaveManager.unlockedWeapons
+                val labels = weapons.map { id ->
+                    when (id) {
+                        0 -> "BLAST"
+                        1 -> "SPIKE"
+                        2 -> "SLUG"
+                        else -> "WPN"
+                    }
+                }.toTypedArray()
+                val colors = weapons.map { id ->
+                    when (id) {
+                        0 -> GameColors.YELLOW
+                        1 -> GameColors.TEXT
+                        2 -> GameColors.PULSE
+                        else -> GameColors.TEXT
+                    }
+                }.toIntArray()
+
+                drawRadialMenu(c, scale, resolvedAtk?.x ?: gs.hudLayout.atkX, resolvedAtk?.y ?: gs.hudLayout.atkY, 
+                    labels, colors, gs.controls.selectedWeaponIdx)
+            }
         }
         if (gs.controls.isTrapMenuOpen && (gs.gameMode != 2 || HudAction.TRAP in gs.tutorialEnabledActions)) {
-            drawRadialMenu(c, scale, gs.hudLayout.trapX, gs.hudLayout.trapY, 
-                arrayOf("CAMO", "DECOY", "EMP"), 
-                intArrayOf(GameColors.TEXT, GameColors.OVERCLOCK, GameColors.SHIELD), 
-                gs.controls.selectedTrapIdx)
+            if (SaveManager.isNodeUnlocked("sys_carry_t")) {
+                val traps = SaveManager.unlockedTraps
+                val labels = traps.map { id ->
+                    when (id) {
+                        1 -> "DECOY"
+                        2 -> "EMP"
+                        0 -> "CAMO"
+                        else -> "TRAP"
+                    }
+                }.toTypedArray()
+                val colors = traps.map { id ->
+                    when (id) {
+                        1 -> GameColors.OVERCLOCK
+                        2 -> GameColors.SHIELD
+                        0 -> GameColors.TEXT
+                        else -> GameColors.TEXT
+                    }
+                }.toIntArray()
+
+                drawRadialMenu(c, scale, resolvedTrap?.x ?: gs.hudLayout.trapX, resolvedTrap?.y ?: gs.hudLayout.trapY, 
+                    labels, colors, gs.controls.selectedTrapIdx)
+            }
         }
         if (gs.controls.isSonarMenuOpen && (gs.gameMode != 2 || HudAction.SONAR in gs.tutorialEnabledActions)) {
-            drawRadialMenu(c, scale, gs.hudLayout.pulseX, gs.hudLayout.pulseY, arrayOf("MANUAL", "LOCK"), intArrayOf(GameColors.TEXT, GameColors.SHIELD), gs.controls.selectedSonarIdx)
+            if (SaveManager.isNodeUnlocked("sys_aim_auto")) {
+                drawRadialMenu(c, scale, resolvedSonar?.x ?: gs.hudLayout.pulseX, resolvedSonar?.y ?: gs.hudLayout.pulseY, arrayOf("MANUAL", "LOCK"), intArrayOf(GameColors.TEXT, GameColors.SHIELD), gs.controls.selectedSonarIdx)
+            }
         }
 
         // --- 6. PAUSE & STORY POPUPS ---
@@ -240,12 +295,25 @@ class HUDRenderer(private val context: Context) {
 
         when (mode) {
             AttackMode.DIRECTIONAL -> {
-                val color = if (gs.controls.attackRequested) GameColors.TEXT else GameColors.RED
+                val isCharging = gs.controls.currentWeapon == 2 && gs.controls.isSniperCharging
+                val color = if (isCharging) GameColors.YELLOW else if (gs.controls.attackRequested) GameColors.TEXT else GameColors.RED
                 drawActionButton(c, atkX, atkY, radius, "ATK", color, false, visualType = resolved.control.visualType)
+                drawDirectionalAimFeedback(c, scale, gs, atkX, atkY, radius, color, isCharging)
             }
             AttackMode.AUTO_AIM -> {
-                val color = if (gs.controls.attackRequested) GameColors.OVERCLOCK else GameColors.SHIELD
+                val isCharging = gs.controls.currentWeapon == 2 && gs.controls.isSniperCharging
+                val baseColor = if (gs.controls.attackRequested) GameColors.OVERCLOCK else GameColors.SHIELD
+                val color = if (isCharging) GameColors.RED else baseColor
+                
                 drawActionButton(c, atkX, atkY, radius, "", color, false, visualType = resolved.control.visualType)
+                
+                // Charge Indicator Ring for Sniper
+                if (isCharging) {
+                    p.style = Paint.Style.STROKE; p.strokeWidth = radius * 0.1f; p.color = GameColors.YELLOW
+                    val chargeRect = RectF(atkX - radius * 0.9f, atkY - radius * 0.9f, atkX + radius * 0.9f, atkY + radius * 0.9f)
+                    c.drawArc(chargeRect, -90f, 360f * (gs.controls.sniperCharge / 1.5f), false, p)
+                }
+
                 // Technical Tracking Icon
                 p.style = Paint.Style.STROKE; p.strokeWidth = radius * 0.05f; p.color = color
                 c.drawCircle(atkX, atkY, radius * 0.35f, p)
@@ -278,23 +346,48 @@ class HUDRenderer(private val context: Context) {
                 
                 p.style = Paint.Style.FILL; p.color = GameColors.HP
                 c.drawCircle(kx, ky, radius * 0.15f, p)
+
+                if (gs.controls.currentWeapon == 2 && gs.controls.isSniperCharging) {
+                    p.style = Paint.Style.STROKE; p.strokeWidth = radius * 0.1f; p.color = GameColors.YELLOW
+                    val chargeRect = RectF(atkX - radius * 0.9f, atkY - radius * 0.9f, atkX + radius * 0.9f, atkY + radius * 0.9f)
+                    c.drawArc(chargeRect, -90f, 360f * (gs.controls.sniperCharge / 1.5f), false, p)
+                }
             }
+        }
+    }
+
+    private fun drawDirectionalAimFeedback(c: Canvas, scale: Float, gs: GameState, x: Float, y: Float, radius: Float, color: Int, isCharging: Boolean) {
+        val dx = gs.controls.aimDirX
+        val dy = gs.controls.aimDirY
+        p.style = Paint.Style.STROKE
+        p.strokeWidth = radius * 0.06f
+        p.color = color
+        c.drawLine(x, y, x + dx * radius * 0.68f, y + dy * radius * 0.68f, p)
+        p.style = Paint.Style.FILL
+        c.drawCircle(x + dx * radius * 0.72f, y + dy * radius * 0.72f, radius * 0.12f, p)
+        if (isCharging) {
+            p.style = Paint.Style.STROKE
+            p.strokeWidth = radius * 0.1f
+            p.color = GameColors.YELLOW
+            val chargeRect = RectF(x - radius * 0.9f, y - radius * 0.9f, x + radius * 0.9f, y + radius * 0.9f)
+            c.drawArc(chargeRect, -90f, 360f * (gs.controls.sniperCharge / 1.5f), false, p)
         }
     }
 
     private fun drawRadialMenu(c: Canvas, scale: Float, cx: Float, cy: Float, labels: Array<String>, colors: IntArray, selectedIdx: Int) {
         val radius = scale * 0.25f
         val count = labels.size
-        // Radial Menu Angle
-        val startAngle = 165f
-        val arcRange = 115f
-        val step = if (count > 1) arcRange / (count - 1) else 0f
+        // Radial Menu Angle (Matches InputSystem logic)
+        val startAngle = 140f
+        val arcRange = 170f
+        val step = if (count > 1) arcRange / (count) else 0f
+        val offset = step / 2f
 
         p.style = Paint.Style.FILL; p.color = 0x88000000.toInt()
         c.drawCircle(cx, cy, radius + scale * 0.1f, p)
 
         for (i in 0 until count) {
-            val angleDeg = startAngle + i * step
+            val angleDeg = startAngle + i * step + offset
             val angleRad = Math.toRadians(angleDeg.toDouble())
             val lx = cx + cos(angleRad).toFloat() * radius
             val ly = cy + sin(angleRad).toFloat() * radius
@@ -456,5 +549,44 @@ class HUDRenderer(private val context: Context) {
         c.drawText("OVERRIDE ACCEPTED", targetW / 2f, targetH / 2f - scale * 0.2f, pText)
         pText.textSize = scale * 0.03f
         c.drawText("SYSTEM PERFORMANCE AT 200%", targetW / 2f, targetH / 2f - scale * 0.12f, pText)
+    }
+
+    private fun drawIntegrityGlitches(c: Canvas, w: Float, h: Float, scale: Float) {
+        val criticalNodes = listOf("core", "sys_aim_manual", "d_plating")
+        var avgIntegrity = 0f
+        var count = 0
+        criticalNodes.forEach { id ->
+            if (SaveManager.isNodeUnlocked(id)) {
+                avgIntegrity += SaveManager.getIntegrity(id)
+                count++
+            }
+        }
+        
+        if (count == 0) return
+        val integrity = avgIntegrity / count
+        if (integrity > 70f) return
+
+        val intensity = (100f - integrity) / 100f // 0.3 to 1.0
+        val time = System.currentTimeMillis()
+        
+        if (time % 1000 < intensity * 500) {
+            p.style = Paint.Style.FILL
+            p.color = (intensity * 40).toInt() shl 24 or (GameColors.RED and 0xFFFFFF)
+            
+            // Random horizontal glitch bars
+            for (i in 0 until (intensity * 5).toInt() + 1) {
+                val gy = (Math.random() * h).toFloat()
+                val gh = (Math.random() * scale * 0.05f).toFloat()
+                c.drawRect(0f, gy, w, gy + gh, p)
+            }
+            
+            // Random text noise
+            if (Math.random() < intensity * 0.2) {
+                pText.textSize = scale * 0.02f
+                pText.color = 0xAAFF0000.toInt()
+                pText.textAlign = Paint.Align.LEFT
+                c.drawText("CRITICAL_HARDWARE_FAILURE", (Math.random() * w * 0.5f).toFloat(), (Math.random() * h).toFloat(), pText)
+            }
+        }
     }
 }
