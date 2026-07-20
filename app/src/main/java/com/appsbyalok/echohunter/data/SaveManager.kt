@@ -327,12 +327,6 @@ object SaveManager {
     val isHardModeUnlocked: Boolean
         get() = unlockedStoryStreak >= 3
 
-    val weaponSlots: Int
-        get() = if (isNodeUnlocked("sys_carry_w")) 3 else 1
-
-    val trapSlots: Int
-        get() = if (isNodeUnlocked("sys_carry_t")) 2 else 1
-
     val isManualAimUnlocked: Boolean
         get() = isNodeUnlocked("sys_aim_manual")
 

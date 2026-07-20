@@ -260,7 +260,7 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
         val validNodes = gs.spawnerNodes.filter { it.state != SpawnState.DESTROYED && it.state != SpawnState.DISABLED }
         if (validNodes.isEmpty()) return
         
-        for (i in 0 until count) {
+        repeat(count) {
             val node = validNodes.random()
             node.queue++
             // If it was READY, move it to ACTIVE to indicate it has work to do
@@ -270,7 +270,7 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
         }
     }
 
-    fun update(dt: Float, gs: GameState, targetW: Float, targetH: Float, scale: Float) {
+    fun update(dt: Float, gs: GameState, targetW: Float, scale: Float) {
         val maxAllowedDistSq = (targetW * 2.5f) * (targetW * 2.5f)
         val activationDistSq = (targetW * 1.5f) * (targetW * 1.5f)
 
@@ -308,7 +308,7 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
             // 2. PROXIMITY STATE MANAGEMENT
             if (distSq > maxAllowedDistSq && node.type != 2) {
                 // If extremely far (procedural drift), relocate safely
-                relocateNode(node, gs, targetW, scale)
+                relocateNode(node, gs, targetW)
             }
 
             if (distSq > activationDistSq) {
@@ -392,7 +392,7 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
         }
     }
 
-    private fun relocateNode(node: SpawnNode, gs: GameState, targetW: Float, scale: Float) {
+    private fun relocateNode(node: SpawnNode, gs: GameState, targetW: Float) {
         for (attempt in 0 until 15) {
             val angle = Random.nextFloat() * 6.2831855f
             val dist = (targetW * 1.2f) + Random.nextFloat() * (targetW * 0.5f)
@@ -585,26 +585,6 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
             gs.collectedDataKB += (250 * (1.0f + com.appsbyalok.echohunter.data.UpgradeSystem.getRewardBonusPercent())).toLong()
             gs.overclockTimer = 8f
         }
-    }
-
-    fun disableNode(node: SpawnNode, duration: Float) {
-        if (node.state == SpawnState.DESTROYED) return
-        node.state = SpawnState.DISABLED
-        node.cooldownTimer = duration
-    }
-
-    fun triggerRepair(gs: GameState, target: SpawnNode? = null) {
-        val nodeToRepair = target ?: gs.spawnerNodes.filter { it.state == SpawnState.DESTROYED }.randomOrNull()
-        nodeToRepair?.let {
-            it.state = SpawnState.REPAIRING
-            it.hp = 1f 
-        }
-    }
-
-    fun findNearestNode(x: Float, y: Float, gs: GameState, onlyDestroyed: Boolean = false): SpawnNode? {
-        return gs.spawnerNodes
-            .filter { if (onlyDestroyed) it.state == SpawnState.DESTROYED else it.state != SpawnState.DESTROYED }
-            .minByOrNull { (it.x - x) * (it.x - x) + (it.y - y) * (it.y - y) }
     }
 
     fun getTotalQueue(gs: GameState): Int {

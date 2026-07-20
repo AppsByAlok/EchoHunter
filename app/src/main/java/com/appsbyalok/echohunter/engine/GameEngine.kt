@@ -202,7 +202,7 @@ class GameEngine(
                 gs.isLevelCleared = true
             }
 
-            if (gs.gameMode != 2) spawnerSys.update(simDt, gs, viewportW, viewportH, scale)
+            if (gs.gameMode != 2) spawnerSys.update(simDt, gs, viewportW, scale)
             enemySys.updateEnemies(simDt, gs, effectSys, viewportW, viewportH, scale)
             enemySys.updateBoss(simDt, gs, effectSys, scale)
             enemySys.updatePowerups(simDt, gs, effectSys, viewportW, viewportH)
