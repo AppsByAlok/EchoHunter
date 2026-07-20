@@ -157,7 +157,7 @@ class InputSystem(private val gs: GameState) {
 
         // 2. ATTACK LOGIC STRATEGY
         when (gs.controls.activeAttackMode) {
-            AttackMode.DIRECTIONAL -> handleDirectionalAttack(scale)
+            AttackMode.DIRECTIONAL -> handleDirectionalAttack()
             AttackMode.AUTO_AIM -> handleAutoAim(enemySys)
             AttackMode.MANUAL_AIM -> handleManualAim(scale)
         }
@@ -184,60 +184,27 @@ class InputSystem(private val gs: GameState) {
         return idx
     }
 
-    private fun handleDirectionalAttack(scale: Float) {
+    private fun handleDirectionalAttack() {
         val isSniper = gs.controls.currentWeapon == 2
-        
+
         if (isSniper) {
             // Sniper: Release to fire if charged or Tap
-            gs.controls.attackRequested = (!gs.controls.isAttackTouching && gs.controls.isSniperCharging) || gs.controls.attackTapQueued
+            gs.controls.attackRequested =
+                (!gs.controls.isAttackTouching && gs.controls.isSniperCharging) || gs.controls.attackTapQueued
         } else {
             // Others: Hold to fire
-            gs.controls.attackRequested = (gs.controls.isAttackTouching || gs.controls.attackTapQueued) && !gs.controls.isWeaponMenuOpen
+            gs.controls.attackRequested =
+                (gs.controls.isAttackTouching || gs.controls.attackTapQueued) && !gs.controls.isWeaponMenuOpen
         }
-        
-        val dx = gs.touch.manualAimCurrentX - gs.touch.manualAimBaseX
-        val dy = gs.touch.manualAimCurrentY - gs.touch.manualAimBaseY
-        val dist = sqrt(dx * dx + dy * dy)
-        val joyMaxRadius = scale * 0.15f
-        // Manual override threshold: 25% of button radius
-        val overrideThreshold = gs.hudLayout.btnRadius * 0.25f
-
-        if (gs.controls.manualAimActive && dist > overrideThreshold) {
-            // Manual Joystick Override
-            val ratio = if (dist > joyMaxRadius) joyMaxRadius / dist else 1f
-            gs.touch.manualAimKnobX = gs.touch.manualAimBaseX + dx * ratio
-            gs.touch.manualAimKnobY = gs.touch.manualAimBaseY + dy * ratio
-
-            gs.controls.aimDirX = dx / dist
-            gs.controls.aimDirY = dy / dist
-            
-            // Sync facing for character sprite
-            gs.lastFacingX = gs.controls.aimDirX
-            gs.lastFacingY = gs.controls.aimDirY
-            gs.lastIntentionalAimX = gs.controls.aimDirX
-            gs.lastIntentionalAimY = gs.controls.aimDirY
+        val moveDist =
+            sqrt(gs.controls.moveDirX * gs.controls.moveDirX + gs.controls.moveDirY * gs.controls.moveDirY)
+        if (moveDist > 0.1f) {
+            gs.controls.aimDirX = gs.controls.moveDirX / moveDist
+            gs.controls.aimDirY = gs.controls.moveDirY / moveDist
         } else {
-            // FIX: Prioritize last intentional aim for Sniper to prevent movement hijacking on release
-            // In Directional mode, non-sniper weapons can still follow movement for convenience.
-            val moveDist = sqrt(gs.controls.moveDirX * gs.controls.moveDirX + gs.controls.moveDirY * gs.controls.moveDirY)
-            if (isSniper || moveDist < 0.1f) {
-                gs.controls.aimDirX = gs.lastIntentionalAimX
-                gs.controls.aimDirY = gs.lastIntentionalAimY
-            } else {
-                gs.controls.aimDirX = gs.controls.moveDirX / moveDist
-                gs.controls.aimDirY = gs.controls.moveDirY / moveDist
-            }
-            
-            // Visuals for the attack button knob
-            if (gs.controls.manualAimActive) {
-                val clampDist = if (dist > joyMaxRadius) joyMaxRadius else dist
-                val ratio = if (dist > 0.001f) clampDist / dist else 0f
-                gs.touch.manualAimKnobX = gs.touch.manualAimBaseX + dx * ratio
-                gs.touch.manualAimKnobY = gs.touch.manualAimBaseY + dy * ratio
-            } else {
-                gs.touch.manualAimKnobX = gs.touch.manualAimBaseX
-                gs.touch.manualAimKnobY = gs.touch.manualAimBaseY
-            }
+            gs.controls.aimDirX =
+                if (gs.lastFacingX == 0f && gs.lastFacingY == 0f) 1f else gs.lastFacingX
+            gs.controls.aimDirY = gs.lastFacingY
         }
         gs.controls.attackPullDist = 0f
     }
@@ -338,10 +305,10 @@ class InputSystem(private val gs: GameState) {
                 if (dist < normalProximityThreshold) {
                     var score = d2
                     // Compilers are primary targets in Clean Sweep
-                    if (gs.activeObjective is com.appsbyalok.echohunter.modes.CleanSweepObjective) {
-                        score *= 0.5f 
+                    score *= if (gs.activeObjective is com.appsbyalok.echohunter.modes.CleanSweepObjective) {
+                        0.5f
                     } else {
-                        score *= 5.0f // Low priority in other modes (further reduced)
+                        5.0f // Low priority in other modes (further reduced)
                     }
 
                     if (score < bestScore) {
@@ -403,10 +370,6 @@ class InputSystem(private val gs: GameState) {
                     // Fire when pulled past 15% (Hold to fire)
                     gs.controls.attackRequested = dist > (joyMaxRadius * 0.15f)
                 }
-                
-                // Update facing
-                gs.lastFacingX = gs.controls.aimDirX
-                gs.lastFacingY = gs.controls.aimDirY
             } else {
                 gs.touch.manualAimKnobX = gs.touch.manualAimBaseX
                 gs.touch.manualAimKnobY = gs.touch.manualAimBaseY
