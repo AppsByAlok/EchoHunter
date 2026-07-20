@@ -123,7 +123,7 @@ class GameEngine(
 
 
         if (gs.isLevelCleared && gs.state == 1) {
-            // NAYA: Wait for winDelayTimer before showing victory UI
+            // Wait for winDelayTimer before showing victory UI
             if (gs.winDelayTimer > 0f) {
                 // Keep updating visuals but skip objective reward logic
             } else {
@@ -192,7 +192,7 @@ class GameEngine(
         effectSys.update(simDt, scale)
 
         if (gs.state == 1 || gs.state == 8) {
-            // --- NAYA: MODULAR OBJECTIVE CALL ---
+            // --- MODULAR OBJECTIVE CALL ---
             // Updates timers and dynamic logic (like Core activation in Story Mode)
             gs.activeObjective.updateObjective(simDt, gs, enemySys, spawnerSys, viewportW, viewportH, scale)
 
@@ -241,7 +241,7 @@ class GameEngine(
         val columns = gs.gridMap!!.size
         val rows = gs.gridMap!![0].size
 
-        // NAYA: Initialize wall visibility map
+        // Initialize wall visibility map
         gs.wallVisMap = Array(columns) { FloatArray(rows) }
 
         gs.tileSize = scale * 0.15f
@@ -263,7 +263,7 @@ class GameEngine(
         gs.px = pCol * gs.tileSize + (gs.tileSize / 2f)
         gs.py = pRow * gs.tileSize + (gs.tileSize / 2f)
 
-        // NAYA: Generate Spawner Nodes for the level
+        // Generate Spawner Nodes for the level
         spawnerSys.generateNodes(gs, gs.mapWidth, gs.mapHeight, scale)
 
         // --- OBJECTIVE SETUP ---
@@ -271,7 +271,7 @@ class GameEngine(
         // We just need to call its setup here after map generation.
         gs.activeObjective.setupObjective(gs, enemySys, spawnerSys, targetW, targetH, scale)
 
-        // NAYA: Physically spawn enemies immediately so the map isn't empty
+        // Physically spawn enemies immediately so the map isn't empty
         if (gs.gameMode != 2 && gs.spawnerNodes.isNotEmpty()) {
             val preSpawnCount = if (gs.difficulty == 1) 10 else 7
             repeat(preSpawnCount) {
@@ -288,7 +288,7 @@ class GameEngine(
         // Initialize progression flags
         gs.controls.isManualAimUnlocked = SaveManager.isManualAimUnlocked
 
-        // NAYA: Start level with a few more enemies queued to emerge shortly
+        // Start level with a few more enemies queued to emerge shortly
         val initialPop = if (gs.difficulty == 1) 8 else 5
         spawnerSys.queueSpawns(initialPop, gs)
 

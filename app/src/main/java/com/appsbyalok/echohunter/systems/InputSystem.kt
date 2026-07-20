@@ -214,16 +214,18 @@ class InputSystem(private val gs: GameState) {
             // Sync facing for character sprite
             gs.lastFacingX = gs.controls.aimDirX
             gs.lastFacingY = gs.controls.aimDirY
+            gs.lastIntentionalAimX = gs.controls.aimDirX
+            gs.lastIntentionalAimY = gs.controls.aimDirY
         } else {
-            // Default: Look where moving, OR last faced direction
-            // We give priority to active movement for the firing direction
+            // FIX: Prioritize last intentional aim for Sniper to prevent movement hijacking on release
+            // In Directional mode, non-sniper weapons can still follow movement for convenience.
             val moveDist = sqrt(gs.controls.moveDirX * gs.controls.moveDirX + gs.controls.moveDirY * gs.controls.moveDirY)
-            if (moveDist > 0.1f) {
+            if (isSniper || moveDist < 0.1f) {
+                gs.controls.aimDirX = gs.lastIntentionalAimX
+                gs.controls.aimDirY = gs.lastIntentionalAimY
+            } else {
                 gs.controls.aimDirX = gs.controls.moveDirX / moveDist
                 gs.controls.aimDirY = gs.controls.moveDirY / moveDist
-            } else {
-                gs.controls.aimDirX = if (gs.lastFacingX == 0f && gs.lastFacingY == 0f) 1f else gs.lastFacingX
-                gs.controls.aimDirY = gs.lastFacingY
             }
             
             // Visuals for the attack button knob
@@ -362,9 +364,9 @@ class InputSystem(private val gs: GameState) {
                 }
             }
         }
-        // Fallback to last facing direction if no targets in range
-        gs.controls.aimDirX = gs.lastFacingX
-        gs.controls.aimDirY = gs.lastFacingY
+        // Fallback to last intentional aim direction if no targets in range
+        gs.controls.aimDirX = gs.lastIntentionalAimX
+        gs.controls.aimDirY = gs.lastIntentionalAimY
     }
 
     private fun handleManualAim(scale: Float) {
@@ -385,6 +387,12 @@ class InputSystem(private val gs: GameState) {
                 gs.controls.aimDirY = dy / dist
                 gs.controls.attackPullDist = (dist / joyMaxRadius).coerceIn(0f, 1f)
                 
+                // Update facing and intentional aim
+                gs.lastFacingX = gs.controls.aimDirX
+                gs.lastFacingY = gs.controls.aimDirY
+                gs.lastIntentionalAimX = gs.controls.aimDirX
+                gs.lastIntentionalAimY = gs.controls.aimDirY
+
                 // Fire Logic
                 if (isSniper) {
                     // Release is handled in onUp usually, but here we track if it *should* fire
@@ -404,9 +412,9 @@ class InputSystem(private val gs: GameState) {
                 gs.touch.manualAimKnobY = gs.touch.manualAimBaseY
                 gs.controls.attackRequested = false
                 
-                // Fallback to movement-based facing when not aiming
-                gs.controls.aimDirX = gs.lastFacingX
-                gs.controls.aimDirY = gs.lastFacingY
+                // Fallback to last intentional aim when not actively dragging
+                gs.controls.aimDirX = gs.lastIntentionalAimX
+                gs.controls.aimDirY = gs.lastIntentionalAimY
             }
         } else {
             gs.touch.manualAimKnobX = gs.touch.manualAimBaseX
@@ -420,9 +428,9 @@ class InputSystem(private val gs: GameState) {
             }
             gs.controls.attackPullDist = 0f
             
-            // Always sync aimDir with lastFacing when idle
-            gs.controls.aimDirX = gs.lastFacingX
-            gs.controls.aimDirY = gs.lastFacingY
+            // Always sync aimDir with last intentional aim when idle
+            gs.controls.aimDirX = gs.lastIntentionalAimX
+            gs.controls.aimDirY = gs.lastIntentionalAimY
         }
     }
 }

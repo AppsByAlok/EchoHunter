@@ -229,15 +229,14 @@ class GameView(context: Context) : View(context) {
     }
 
     fun disconnectCable() {
-        cleanupLevelEffects()
+        clearRunTransientEffects()
         uiMainMenu.disconnect()
         changeState(0)
         EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
     }
 
     fun returnToArchives() {
-        cleanupLevelEffects()
-        gs.isLevelCleared = false
+        clearRunTransientEffects()
         
         // Return to Hub (15) if Story/Training, else Archives (11)
         if (gs.gameMode == 1 || gs.gameMode == 2) {
@@ -255,6 +254,21 @@ class GameView(context: Context) : View(context) {
             gs.chromaticIntensity = 0f
             gs.sectorFlash = 0f
         }
+    }
+
+    /** Clears effects that belong to an abandoned run and must never bleed into menu UI. */
+    private fun clearRunTransientEffects() {
+        cleanupLevelEffects()
+        gs.isLevelCleared = false
+        gs.winDelayTimer = 0f
+        gs.slowMoTimer = 0f
+        gs.damageFlash = 0f
+        gs.sectorFlash = 0f
+        gs.empFlashTimer = 0f
+        gs.whiteFlash = 0f
+        gs.shakeAmount = 0f
+        gs.chromaticIntensity = 0f
+        gs.shockwaveActive = false
     }
 
     fun pauseGame() {
@@ -437,7 +451,7 @@ class GameView(context: Context) : View(context) {
         gs.damageFlash = 0.3f
         gs.chromaticIntensity = 0.5f
 
-        // --- NAYA: CENTRALIZED CINEMATIC FOCUS ---
+        // --- CENTRALIZED CINEMATIC FOCUS ---
         gs.triggerCinematicFocus(safeX, safeY, zoom = 1.4f, duration = 1.5f, hitStop = 0.2f)
         gs.shakeAmount = scale * 0.15f // Intense vibration on boss arrival
 
@@ -502,10 +516,10 @@ class GameView(context: Context) : View(context) {
 
         engine.update(dt, width.toFloat(), height.toFloat(), gameScale)
 
-        // NAYA: StateManager updates UI logic
+        // StateManager updates UI logic
         stateManager.update(dt, width.toFloat(), height.toFloat(), gameScale)
 
-        // --- NAYA: MODULAR DRAW (No more giant when block!) ---
+        // --- MODULAR DRAW (No more giant when block!) ---
         stateManager.draw(canvas, width.toFloat(), height.toFloat(), gameScale, dt)
 
         drawTransientOverlays(canvas, dt)
@@ -552,6 +566,9 @@ class GameView(context: Context) : View(context) {
     }
 
     fun drawTransientOverlays(canvas: Canvas, dt: Float) {
+        // Transient effects are run-scoped. Menus must not render a paused game frame.
+        if (gs.state != 1 && gs.state != 8 && gs.state != 9 && gs.state != 12) return
+
         if (gs.damageFlash > 0f) {
             canvas.drawColor((gs.damageFlash * 100).toInt() shl 24 or 0xFF0000)
             gs.damageFlash = max(0f, gs.damageFlash - dt * 2f)
@@ -576,7 +593,7 @@ class GameView(context: Context) : View(context) {
 
             // 2. Big Center Text with Scale-up Effect
             pAlert.textSize = gameScale * 0.12f
-            pAlert.color = (com.appsbyalok.echohunter.utils.GameColors.CLARITY and 0xFFFFFF) or (255 shl 24)
+            pAlert.color = (GameColors.CLARITY and 0xFFFFFF) or (255 shl 24)
             pAlert.style = Paint.Style.FILL
             
             val centerX = width / 2f

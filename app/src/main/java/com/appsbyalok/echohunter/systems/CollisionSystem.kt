@@ -503,6 +503,20 @@ class CollisionSystem(
                         playedEnemyHackSound = true
                     }
                     enemySystem.killEnemy(i, gs)
+                } else if (enemySystem.type[i] == 6) {
+                    // --- BOMBER COLLISION ---
+                    // Bomber detonates on contact, creating a damaging explosion.
+                    val explosionRadius = scale * 0.35f
+                    val explosionDamage = 10f // High, fixed damage
+                    triggerExplosion(
+                        enemySystem.ex[i], enemySystem.ey[i], explosionRadius, explosionDamage, scale, true, onScoreAdd, onCoreUnlock
+                    )
+                    // The bomber is consumed in the explosion.
+                    enemySystem.killEnemy(i, gs)
+                    // Also damage the player if they are not invincible.
+                    if (gs.playerIframe <= 0f) {
+                        onDamage(scale)
+                    }
                 }
             }
         }

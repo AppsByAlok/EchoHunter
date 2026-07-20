@@ -6,6 +6,8 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.media.ToneGenerator
+import android.text.TextPaint
+import android.text.TextUtils
 import android.view.MotionEvent
 import com.appsbyalok.echohunter.data.SaveManager
 import com.appsbyalok.echohunter.engine.GameState
@@ -18,7 +20,7 @@ import com.appsbyalok.echohunter.utils.GameColors
 
 class UIArsenal {
     private val p = Paint().apply { isAntiAlias = true }
-    private val pText = Paint().apply {
+    private val pText = TextPaint().apply {
         isAntiAlias = true
         typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
     }
@@ -36,7 +38,7 @@ class UIArsenal {
     private var hitOnDown: String? = null
     private var isClosePressed = false
 
-    fun draw(c: Canvas, targetW: Float, targetH: Float, scale: Float, gs: GameState, dt: Float) {
+    fun draw(c: Canvas, targetW: Float, targetH: Float, scale: Float, gs: GameState) {
         val metrics = UIMenuMetrics(targetW, targetH, scale)
         chrome.drawBackground(c, metrics, p, bgColor = 0xEE051015.toInt())
 
@@ -48,7 +50,11 @@ class UIArsenal {
         val headerHeight = metrics.headerHeight
         c.drawRect(0f, 0f, targetW, headerHeight, p)
         pText.color = GameColors.BG; pText.textSize = scale * 0.045f; pText.textAlign = Paint.Align.LEFT
-        c.drawText("root@probe-7:/sys/loadout ~", scale * 0.05f + insetL, insetT + (headerHeight - insetT) * 0.65f, pText)
+        val headerText = "root@probe-7:/sys/loadout ~ [HARDWARE_EVOLUTION]"
+        val headerTextX = scale * 0.05f + insetL
+        val availableWidth = targetW - headerTextX - insetR - (scale * 0.08f)
+        val truncatedText = TextUtils.ellipsize(headerText, pText, availableWidth.coerceAtLeast(0f), TextUtils.TruncateAt.END)
+        c.drawText(truncatedText.toString(), headerTextX, insetT + (headerHeight - insetT) * 0.65f, pText)
 
         // --- LAYOUT ---
         val isPortrait = targetH > targetW
@@ -58,11 +64,11 @@ class UIArsenal {
         if (isPortrait) {
             val schematicH = contentH * 0.5f
             treeRenderer.draw(c, insetL + scale * 0.02f, contentY, targetW - insetL - insetR - scale * 0.04f, schematicH, scale, gs, hitOnDown)
-            drawDetails(c, insetL + scale * 0.02f, contentY + schematicH + scale * 0.02f, targetW - insetL - insetR - scale * 0.04f, contentH - schematicH - scale * 0.02f, scale, gs)
+            drawDetails(c, insetL + scale * 0.02f, contentY + schematicH + scale * 0.02f, targetW - insetL - insetR - scale * 0.04f, contentH - schematicH - scale * 0.02f, scale)
         } else {
             val schematicW = targetW * 0.6f
             treeRenderer.draw(c, insetL + scale * 0.02f, contentY, schematicW - insetL - scale * 0.04f, contentH, scale, gs, hitOnDown)
-            drawDetails(c, schematicW + scale * 0.02f, contentY, targetW - schematicW - insetR - scale * 0.04f, contentH, scale, gs)
+            drawDetails(c, schematicW + scale * 0.02f, contentY, targetW - schematicW - insetR - scale * 0.04f, contentH, scale)
         }
 
         // --- DISCONNECT BUTTON ---
@@ -72,7 +78,7 @@ class UIArsenal {
         closeButton.draw(c, scale, p, pText, "DISCONNECT", isClosePressed, 0xFF330000.toInt(), GameColors.RED, GameColors.RED, scale * 0.02f, scale * 0.045f)
     }
 
-    private fun drawDetails(c: Canvas, x: Float, y: Float, w: Float, h: Float, scale: Float, gs: GameState) {
+    private fun drawDetails(c: Canvas, x: Float, y: Float, w: Float, h: Float, scale: Float) {
         val selected = treeRenderer.getSelectedNode() ?: return
         statButtons.clear()
         
@@ -89,6 +95,7 @@ class UIArsenal {
         c.drawText(selected.name, tx, ty, pText)
         
         ty += scale * 0.04f
+        pText.textAlign = Paint.Align.LEFT
         pText.color = GameColors.CLARITY; pText.textSize = scale * 0.022f
         val lines = wrapText(selected.description, w - scale * 0.06f, pText)
         for (line in lines) {
@@ -98,6 +105,7 @@ class UIArsenal {
 
         if (selected.isUnlocked) {
             ty += scale * 0.02f
+            pText.textAlign = Paint.Align.LEFT
             val integrityColor = if (selected.integrity > 50) GameColors.HP else GameColors.RED
             pText.color = integrityColor; pText.textSize = scale * 0.025f
             c.drawText("INTEGRITY: ${selected.integrity.toInt()}%", tx, ty, pText)
@@ -106,27 +114,58 @@ class UIArsenal {
                 val rW = scale * 0.25f
                 secondaryButton.set(x + w - rW - scale * 0.03f, ty - scale * 0.035f, x + w - scale * 0.03f, ty + scale * 0.015f)
                 secondaryButton.draw(c, scale, p, pText, "REPAIR (${selected.getRepairCost()})", hitOnDown == "REPAIR", 0xFF332200.toInt(), GameColors.YELLOW, GameColors.YELLOW, scale * 0.005f, scale * 0.018f)
+                pText.textAlign = Paint.Align.LEFT
             }
+
+            // Since REPAIR and INTEGRITY are drawn together, let's advance ty to next line
+            ty += scale * 0.05f
 
             if (selected.exclusiveGroup != null) {
                 val resetW = scale * 0.25f
-                resetButton.set(x + w - resetW - scale * 0.03f, ty + scale * 0.02f, x + w - scale * 0.03f, ty + scale * 0.07f)
+                val resetH = scale * 0.05f
+                resetButton.set(x + w - resetW - scale * 0.03f, ty - scale * 0.025f, x + w - scale * 0.03f, ty + resetH - scale * 0.025f)
                 resetButton.draw(c, scale, p, pText, "RESET ROUTE", hitOnDown == "RESET", 0xFF330000.toInt(), GameColors.RED, GameColors.RED, scale * 0.005f, scale * 0.016f)
+                pText.textAlign = Paint.Align.LEFT
+                // Advance ty dynamically to clear the button and provide clearance
+                ty += resetH + scale * 0.01f
             }
 
-            ty += scale * 0.05f
+            ty += scale * 0.02f
+            pText.textAlign = Paint.Align.LEFT
             pText.color = GameColors.PULSE; pText.textSize = scale * 0.028f
             c.drawText("SUBSYSTEM UPGRADES:", tx, ty, pText)
             ty += scale * 0.05f
 
             for (stat in selected.stats) {
+                pText.textAlign = Paint.Align.LEFT
                 pText.color = GameColors.CLARITY; pText.textSize = scale * 0.022f
-                c.drawText("${stat.name} [LVL ${stat.level}/${stat.maxLevel}]", tx, ty, pText)
+
+                val statText = "${stat.name} [LVL ${stat.level}/${stat.maxLevel}]"
+                val availableWidth: Float
+
+                if (stat.level < stat.maxLevel) {
+                    val upW = scale * 0.22f
+                    val btnX = x + w - upW - scale * 0.03f
+                    availableWidth = btnX - tx - (scale * 0.02f) // Space between text and button
+                } else {
+                    // Position where "MAXED" text is drawn
+                    val maxedTextX = x + w - scale * 0.12f
+                    availableWidth = maxedTextX - tx - (scale * 0.02f)
+                }
+
+                val truncatedText = TextUtils.ellipsize(
+                    statText,
+                    pText,
+                    availableWidth,
+                    TextUtils.TruncateAt.END
+                )
+
+                c.drawText(truncatedText.toString(), tx, ty, pText)
                 
                 if (stat.level < stat.maxLevel) {
                     val upW = scale * 0.22f; val upH = scale * 0.045f
                     val btnX = x + w - upW - scale * 0.03f
-                    val r = RectF(btnX, ty - scale * 0.035f, btnX + upW, ty + scale * 0.01f)
+                    val r = RectF(btnX, ty - upH * 0.7f, btnX + upW, ty + upH * 0.3f)
                     statButtons[stat.id] = r
                     
                     p.color = if (hitOnDown == "UP_${stat.id}") Color.WHITE else 0xFF003300.toInt()
@@ -149,6 +188,7 @@ class UIArsenal {
             val canUnlock = treeRenderer.canUnlock(selected)
             ty += scale * 0.05f
             if (canUnlock) {
+                pText.textAlign = Paint.Align.LEFT
                 pText.color = GameColors.YELLOW; pText.textSize = scale * 0.03f
                 c.drawText("INITIALIZATION COST: ${selected.cost} KB", tx, ty, pText)
                 
@@ -167,7 +207,7 @@ class UIArsenal {
         val lines = mutableListOf<String>()
         var currentLine = StringBuilder()
         for (word in words) {
-            val testLine = if (currentLine.isEmpty()) word else "${currentLine} $word"
+            val testLine = if (currentLine.isEmpty()) word else "$currentLine $word"
             if (paint.measureText(testLine) <= maxWidth) {
                 currentLine.append(if (currentLine.isEmpty()) word else " $word")
             } else {
@@ -179,7 +219,7 @@ class UIArsenal {
         return lines
     }
 
-    fun onTouch(x: Float, y: Float, action: Int, scale: Float, gs: GameState, onBack: () -> Unit): Boolean {
+    fun onTouch(x: Float, y: Float, action: Int, gs: GameState, onBack: () -> Unit): Boolean {
         when (action) {
             MotionEvent.ACTION_DOWN -> {
                 isClosePressed = closeButton.contains(x, y)
@@ -240,7 +280,7 @@ class UIArsenal {
                             SaveManager.addData(refund)
                             treeRenderer.selectNode(null)
                             EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
-                            gs.showGlobalMessage("ROUTE RESET. ${refund} KB RECOVERED.", 1.5f)
+                            gs.showGlobalMessage("ROUTE RESET. $refund KB RECOVERED.", 1.5f)
                         }
                     } else if (hitOnDown!!.startsWith("UP_")) {
                         val statId = hitOnDown!!.substring(3)
@@ -249,7 +289,7 @@ class UIArsenal {
                             val cost = stat.getCost()
                             if (SaveManager.spendData(cost.toLong())) {
                                 stat.level++
-                                SaveManager.setStatLevel(selected!!.id, stat.id, stat.level)
+                                SaveManager.setStatLevel(selected.id, stat.id, stat.level)
                                 EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 100)
                                 gs.showGlobalMessage("${stat.name} UPGRADED TO LVL ${stat.level}.", 1.2f)
                             } else {

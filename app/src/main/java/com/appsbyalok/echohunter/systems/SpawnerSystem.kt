@@ -161,6 +161,7 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
                     config.features.contains(LevelFeature.CLEAN_SWEEP) -> {
                         if (i % 4 == 0) 4 else Random.nextInt(0, 2)
                     }
+                    Random.nextFloat() < 0.1f -> 6 // 10% chance for a Bomber spawner
                     i == 0 -> 0 
                     i == 1 -> 1 
                     Random.nextFloat() < 0.2f -> 2 
@@ -207,6 +208,7 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
                             val type = when {
                                 config.features.contains(LevelFeature.ELIMINATION) -> 2
                                 config.features.contains(LevelFeature.CLEAN_SWEEP) && foundCount % 4 == 0 -> 4
+                                Random.nextFloat() < 0.1f -> 6 // Bomber
                                 else -> Random.nextInt(0, 3)
                             }
                             val stats = getNodeStats(type)
@@ -249,6 +251,7 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
             0 -> 1.5f to 100f   // Normal: Fast, Standard HP
             1 -> 4.0f to 200f   // Swarm: Medium, High HP
             4 -> 3.0f to 300f   // Repair Hub: Medium, Beefy
+            6 -> 2.5f to 50f    // Bomber: Fast, Low HP (glass cannon)
             else -> 6.0f to 500f // Admin: Slow, Tanky
         }
     }

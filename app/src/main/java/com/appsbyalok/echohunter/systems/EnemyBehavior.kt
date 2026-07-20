@@ -357,6 +357,38 @@ object RepairDroneBehavior : IEnemyBehavior {
     }
 }
 
+// 7. BOMBER BEHAVIOR (Suicide Unit)
+object BomberBehavior : IEnemyBehavior {
+    override fun updateBehavior(
+        i: Int,
+        dt: Float,
+        gs: GameState,
+        enemySys: EnemySystem,
+        ai: EnemyAI,
+        targetW: Float,
+        targetH: Float,
+        scale: Float,
+    ) {
+        val targetX = if (gs.isDecoyActive) gs.decoyX else gs.px
+        val targetY = if (gs.isDecoyActive) gs.decoyY else gs.py
+        val tdx = targetX - enemySys.ex[i]
+        val tdy = targetY - enemySys.ey[i]
+        val td2 = tdx * tdx + tdy * tdy
+
+        val dist = sqrt(td2)
+        val config = com.appsbyalok.echohunter.data.LevelEngine.getLevelConfig(gs.currentLevel)
+        val speed = scale * 0.3f * config.speedMultiplier // Slightly faster than normal
+
+        if (dist > 0f) {
+            val lerpFactor = (dt * 8f).coerceIn(0f, 1f) // More responsive steering
+            enemySys.evx[i] =
+                (enemySys.evx[i] * (1f - lerpFactor)) + ((tdx / dist) * speed * lerpFactor)
+            enemySys.evy[i] =
+                (enemySys.evy[i] * (1f - lerpFactor)) + ((tdy / dist) * speed * lerpFactor)
+        }
+    }
+}
+
 // 6. GUARD BEHAVIOR (Orbits HVT, switches to Aggro when player enters range)
 object GuardBehavior : IEnemyBehavior {
     override fun updateBehavior(
@@ -373,7 +405,7 @@ object GuardBehavior : IEnemyBehavior {
         val hvtIdx = enemySys.invX[i].toInt()
         val hasHvt = hvtIdx >= 0 && hvtIdx < enemySys.n && enemySys.ex[hvtIdx] > -1000f
 
-        // If HVT is lost/destroyed, the Guard should also be terminated
+        // CRITICAL FIX: If HVT is lost/destroyed, the Guard must be terminated to prevent crash.
         if (!hasHvt) {
             enemySys.hp[i] = 0
             enemySys.killEnemy(i, gs)

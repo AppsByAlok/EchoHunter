@@ -273,7 +273,7 @@ class MenuRenderer(private val context: Context) {
         val gap = scale * 0.04f
         
         val btnX = targetW / 2f - btnW / 2f
-        var btnY = targetH * 0.58f
+        var btnY = targetH * 0.65f
 
         // 1. NEXT LEVEL BUTTON / FINAL VICTORY
         victoryNextRect.set(btnX, btnY, btnX + btnW, btnY + btnH)

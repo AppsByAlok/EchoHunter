@@ -309,7 +309,7 @@ object SaveManager {
 
     private inline fun <reified T : Enum<T>> enumOrDefault(value: String, default: T): T =
         enumValues<T>().firstOrNull { it.name == value } ?: default
-    // --- NAYA STREAK SYSTEM (ROGUELITE) ---
+    // --- STREAK SYSTEM (ROGUELITE) ---
     var currentStoryStreak: Int = 0
         private set
     var unlockedStoryStreak: Int = 0

@@ -372,7 +372,7 @@ class SubMenuState(private val manager: AppStateManager) : IAppState {
         when (gs.state) {
             10 -> manager.view.uiDecompiler.draw(c, width, height, scale, dt)
             11 -> manager.view.uiArchives.draw(c, width, height, gs, scale, dt)
-            13 -> manager.view.uiArsenal.draw(c, width, height, scale, gs, dt)
+            13 -> manager.view.uiArsenal.draw(c, width, height, scale, gs)
             14 -> manager.view.uiNanoOS.draw(c, width, height, scale, gs.timeSinceStart)
             15 -> manager.view.uiMainFrame.draw(c, width, height, gs, scale, dt)
             17 -> manager.view.uiTerminal.draw(c, width, height, scale)
@@ -384,7 +384,7 @@ class SubMenuState(private val manager: AppStateManager) : IAppState {
             10 -> manager.view.uiDecompiler.onTouch(vx, vy, action, scale, gs, manager.view.onAppClose)
             11 -> manager.view.uiArchives.onTouch(vx, vy, action,
                 gs, scale, manager.view.onArchiveSelect, manager.view.onAppClose)
-            13 -> manager.view.uiArsenal.onTouch(vx, vy, action, scale, gs, manager.view.onAppClose)
+            13 -> manager.view.uiArsenal.onTouch(vx, vy, action, gs, manager.view.onAppClose)
             14 -> manager.view.uiNanoOS.onTouch(vx, vy, action, scale, { appIndex ->
                 manager.view.menuReturnState = 14
                 when (appIndex) {

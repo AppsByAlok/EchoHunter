@@ -359,14 +359,16 @@ class UIArchives {
         val chipRows =
             ((featureEnumValues.size + metrics.chipColumns - 1) / metrics.chipColumns).coerceAtLeast(
                 1
-            )
-        val expandedBottom =
-            metrics.expandedFilterTop + metrics.expandedFilterHeight + metrics.controlGap + chipRows * (scale * 0.052f + metrics.controlGap)
-        val collapsedTop = metrics.filterToggleTop + metrics.filterToggleHeight + metrics.controlGap
-        val targetListTop = if (filterSystem.isFilterExpanded) expandedBottom else collapsedTop
-        val maxAllowedTop = height - metrics.footerHeight - scale * 0.24f
-        listTop = targetListTop.coerceAtMost(maxAllowedTop)
-            .coerceAtLeast(scale * if (metrics.isLandscape) 0.22f else 0.38f)
+            ).coerceAtLeast(0) // Ensure it's not negative
+
+        val expandedFilterContentHeight = metrics.expandedFilterHeight + metrics.controlGap + chipRows * (scale * 0.052f + metrics.controlGap)
+        val expandedBottom = metrics.expandedFilterTop + expandedFilterContentHeight
+
+        val collapsedTop = metrics.filterToggleTop + metrics.filterToggleHeight + metrics.controlGap * 2f
+        val targetListTop = if (filterSystem.isFilterExpanded) (expandedBottom + metrics.controlGap) else collapsedTop
+
+        val maxAllowedTop = height - metrics.footerHeight - scale * 0.20f // Give a bit more space
+        listTop = targetListTop.coerceAtMost(maxAllowedTop).coerceAtLeast(scale * 0.1f)
         listBottom = height - metrics.footerHeight
         clearFiltersBoxRect.setEmpty()
 

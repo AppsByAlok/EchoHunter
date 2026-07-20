@@ -135,6 +135,7 @@ class ExitCommand : TerminalCommand {
     override val manual = "Terminates the current terminal session and wipes the system buffer."
     override fun execute(args: List<String>, context: CommandContext): CommandResult {
         return CommandResult("""
+            
             SHUTTING DOWN NANO-OS...
             CLEANING TEMPORARY BUFFERS...
             SESSION TERMINATED.

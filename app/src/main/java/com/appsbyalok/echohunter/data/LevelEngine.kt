@@ -108,7 +108,7 @@ object LevelEngine {
 
         val targetScore = (getSaturatedValue(level, 50f, 1950f, 400f) * (1.0f + UpgradeSystem.getRewardBonusPercent())).toLong()
 
-        // --- NAYA: SMOOTH REWARD SCALING (Prevents Long Overflow) ---
+        // --- SMOOTH REWARD SCALING (Prevents Long Overflow) ---
         val baseClear = 100f
         val maxAddClear = 50000f // Base plateau at 50k KB
         var clearReward = getSaturatedValue(level, baseClear, maxAddClear, 300f).toLong()
@@ -142,7 +142,7 @@ object LevelEngine {
             return LevelConfig(features, 0, 1.1f, 1f, 0.4f, 0f, 153600L, 180f)
         }
 
-        // --- NAYA: DYNAMIC PAR TIME CALCULATION ---
+        // --- DYNAMIC PAR TIME CALCULATION ---
         val basePar = if (isHard) 50f else 60f
         // Level growth: up to 120s extra for higher levels
         val levelTimeGrowth = getSaturatedValue(level, 0f, 120f, 600f)

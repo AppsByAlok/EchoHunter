@@ -236,8 +236,8 @@ object UpgradeSystem {
 
     // Accessors for Systems
     fun getBonusMaxHp(): Int {
-        if (!SaveManager.isNodeUnlocked("d_plating")) return 0
-        return SaveManager.getStatLevel("d_plating", "hp") - 1
+        // HP is now part of the Core Hardware node.
+        return SaveManager.getStatLevel("core", "hp") - 1
     }
 
     fun getBonusOverclockTime(): Float = getLevel(UpgradeType.OVERCLOCK_DUR) * 1.0f

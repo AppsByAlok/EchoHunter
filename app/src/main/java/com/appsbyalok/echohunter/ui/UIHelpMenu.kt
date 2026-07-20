@@ -298,7 +298,7 @@ class UIHelpMenu(private val context: Context) {
         drawLine("- OVR [Overclock]: Ultimate. Ram enemies to destroy them!", GameColors.TEXT)
         sy += lh * 0.5f
 
-        // --- NAYA: THREAT IDENTIFICATION (ICONS LEGEND) ---
+        // --- THREAT IDENTIFICATION (ICONS LEGEND) ---
         drawLine("2. NODE IDENTIFICATION (LEGEND)", GameColors.SHIELD, true)
         drawLine(
             "CLASSIC: Standard kilobyte payload extraction.",

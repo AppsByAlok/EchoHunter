@@ -70,7 +70,7 @@ class GameState {
     var modInfinityTraps = false // Cheat flag for unlimited traps
 
     var gridMap: Array<IntArray>? = null // 2D layout representing walls and walkable areas
-    var wallVisMap: Array<FloatArray>? = null // NAYA: Tracks persistence of wall visibility
+    var wallVisMap: Array<FloatArray>? = null // Tracks persistence of wall visibility
     var tileSize = 100f // Size of each grid cell in world units
     var mapWidth = 0f // Total width of the current map
     var mapHeight = 0f // Total height of the current map
@@ -80,6 +80,9 @@ class GameState {
 
     var lastFacingX = 1f // The horizontal direction the player last moved towards
     var lastFacingY = 0f // The vertical direction the player last moved towards
+
+    var lastIntentionalAimX = 1f // Stores the last direction the player aimed manually
+    var lastIntentionalAimY = 0f
 
     val maxSpikes = 12 // Maximum number of active projectiles (spikes) allowed
     val spikeX = FloatArray(maxSpikes) // X positions of projectiles
@@ -106,7 +109,7 @@ class GameState {
 
     var escapeGateActive = false // Whether the level exit portal is currently available
 
-    // --- NAYA: GLOBAL SPAWNER NODES ---
+    // --- GLOBAL SPAWNER NODES ---
     var spawnerNodes = mutableListOf<com.appsbyalok.echohunter.systems.SpawnNode>()
 
     var attackCooldown = 0f // Time remaining before the next attack can be performed
@@ -205,7 +208,7 @@ class GameState {
         }
 
     var comboBreakTimer = 0f // Grace period before the combo counter resets
-    var regenTimer = 0f // NAYA: Passive Regen Timer
+    var regenTimer = 0f // Passive Regen Timer
     var currentSector = 1 // Current subsection of the level (e.g., Sector 1 of 3)
     var sectorTarget = 30 // Objective target required to clear the current sector
 
@@ -295,8 +298,8 @@ class GameState {
     var bossMaxHp = 0 // Maximum possible health of the boss
     var bossX = -1000f // World X position of the boss
     var bossY = -1000f // World Y position of the boss
-    var bossVx = 0f // NAYA: Boss Velocity X
-    var bossVy = 0f // NAYA: Boss Velocity Y
+    var bossVx = 0f // Boss Velocity X
+    var bossVy = 0f // Boss Velocity Y
     var bossIframe = 0f // Boss's temporary invulnerability period
     var bossType = 0 // Identifier for the type of boss encountered
     var bossVis = 1.0f // Visual alpha/visibility factor for the boss
@@ -508,7 +511,7 @@ class GameState {
     fun updateTimers(dt: Float, scale: Float) {
         if (playerIframe > 0f) playerIframe -= dt
 
-        // --- NAYA: PASSIVE REGEN LOGIC ---
+        // --- PASSIVE REGEN LOGIC ---
         val regenInterval = UpgradeSystem.getRegenInterval()
         if (regenInterval > 0f && hp < maxHp && state == 1) {
             regenTimer += dt
@@ -520,7 +523,7 @@ class GameState {
             regenTimer = 0f
         }
 
-        // --- NAYA: COMBO DECAY LOGIC ---
+        // --- COMBO DECAY LOGIC ---
         if (combo > 0 && comboBreakTimer <= 0f && state == 1) {
             // Decays combo slowly if not in action, but doesn't drop to 0 instantly if it's very high
             if (combo > 50) combo -= 1 else combo = 0
@@ -666,7 +669,7 @@ class GameState {
     fun updateVisibilityMath(scale: Float, maxRad: Float, dt: Float) {
         val applyDarkness = isDarknessLevel || StoryProtocol.isBlackoutActive
 
-        // NAYA: Passive vision radius scales with OPTIC_SENSORS upgrade
+        // Passive vision radius scales with OPTIC_SENSORS upgrade
         // Base radius is around 15% of screen, can grow with upgrades
         val baseAura = scale * 0.15f 
         val visionMult = UpgradeSystem.getVisionRadiusMultiplier()
@@ -710,7 +713,7 @@ class GameState {
             outerRSq = 0f
         }
 
-        // NAYA: Decay wall visibility over time using Upgrade bonus
+        // Decay wall visibility over time using Upgrade bonus
         val decayDuration = UpgradeSystem.getSonarDurationBonus()
         wallVisMap?.let { vis ->
             for (x in vis.indices) {

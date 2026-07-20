@@ -24,6 +24,7 @@ class HardwareTreeRenderer {
         // --- CORE & SYSTEM (The Root) ---
         nodes.add(HardwareNode("core", "PROBE-7 CORE", NodeType.CORE, "Central processing unit. Essential for all operations.", 0, 0.5f, 0.5f, isUnlocked = true).apply {
             stats.add(UpgradeStat("speed", "Neural Sync (Spd)", 1, 5, 400))
+            stats.add(UpgradeStat("hp", "Hull Integrity", 1, 10, 500))
         })
         
         // --- LOGIC & AIM BRANCH (Manual Override is now the Foundation) ---
@@ -46,6 +47,12 @@ class HardwareTreeRenderer {
             stats.add(UpgradeStat("dmg", "Pellet Impact", 1, 8, 450))
             stats.add(UpgradeStat("spread", "Choke Adjust", 1, 5, 400))
             stats.add(UpgradeStat("reload", "Quick Cycle", 1, 5, 600))
+        })
+        nodes.add(HardwareNode("shotgun_burn", "THERMITE SLUGS", NodeType.WEAPON, "Exclusive route: shots ignite enemies, dealing damage over time.", 3500, 0.22f, 0.12f, listOf("w_shotgun"), exclusiveGroup = "shotgun_route").apply {
+            stats.add(UpgradeStat("burn_dmg", "Thermal Yield", 1, 5, 800))
+        })
+        nodes.add(HardwareNode("shotgun_shock", "TESLA BUCKSHOT", NodeType.WEAPON, "Exclusive route: shots chain electric damage between close enemies.", 3500, 0.28f, 0.3f, listOf("w_shotgun"), exclusiveGroup = "shotgun_route").apply {
+            stats.add(UpgradeStat("chain_range", "Jump Radius", 1, 5, 800))
         })
         
         nodes.add(HardwareNode("w_sniper", "ARC BOLT", NodeType.WEAPON, "Heavy rail-driver. Hold to charge for massive piercing damage.", 2500, 0.65f, 0.2f, listOf("w_blaster")).apply {
@@ -75,6 +82,12 @@ class HardwareTreeRenderer {
             stats.add(UpgradeStat("radius", "Blast Radius", 1, 5, 600))
             stats.add(UpgradeStat("dmg", "Systems Shock", 1, 5, 800))
         })
+        nodes.add(HardwareNode("emp_freeze", "CRYOGENIC BURST", NodeType.UTILITY, "Exclusive route: EMP field freezes enemies in place for a long duration.", 3500, 0.12f, 0.82f, listOf("u_emp"), exclusiveGroup = "emp_route").apply {
+            stats.add(UpgradeStat("freeze_dur", "Sub-Zero Time", 1, 5, 900))
+        })
+        nodes.add(HardwareNode("emp_vulnerability", "VIRAL PAYLOAD", NodeType.UTILITY, "Exclusive route: EMP field makes enemies take 50% more damage from all sources.", 3500, 0.08f, 0.7f, listOf("u_emp"), exclusiveGroup = "emp_route").apply {
+            stats.add(UpgradeStat("vuln_dur", "Infection Window", 1, 5, 900))
+        })
         
         // Trap Capacity Node
         nodes.add(HardwareNode("sys_carry_t", "UTILITY BELT", NodeType.CORE, "Optimized storage for multiple trap types.", 3500, 0.15f, 0.6f, listOf("u_emp")))
@@ -84,8 +97,7 @@ class HardwareTreeRenderer {
         })
 
         // --- DEFENSE BRANCH ---
-        nodes.add(HardwareNode("d_plating", "NANO ARMOR", NodeType.DEFENSE, "Reactive composite plating for hull integrity.", 1200, 0.75f, 0.5f, listOf("core")).apply {
-            stats.add(UpgradeStat("hp", "Hull Integrity", 1, 10, 500))
+        nodes.add(HardwareNode("d_plating", "NANO ARMOR", NodeType.DEFENSE, "Reactive composite plating. Focuses on specialized defense protocols.", 1200, 0.75f, 0.5f, listOf("core")).apply {
             stats.add(UpgradeStat("regen", "Auto-Repair", 1, 5, 800))
         })
         nodes.add(HardwareNode("d_shield", "PULSE SHIELD", NodeType.DEFENSE, "Energy barrier that absorbs incoming fire.", 3500, 0.9f, 0.5f, listOf("d_plating")).apply {

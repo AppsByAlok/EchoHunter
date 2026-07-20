@@ -31,6 +31,10 @@ class UIMenuButton {
         radius: Float = scale * 0.01f,
         textSize: Float = scale * 0.035f
     ) {
+        val oldAlign = textPaint.textAlign
+        val oldSize = textPaint.textSize
+        val oldColor = textPaint.color
+
         paint.style = Paint.Style.FILL
         paint.color = if (pressed) GameColors.mixColors(fillColor, strokeColor, 0.35f) else fillColor
         c.drawRoundRect(rect, radius, radius, paint)
@@ -47,5 +51,9 @@ class UIMenuButton {
         val offset = (textPaint.descent() + textPaint.ascent()) / 2f
         c.drawText(label, rect.centerX(), rect.centerY() - offset, textPaint)
         textPaint.clearShadowLayer()
+
+        textPaint.textAlign = oldAlign
+        textPaint.textSize = oldSize
+        textPaint.color = oldColor
     }
 }
