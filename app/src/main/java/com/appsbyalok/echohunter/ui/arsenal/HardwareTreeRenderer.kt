@@ -255,6 +255,14 @@ class HardwareTreeRenderer {
         return parentsReady && groupAvailable
     }
 
+    fun hasAffordableAction(availableData: Long): Boolean = nodes.any { node ->
+        (!node.isUnlocked && canUnlock(node) && node.cost > 0 && node.cost <= availableData) ||
+            (node.isUnlocked && node.stats.any { stat ->
+                stat.level < stat.maxLevel && stat.getCost() <= availableData
+            }) ||
+            (node.isUnlocked && node.integrity < 100f && node.getRepairCost() <= availableData)
+    }
+
     fun resetSubtree(root: HardwareNode): Pair<List<HardwareNode>, Long> {
         val affectedIds = mutableSetOf(root.id)
         var changed = true

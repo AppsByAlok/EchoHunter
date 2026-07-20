@@ -18,6 +18,7 @@ import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.systems.EffectSystem
 import com.appsbyalok.echohunter.utils.EchoAudioManager
 import com.appsbyalok.echohunter.utils.GameColors
+import kotlin.math.atan2
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.random.Random
@@ -46,6 +47,10 @@ class UIMainMenu(private val context: Context) {
     private var connectedMode = -1
     private var animatingToPort = -1
     private var isSwitchOn = false
+    private var idleTime = 0f
+    private var hasUpgradeAvailable = false
+    private var guidanceTime = 0f
+    private var guidancePort = -1
 
     private val portX = FloatArray(3)
     private val portY = FloatArray(3)
@@ -96,6 +101,9 @@ class UIMainMenu(private val context: Context) {
         plugY = plugRestY
         isSwitchOn = false
         isDraggingPlug = false
+        idleTime = 0f
+        guidanceTime = 0f
+        guidancePort = -1
     }
 
     fun update(
@@ -106,7 +114,20 @@ class UIMainMenu(private val context: Context) {
         effectSys: EffectSystem,
         gs: GameState,
         onRouteConnection: (Int) -> Unit,
+        upgradesAvailable: Boolean,
     ) {
+        hasUpgradeAvailable = upgradesAvailable
+        if (connectedMode == -1 && !isDraggingPlug) idleTime += dt
+        else idleTime = 0f
+
+        val nextGuidancePort = guidedPort()
+        if (nextGuidancePort != guidancePort) {
+            guidancePort = nextGuidancePort ?: -1
+            guidanceTime = 0f
+        } else if (nextGuidancePort != null && connectedMode == -1 && !isDraggingPlug) {
+            guidanceTime += dt
+        }
+
         if (!isDraggingPlug && connectedMode == -1) {
             plugX += (targetPlugX - plugX) * 12f * dt
             plugY += (targetPlugY - plugY) * 12f * dt
@@ -261,11 +282,17 @@ class UIMainMenu(private val context: Context) {
         val hintY = if (isPortrait) targetH * 0.46f else targetH * 0.48f
 
         if (connectedMode == -1) {
-            if (!SaveManager.isUiTutorialSeen) {
-                drawTutorialOverlay(c, scale, targetW, targetH)
-            } else {
+            when {
+                !SaveManager.isUiTutorialSeen ->
+                    drawPlugGuidance(c, scale, targetW, targetH, 1, getCachedString(R.string.ui_hint_tutorial_drag), GameColors.YELLOW)
+                hasUpgradeAvailable ->
+                    drawPlugGuidance(c, scale, targetW, targetH, 2, "UPGRADES AVAILABLE // OPEN NANO-OS", GameColors.HP)
+                idleTime >= 8f ->
+                    drawPlugGuidance(c, scale, targetW, targetH, 1, "NEED A ROUTE? // CONNECT TO MAINFRAME", GameColors.PULSE)
+                else -> {
                 pText.color = GameColors.YELLOW
                 c.drawText(getCachedString(R.string.ui_hint_connect), targetW / 2f, hintY, pText)
+                }
             }
         } else {
             if (!isSwitchOn) {
@@ -291,11 +318,16 @@ class UIMainMenu(private val context: Context) {
             val isHovered =
                 isDraggingPlug && (dxHover * dxHover + dyHover * dyHover) < (scale * 0.15f) * (scale * 0.15f)
 
+            val isGuidedPort = connectedMode == -1 && guidedPort() == i
+            val portPulse = if (SaveManager.isEffectsEnabled) {
+                (System.currentTimeMillis() % 1000L) / 1000f
+            } else 0f
             p.style = Paint.Style.STROKE
-            p.strokeWidth = if (isHovered) scale * 0.02f else scale * 0.015f
+            p.strokeWidth = if (isHovered || isGuidedPort) scale * 0.02f else scale * 0.015f
             p.color =
-                if (connectedMode == i) GameColors.PULSE else if (isHovered) GameColors.CLARITY else 0xFF444444.toInt()
-            c.drawCircle(portX[i], portY[i], scale * 0.045f, p)
+                if (connectedMode == i) GameColors.PULSE else if (isGuidedPort) guidanceColor() else if (isHovered) GameColors.CLARITY else 0xFF444444.toInt()
+            val portRadius = scale * (0.045f + if (isGuidedPort) portPulse * 0.012f else 0f)
+            c.drawCircle(portX[i], portY[i], portRadius, p)
 
             p.style = Paint.Style.FILL
             p.color = 0xFF0A0A0A.toInt()
@@ -488,21 +520,56 @@ class UIMainMenu(private val context: Context) {
         effectSys.drawParticles(c, 0f, 0f, scale)
     }
 
-    private fun drawTutorialOverlay(c: Canvas, scale: Float, targetW: Float, targetH: Float) {
-        pText.color = GameColors.YELLOW
+    private fun guidedPort(): Int? = when {
+        connectedMode != -1 -> null
+        !SaveManager.isUiTutorialSeen -> 1
+        hasUpgradeAvailable -> 2
+        idleTime >= 8f -> 1
+        else -> null
+    }
+
+    private fun guidanceColor(): Int = when {
+        !SaveManager.isUiTutorialSeen -> GameColors.YELLOW
+        hasUpgradeAvailable -> GameColors.HP
+        else -> GameColors.PULSE
+    }
+
+    private fun drawPlugGuidance(c: Canvas, scale: Float, targetW: Float, targetH: Float, targetPort: Int, text: String, color: Int) {
+        pText.color = color
         pText.textSize = scale * 0.035f
         pText.textAlign = Paint.Align.CENTER
         val hintY = if (targetW < targetH) targetH * 0.46f else targetH * 0.48f
-        c.drawText(getCachedString(R.string.ui_hint_tutorial_drag), targetW / 2f, hintY, pText)
+        c.drawText(text, targetW / 2f, hintY, pText)
 
-        // Draw animated arrow from plug to port 1 (Mainframe)
-        val t = (System.currentTimeMillis() % 1000) / 1000f
-        val arrowX = plugRestX + (portX[1] - plugRestX) * t
-        val arrowY = plugRestY + (portY[1] - plugRestY) * t
+        val t = (System.currentTimeMillis() % 1200L) / 1200f
+        val arrowX = plugRestX + (portX[targetPort] - plugRestX) * t
+        val arrowY = plugRestY + (portY[targetPort] - plugRestY) * t
+        val angle = atan2(portY[targetPort] - plugRestY, portX[targetPort] - plugRestX)
 
+        val showArrow = SaveManager.isEffectsEnabled && guidanceTime >= 10f
+        if (SaveManager.isEffectsEnabled) {
+            p.style = Paint.Style.STROKE
+            p.strokeWidth = scale * 0.006f
+            p.color = color
+            c.drawLine(plugRestX, plugRestY, arrowX, arrowY, p)
+        }
         p.style = Paint.Style.FILL
-        p.color = GameColors.YELLOW
-        c.drawCircle(arrowX, arrowY, scale * 0.01f, p)
+        p.color = color
+        if (!showArrow) {
+            val dotSize = if (SaveManager.isEffectsEnabled) scale * 0.01f else scale * 0.006f
+            c.drawCircle(arrowX, arrowY, dotSize, p)
+        } else {
+            c.save()
+            c.rotate(Math.toDegrees(angle.toDouble()).toFloat(), arrowX, arrowY)
+            val head = scale * 0.025f
+            c.drawPath(Path().apply {
+                moveTo(arrowX + head, arrowY)
+                lineTo(arrowX - head, arrowY - head * 0.65f)
+                lineTo(arrowX - head, arrowY + head * 0.65f)
+                close()
+            }, p)
+            c.restore()
+        }
     }
 
     private fun drawSwitchTutorial(c: Canvas, scale: Float, targetW: Float) {
@@ -556,6 +623,8 @@ class UIMainMenu(private val context: Context) {
 
         when (action) {
             MotionEvent.ACTION_DOWN -> {
+                idleTime = 0f
+                guidanceTime = 0f
                 touchDownX = vx
                 touchDownY = vy
                 hitPortOnDown = -1

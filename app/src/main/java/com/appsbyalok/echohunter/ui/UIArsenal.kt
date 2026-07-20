@@ -38,6 +38,8 @@ class UIArsenal {
     private var hitOnDown: String? = null
     private var isClosePressed = false
 
+    fun hasAffordableAction(): Boolean = treeRenderer.hasAffordableAction(SaveManager.dataCoinsKB)
+
     fun draw(c: Canvas, targetW: Float, targetH: Float, scale: Float, gs: GameState) {
         val metrics = UIMenuMetrics(targetW, targetH, scale)
         chrome.drawBackground(c, metrics, p, bgColor = 0xEE051015.toInt())

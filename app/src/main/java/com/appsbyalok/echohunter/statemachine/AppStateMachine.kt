@@ -66,7 +66,7 @@ class MainMenuState(private val manager: AppStateManager) : IAppState {
     }
     override fun onExit(gs: GameState) {}
     override fun update(dt: Float, gs: GameState, width: Float, height: Float, scale: Float) {
-        manager.view.uiMainMenu.update(dt, width, height, manager.view, manager.view.effectSys, gs, manager.view.onMenuRoute)
+        manager.view.uiMainMenu.update(dt, width, height, manager.view, manager.view.effectSys, gs, manager.view.onMenuRoute, manager.view.uiArsenal.hasAffordableAction())
         manager.view.worldRenderer.updateDashEffect(scale)
     }
     override fun draw(c: Canvas, gs: GameState, width: Float, height: Float, scale: Float, dt: Float) {
