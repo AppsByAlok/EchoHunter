@@ -300,8 +300,8 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
 
             if (node.overloadTimer > 0f) {
                 node.overloadTimer -= dt
-                if (Random.nextFloat() < 6f * dt) {
-                    effectSys.spawnParticles(node.x, node.y, 1, scale * 0.5f)
+                if (Random.nextFloat() < 2f * dt) {
+                    effectSys.spawnParticles(node.x, node.y, 1, scale * 0.35f, count = 1)
                 }
             }
 
@@ -357,7 +357,7 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
                     SpawnState.SELF_DESTROYING -> {
                         if (node.cooldownTimer > 0f) {
                             node.cooldownTimer -= dt
-                            if (Random.nextFloat() < 9f * dt) effectSys.spawnParticles(node.x, node.y, 0, scale * 0.5f)
+                            if (Random.nextFloat() < 3f * dt) effectSys.spawnParticles(node.x, node.y, 0, scale * 0.35f, count = 1)
                         } else {
                             node.hp -= dt * 100f
                             if (node.hp <= 0f) onNodeDestroyed(node, gs, scale)
@@ -373,14 +373,14 @@ class SpawnerSystem(private val enemySys: EnemySystem, private val effectSys: Ef
                     }
                     else -> {}
                 }
-            } else if (Random.nextFloat() < 6f * dt) {
+            } else if (Random.nextFloat() < 1.5f * dt) {
                 // Visual feedback for stasis
-                effectSys.spawnParticles(node.x, node.y, 2, scale * 0.3f)
+                effectSys.spawnParticles(node.x, node.y, 2, scale * 0.25f, count = 1)
             }
 
-            // Ambient particles for active nodes
-            if (Random.nextFloat() < 3f * dt && node.state != SpawnState.INACTIVE) {
-                effectSys.spawnParticles(node.x, node.y, 0, scale * 0.5f)
+            // An active node gets a subtle cue; idle/ready nodes stay visually quiet.
+            if (node.state == SpawnState.ACTIVE && Random.nextFloat() < 0.75f * dt) {
+                effectSys.spawnParticles(node.x, node.y, 0, scale * 0.3f, count = 1)
             }
         }
 

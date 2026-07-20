@@ -28,6 +28,8 @@ class EffectSystem {
     private val pxA = FloatArray(pn); private val pyA = FloatArray(pn)
     private val pvxA = FloatArray(pn); private val pvyA = FloatArray(pn)
     private val pLife = FloatArray(pn)
+    private val pInitialLife = FloatArray(pn)
+    private val pColor = IntArray(pn)
 
     private val trailLength = 15
     private val trailX = FloatArray(trailLength); private val trailY = FloatArray(trailLength)
@@ -63,7 +65,8 @@ class EffectSystem {
         trailIdx = (trailIdx + 1) % trailLength
     }
 
-    fun spawnParticles(x: Float, y: Float, colorMode: Int, scale: Float) {
+    fun spawnParticles(x: Float, y: Float, colorMode: Int, scale: Float, count: Int = defaultParticleCount(colorMode)) {
+        var spawned = 0
         for (i in 0 until pn) {
             if (pLife[i] <= 0) {
                 pxA[i] = x; pyA[i] = y
@@ -72,20 +75,38 @@ class EffectSystem {
                 pvxA[i] = cos(angle) * speed
                 pvyA[i] = sin(angle) * speed
                 
-                // --- FIX: VISUAL CLARITY COLOR MAPPING ---
-                // 0 -> PULSE (Blue), 1 -> RED (Default/Enemy), 2 -> OVERCLOCK (Orange), 3 -> BOSS (Magenta), 4 -> CRIT (Yellow)
-                pLife[i] = when(colorMode) {
-                    0 -> 0.9f  // Pulse Blue
-                    1 -> 1.0f  // Red
-                    2 -> 2.0f  // Overclock
-                    3 -> 3.0f  // Boss
-                    4 -> 1.5f  // CRIT (Yellow/White)
-                    else -> 1.0f
-                }
-                // Break condition adjusted for higher particle count
-                if (Random.nextFloat() > 0.95f) break
+                pInitialLife[i] = particleLifetime(colorMode)
+                pLife[i] = pInitialLife[i]
+                pColor[i] = particleColor(colorMode)
+                spawned++
+                if (spawned >= count) break
             }
         }
+    }
+
+    private fun defaultParticleCount(colorMode: Int) = when (colorMode) {
+        3 -> 6 // Boss impact
+        4, 6 -> 8 // Critical hit / EMP
+        8, 15 -> 10 // Menu connection / repair confirmation
+        else -> 4
+    }
+
+    private fun particleLifetime(colorMode: Int) = when (colorMode) {
+        3 -> 0.85f
+        4, 6 -> 0.7f
+        8, 15 -> 0.8f
+        else -> 0.55f
+    }
+
+    private fun particleColor(colorMode: Int) = when (colorMode) {
+        0 -> GameColors.PULSE
+        1 -> GameColors.RED
+        2 -> GameColors.SHIELD
+        3 -> GameColors.BOSS
+        4 -> GameColors.YELLOW
+        6, 8 -> GameColors.CLARITY
+        15 -> GameColors.HP
+        else -> GameColors.PULSE
     }
 
     fun spawnFloatingText(x: Float, y: Float, value: Long, color: Int, overrideStr: String? = null) {
@@ -168,17 +189,8 @@ class EffectSystem {
 
         for (i in 0 until pn) {
             if (pLife[i] > 0) {
-                val life = pLife[i]
-                val pColor = when {
-                    life > 2.0f -> GameColors.BOSS
-                    life > 1.0f && life <= 1.5f -> GameColors.YELLOW // CRIT particles
-                    life > 1.0f -> GameColors.OVERCLOCK
-                    life < 1.0f && life > 0.85f -> GameColors.PULSE
-                    else -> GameColors.RED
-                }
-
-                val alphaAlpha = if (life > 1f) life - life.toInt() else life
-                p.color = ((alphaAlpha * 255).toInt() shl 24) or (pColor and 0xFFFFFF)
+                val alphaAlpha = (pLife[i] / pInitialLife[i]).coerceIn(0f, 1f)
+                p.color = ((alphaAlpha * 255).toInt() shl 24) or (pColor[i] and 0xFFFFFF)
 
                 val sz = alphaAlpha * (scale * 0.008f)
                 val sx = pxA[i] - cameraX
