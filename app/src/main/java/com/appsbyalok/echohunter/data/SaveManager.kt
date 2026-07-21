@@ -419,7 +419,7 @@ object SaveManager {
         isSoundEnabled = prefs.getBoolean("isSoundEnabled", true)
         isVibrationEnabled = prefs.getBoolean("isVibrationEnabled", true)
         isEffectsEnabled = prefs.getBoolean("isEffectsEnabled", true)
-        screenOrientation = prefs.getInt("screenOrientation", 0)
+        screenOrientation = prefs.getInt("screenOrientation", 3)
         
         terminalTheme = prefs.getString("terminalTheme", "DARK") ?: "DARK"
         typewriterSpeed = prefs.getInt("typewriterSpeed", 3)
