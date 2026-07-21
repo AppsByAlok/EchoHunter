@@ -32,15 +32,25 @@ class UIMainFrame {
     var screenMode = 0
     var selectedActIndex = -1
 
+    private val screenHistory = mutableListOf<Int>()
+
     fun reset() {
         screenMode = 0
         selectedActIndex = -1
         scroller.scrollY = 0f
+        screenHistory.clear()
     }
 
     fun openActDetails(actIndex: Int) {
+        pushHistory()
         screenMode = 2
         selectedActIndex = actIndex
+    }
+
+    private fun pushHistory() {
+        if (screenHistory.isEmpty() || screenHistory.last() != screenMode) {
+            screenHistory.add(screenMode)
+        }
     }
 
     // Main Hub Cards
@@ -514,6 +524,7 @@ class UIMainFrame {
                     2 -> { // Story Act selection menu
                         if (SaveManager.isStoryModeUnlocked) {
                             EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
+                            pushHistory()
                             screenMode = 1
                         } else {
                             EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_SOFT_ERROR_LITE, 100)
@@ -530,11 +541,12 @@ class UIMainFrame {
                 when (hitId) {
                     10 -> { // Back to Hub screen
                         EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
-                        screenMode = 0
+                        if (!popHistory()) screenMode = 0
                     }
                     in 0..5 -> {
                         if (isActUnlocked(hitId)) {
                             EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
+                            pushHistory()
                             selectedActIndex = hitId
                             screenMode = 2
                         } else {
@@ -547,7 +559,7 @@ class UIMainFrame {
                 when (hitId) {
                     20 -> { // Abort - back to selection menu
                         EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
-                        screenMode = 1
+                        if (!popHistory()) screenMode = 1
                     }
                     21 -> { // Initiate cyber-heist!
                         EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 120)
@@ -560,17 +572,15 @@ class UIMainFrame {
         }
     }
 
-    fun handleBackPressed(): Boolean {
-        return when (screenMode) {
-            2 -> {
-                screenMode = 1
-                true
-            }
-            1 -> {
-                screenMode = 0
-                true
-            }
-            else -> false
+    private fun popHistory(): Boolean {
+        if (screenHistory.isNotEmpty()) {
+            screenMode = screenHistory.removeAt(screenHistory.size - 1)
+            return true
         }
+        return false
+    }
+
+    fun handleBackPressed(): Boolean {
+        return popHistory()
     }
 }

@@ -19,6 +19,7 @@ import com.appsbyalok.echohunter.engine.GameEngine
 import com.appsbyalok.echohunter.engine.GameState
 import com.appsbyalok.echohunter.input.AttackMode
 import com.appsbyalok.echohunter.input.TouchController
+import com.appsbyalok.echohunter.navigation.NavManager
 import com.appsbyalok.echohunter.statemachine.AppStateManager
 import com.appsbyalok.echohunter.systems.CollisionSystem
 import com.appsbyalok.echohunter.systems.EffectSystem
@@ -79,16 +80,17 @@ class GameView(context: Context) : View(context) {
     var gameScale = 1f
     var lastFrameTime = System.nanoTime()
 
-    var menuReturnState = 0
+    internal val navManager = NavManager(gs)
 
     // --- Callbacks for State Machine & UI ---
     internal val onAppClose: () -> Unit = {
-        if (menuReturnState == 0) disconnectCable()
-        else changeState(menuReturnState)
+        val target = navManager.popPreviousState()
+        if (target == -1 || target == gs.state || (target == 0 && gs.state in 10..17)) disconnectCable()
+        else changeState(target, pushToHistory = false)
     }
     internal val onArchiveSelect: (Int) -> Unit = { lvl -> startGame(0, lvl) }
     internal val onHelpOpen: () -> Unit = { changeState(3) }
-    internal val onHelpClose: () -> Unit = { changeState(0) }
+    internal val onHelpClose: () -> Unit = { onAppClose() }
     internal val onWipeData: () -> Unit = {
         gs.resetGame()
         disconnectCable()
@@ -105,25 +107,20 @@ class GameView(context: Context) : View(context) {
         }
     }
     internal val onMenuRoute: (Int) -> Unit = { route ->
-        val callerState = gs.state
         when (route) {
             0 -> { // 0 = Sandbox -> Campaign Archives
                 gs.gameMode = 0
-                menuReturnState = callerState
                 changeState(11)
             }
             1 -> {
                 // Route 1 now goes to Mainframe/Simulations Hub
-                menuReturnState = callerState
                 uiMainFrame.reset()
                 changeState(15) // State 15: UIMainFrame
             }
             2 ->{// 2 = Nano-OS -> OS Menu
-                menuReturnState = callerState
                 changeState(14)
             }
             151 -> { // Deep link to Act selection details
-                menuReturnState = callerState
                 uiMainFrame.openActDetails(0) // Act 1
                 changeState(15)
             }
@@ -222,16 +219,17 @@ class GameView(context: Context) : View(context) {
             currentStoryLines = gs.modeStrategy.getIntroLines()
             storyStep = 0
             gs.nextStateAfterStory = 1
-            changeState(5)
+            changeState(5, pushToHistory = false)
         } else {
-            changeState(1)
+            changeState(1, pushToHistory = false)
         }
     }
 
     fun disconnectCable() {
         clearRunTransientEffects()
         uiMainMenu.disconnect()
-        changeState(0)
+        navManager.clearHistory()
+        changeState(0, pushToHistory = false)
         EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
     }
 
@@ -241,9 +239,9 @@ class GameView(context: Context) : View(context) {
         // Return to Hub (15) if Story/Training, else Archives (11)
         if (gs.gameMode == 1 || gs.gameMode == 2) {
             uiMainFrame.reset()
-            changeState(15)
+            changeState(15, pushToHistory = false)
         } else {
-            changeState(11)
+            changeState(11, pushToHistory = false)
         }
         EchoAudioManager.playSound(ToneGenerator.TONE_CDMA_ABBR_INTERCEPT, 100)
     }
@@ -273,7 +271,7 @@ class GameView(context: Context) : View(context) {
 
     fun pauseGame() {
         if (gs.state == 1 || gs.state == 8 || gs.state == 9) {
-            changeState(2)
+            changeState(2, pushToHistory = false)
             EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100)
         }
     }
@@ -284,9 +282,10 @@ class GameView(context: Context) : View(context) {
         startGame(cm, cl)
     }
 
-    fun changeState(newState: Int) {
+    fun changeState(newState: Int, pushToHistory: Boolean = true) {
         // Safety: Reset touch controller whenever state changes to prevent hardlocked HUD elements
         if (gs.state != newState) {
+            if (pushToHistory) navManager.pushCurrentState()
             touchController.reset()
         }
         gs.state = newState
@@ -625,10 +624,6 @@ class GameView(context: Context) : View(context) {
 
 
     fun handleBackPressed(): Boolean {
-        if (gs.state == 16) {
-            onAppClose()
-            return true
-        }
         return stateManager.onBackPressed()
     }
 
@@ -636,14 +631,14 @@ class GameView(context: Context) : View(context) {
         gs.saveState(outState)
         outState.putIntArray("currentStoryLines", currentStoryLines)
         outState.putInt("storyStep", storyStep)
-        outState.putInt("menuReturnState", menuReturnState)
+        navManager.saveState(outState)
     }
 
     fun restoreState(savedInstanceState: Bundle) {
         gs.restoreState(savedInstanceState)
         savedInstanceState.getIntArray("currentStoryLines")?.let { currentStoryLines = it }
         storyStep = savedInstanceState.getInt("storyStep", 0)
-        menuReturnState = savedInstanceState.getInt("menuReturnState", 0)
+        navManager.restoreState(savedInstanceState)
         syncStateToManager()
     }
 

@@ -210,7 +210,7 @@ class PauseState(private val manager: AppStateManager) : IAppState {
                     }
                     5 -> {
                         val returnState = if (gs.state == 8 || (gs.coreX > 0f && gs.bossHp <= 0 && gs.gameMode == 1 && gs.currentSector >= 8)) 8 else 1
-                        manager.view.changeState(returnState)
+                        manager.view.changeState(returnState, pushToHistory = false)
                         manager.view.lastFrameTime = System.nanoTime()
                     }
                 }
@@ -220,7 +220,7 @@ class PauseState(private val manager: AppStateManager) : IAppState {
         return true
     }
     override fun onBackPressed(gs: GameState): Boolean {
-        manager.view.changeState(0)
+        manager.view.onAppClose()
         return true
     }
 }
@@ -238,7 +238,7 @@ class HelpState(private val manager: AppStateManager) : IAppState {
         return manager.view.uiHelpMenu.onTouch(vx, vy, action, scale, gs, manager.view, manager.view.effectSys, manager.view.onHelpClose)
     }
     override fun onBackPressed(gs: GameState): Boolean {
-        manager.view.changeState(0)
+        manager.view.onAppClose()
         return true
     }
 }
@@ -351,7 +351,7 @@ class StoryCutsceneState(private val manager: AppStateManager) : IAppState {
     }
     override fun onBackPressed(gs: GameState): Boolean {
         if (gs.state == 5 || gs.state == 7) {
-            manager.view.changeState(0)
+            manager.view.onAppClose()
             return true
         }
         return true
@@ -386,11 +386,13 @@ class SubMenuState(private val manager: AppStateManager) : IAppState {
                 gs, scale, manager.view.onArchiveSelect, manager.view.onAppClose)
             13 -> manager.view.uiArsenal.onTouch(vx, vy, action, gs, manager.view.onAppClose)
             14 -> manager.view.uiNanoOS.onTouch(vx, vy, action, scale, { appIndex ->
-                manager.view.menuReturnState = 14
                 when (appIndex) {
                     0 -> manager.view.changeState(10)
                     1 -> manager.view.changeState(13)
-                    2 -> manager.view.changeState(15) // State 15: UIMainFrame (Simulation Control)
+                    2 -> {
+                        manager.view.uiMainFrame.reset()
+                        manager.view.changeState(15) // State 15: UIMainFrame (Simulation Control)
+                    }
                     3 -> manager.view.changeState(17)
                     4 -> manager.view.changeState(16)
                 }
@@ -405,10 +407,8 @@ class SubMenuState(private val manager: AppStateManager) : IAppState {
         if (gs.state == 13 && manager.view.uiArsenal.handleBack()) return true
         if (gs.state == 16 && manager.view.uiSettings.handleBack { manager.view.resolveHudLayout() }) return true
         if (gs.state == 15 && manager.view.uiMainFrame.handleBackPressed()) return true
-        if (gs.state == 10 || gs.state == 11 || gs.state == 13 || gs.state == 15 || gs.state == 17 || gs.state == 16) {
+        if (gs.state == 10 || gs.state == 11 || gs.state == 13 || gs.state == 15 || gs.state == 17 || gs.state == 16 || gs.state == 14) {
             manager.view.onAppClose()
-        } else if (gs.state == 14) {
-            manager.view.disconnectCable()
         }
         return true
     }
