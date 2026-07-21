@@ -52,11 +52,15 @@ class GameState {
     // --- GLOBAL SNACK BAR / TOAST SYSTEM ---
     var globalMessage = "" // Current message text to display in the global snackbar
     var globalMessageTimer = 0f // Remaining duration for the global message display
+    var globalMessageActionLabel = "" // Optional action button label
+    var globalMessageAction: (() -> Unit)? = null // Optional action callback
 
-    fun showGlobalMessage(msg: String, duration: Float = 2f) {
+    fun showGlobalMessage(msg: String, duration: Float = 2f, actionLabel: String = "", action: (() -> Unit)? = null) {
         Log.d("TAG", "showGlobalMessage called: $msg")
         globalMessage = msg
         globalMessageTimer = duration
+        globalMessageActionLabel = actionLabel
+        globalMessageAction = action
     }
 
     // --- AUTOPILOT & DOUBLE TAP ---

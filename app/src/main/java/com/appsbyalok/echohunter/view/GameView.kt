@@ -83,10 +83,28 @@ class GameView(context: Context) : View(context) {
     internal val navManager = NavManager(gs)
 
     // --- Callbacks for State Machine & UI ---
+    internal var lastExitTapTime = 0L
+
     internal val onAppClose: () -> Unit = {
-        val target = navManager.popPreviousState()
-        if (target == -1 || target == gs.state || (target == 0 && gs.state in 10..17)) disconnectCable()
-        else changeState(target, pushToHistory = false)
+        if (navManager.isStackEmpty()) {
+            if (gs.state == 0) {
+                val now = System.currentTimeMillis()
+                if (now - lastExitTapTime < 2000) {
+                    (context as? MainActivity)?.finish()
+                } else {
+                    lastExitTapTime = now
+                    gs.showGlobalMessage("TERMINATING SESSION...\nPress BACK again or use override to exit.", 2.5f, "EXIT NOW") {
+                        (context as? MainActivity)?.finish()
+                    }
+                }
+            } else {
+                disconnectCable()
+            }
+        } else {
+            val target = navManager.popPreviousState()
+            if (target == -1 || target == gs.state || (target == 0 && gs.state in 10..17)) disconnectCable()
+            else changeState(target, pushToHistory = false)
+        }
     }
     internal val onArchiveSelect: (Int) -> Unit = { lvl -> startGame(0, lvl) }
     internal val onHelpOpen: () -> Unit = { changeState(3) }
@@ -167,6 +185,7 @@ class GameView(context: Context) : View(context) {
         textAlign = Paint.Align.CENTER
     }
     private val rectToast = RectF()
+    private val rectToastAction = RectF()
 
     init {
         EchoAudioManager.init()
@@ -525,40 +544,102 @@ class GameView(context: Context) : View(context) {
         worldRenderer.drawCRTOverlay(canvas, gs, width.toFloat(), height.toFloat())
 
         // Global Overlay Message (Universal Toast - Restored Top Bar Style)
+        // Global Overlay Message (Universal Terminal Snackbar)
         if (gs.globalMessageTimer > 0f) {
             val alpha = (min(1f, gs.globalMessageTimer * 2f) * 255).toInt().coerceIn(0, 255)
-            val boxW = if (width > height) width * 0.45f else width * 0.85f
-            val boxH = gameScale * 0.12f
+            val isPortrait = height > width
+            
+            // Text Configuration
+            pAlert.textSize = gameScale * 0.032f
+            pAlert.typeface = Typeface.MONOSPACE
+            pAlert.style = Paint.Style.FILL
+            
+            val textPadding = gameScale * 0.04f
+            val hasAction = gs.globalMessageActionLabel.isNotEmpty()
+            
+            // Layout Calculations
+            val boxW = if (isPortrait) width * 0.92f else width * 0.65f
+            val actionAreaWidth = if (hasAction) gameScale * 0.22f else 0f
+            val maxTextWidth = boxW - textPadding * 2 - actionAreaWidth
+            
+            // Wrap text into lines
+            val wrappedLines = mutableListOf<String>()
+            val rawLines = gs.globalMessage.split("\n")
+            outer@for (rawLine in rawLines) {
+                var remaining = rawLine
+                while (remaining.isNotEmpty()) {
+                    val count = pAlert.breakText(remaining, true, maxTextWidth, null)
+                    if (count <= 0) break
+                    
+                    var actualCount = count
+                    if (count < remaining.length) {
+                        // Try to find the last space before count to avoid breaking words
+                        val lastSpace = remaining.substring(0, count).lastIndexOf(' ')
+                        if (lastSpace != -1 && lastSpace > 0) {
+                            actualCount = lastSpace + 1
+                        }
+                    }
+                    
+                    wrappedLines.add(remaining.substring(0, actualCount).trim())
+                    remaining = remaining.substring(actualCount).trim()
+                    if (wrappedLines.size >= 3) break@outer // Max 3 lines
+                }
+            }
+            
+            val lineHeight = pAlert.textSize * 1.3f
+            val boxH = max(gameScale * 0.1f, wrappedLines.size * lineHeight + textPadding * 2)
             val boxX = width / 2f
-            val boxY = gameScale * 0.05f 
+            val boxY = gs.hudLayout.safeInsetTop + gameScale * 0.02f // Positioned at top to avoid joysticks
 
             val rect = rectToast.apply {
                 set(boxX - boxW/2f, boxY, boxX + boxW/2f, boxY + boxH)
             }
 
-            pAlert.style = Paint.Style.FILL
-            pAlert.color = (alpha shl 24) or 0x110505
-            canvas.drawRoundRect(rect, gameScale * 0.02f, gameScale * 0.02f, pAlert)
-
-            pAlert.style = Paint.Style.STROKE
-            pAlert.color = (alpha shl 24) or (GameColors.RED and 0xFFFFFF)
-            pAlert.strokeWidth = gameScale * 0.005f
-            canvas.drawRoundRect(rect, gameScale * 0.02f, gameScale * 0.02f, pAlert)
-
+            // Draw Background (Terminal Dark)
+            pAlert.color = (alpha shl 24) or 0x0D0D0D
+            canvas.drawRect(rect, pAlert)
+            
+            // Neon Left Accent Bar
             pAlert.color = (alpha shl 24) or (GameColors.CLARITY and 0xFFFFFF)
-            pAlert.textSize = gameScale * 0.04f
-            pAlert.style = Paint.Style.FILL
+            canvas.drawRect(rect.left, rect.top, rect.left + gameScale * 0.008f, rect.bottom, pAlert)
 
-            val text = gs.globalMessage
-            val lines = text.split("\n")
-            if (lines.size == 1) {
-                canvas.drawText(lines[0], boxX, rect.centerY() + pAlert.textSize * 0.3f, pAlert)
-            } else {
-                canvas.drawText(lines[0], boxX, rect.centerY() - gameScale * 0.01f, pAlert)
-                canvas.drawText(lines[1], boxX, rect.centerY() + gameScale * 0.045f, pAlert)
+            // Border (Subtle Cyan)
+            pAlert.style = Paint.Style.STROKE
+            pAlert.strokeWidth = 1f
+            pAlert.color = (alpha / 2 shl 24) or (GameColors.CLARITY and 0xFFFFFF)
+            canvas.drawRect(rect, pAlert)
+
+            // Render Text Lines
+            pAlert.style = Paint.Style.FILL
+            pAlert.textAlign = Paint.Align.LEFT
+            pAlert.color = (alpha shl 24) or (GameColors.CLARITY and 0xFFFFFF)
+            wrappedLines.forEachIndexed { index, line ->
+                canvas.drawText(line, rect.left + textPadding, rect.top + textPadding + pAlert.textSize * 0.8f + index * lineHeight, pAlert)
             }
 
+            // Draw Action Button (if present)
+            if (hasAction) {
+                val btnW = actionAreaWidth - textPadding
+                val btnH = gameScale * 0.065f
+                rectToastAction.set(rect.right - btnW - textPadding, rect.centerY() - btnH/2f, rect.right - textPadding, rect.centerY() + btnH/2f)
+                
+                pAlert.style = Paint.Style.FILL
+                pAlert.color = (alpha shl 24) or (GameColors.YELLOW and 0xFFFFFF)
+                canvas.drawRoundRect(rectToastAction, 4f, 4f, pAlert)
+                
+                pAlert.color = (alpha shl 24) or 0x000000
+                pAlert.textAlign = Paint.Align.CENTER
+                pAlert.textSize = gameScale * 0.026f
+                pAlert.typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+                canvas.drawText(gs.globalMessageActionLabel, rectToastAction.centerX(), rectToastAction.centerY() + pAlert.textSize * 0.35f, pAlert)
+            } else {
+                rectToastAction.setEmpty()
+            }
+            pAlert.textAlign = Paint.Align.CENTER // Reset for other UI elements
+
             gs.globalMessageTimer -= dt
+        } else {
+            rectToastAction.setEmpty()
         }
 
         invalidate()
@@ -594,6 +675,7 @@ class GameView(context: Context) : View(context) {
             pAlert.textSize = gameScale * 0.12f
             pAlert.color = (GameColors.CLARITY and 0xFFFFFF) or (255 shl 24)
             pAlert.style = Paint.Style.FILL
+            pAlert.textAlign = Paint.Align.CENTER
             
             val centerX = width / 2f
             val centerY = height / 2f
@@ -618,13 +700,26 @@ class GameView(context: Context) : View(context) {
         val x = event.x
         val y = event.y
 
+        if (gs.globalMessageTimer > 0f && !rectToastAction.isEmpty) {
+            if (rectToastAction.contains(x, y) && event.action == MotionEvent.ACTION_UP) {
+                gs.globalMessageAction?.invoke()
+                gs.globalMessageTimer = 0f
+                return true
+            }
+        }
+
         // --- MODULAR TOUCH (TouchController aur menus handle) ---
         return stateManager.onTouch(event, x, y, event.action, gameScale, width.toFloat(), height.toFloat())
     }
 
 
     fun handleBackPressed(): Boolean {
-        return stateManager.onBackPressed()
+        val handled = stateManager.onBackPressed()
+        if (!handled && gs.state == 0) {
+            onAppClose()
+            return true
+        }
+        return handled
     }
 
     fun saveState(outState: Bundle) {

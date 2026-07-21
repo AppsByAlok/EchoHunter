@@ -57,5 +57,8 @@ class NavManager(private val gs: GameState) {
         }
     }
 
+    /**
+     * Checks if there are any states in the navigation history.
+     */
     fun isStackEmpty(): Boolean = navigationStack.isEmpty()
 }
