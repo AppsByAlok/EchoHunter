@@ -26,13 +26,13 @@ class TouchController(private val gs: GameState) {
         when (action) {
             MotionEvent.ACTION_DOWN -> {
                 reset() // Force clear ghost touches on fresh start
-                if (gs.state == 1 || gs.state == 8) onDown(pointerId, vx, vy)
+                if (gs.state == 1 || gs.state == 8 || gs.state == 9) onDown(pointerId, vx, vy)
             }
             MotionEvent.ACTION_POINTER_DOWN -> {
-                if (gs.state == 1 || gs.state == 8) onDown(pointerId, vx, vy)
+                if (gs.state == 1 || gs.state == 8 || gs.state == 9) onDown(pointerId, vx, vy)
             }
             MotionEvent.ACTION_MOVE -> {
-                if (gs.state == 1 || gs.state == 8) onMove(e, offsetX, offsetY)
+                if (gs.state == 1 || gs.state == 8 || gs.state == 9) onMove(e, offsetX, offsetY)
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> onUp(pointerId, action, vx, vy)
             MotionEvent.ACTION_CANCEL -> reset()

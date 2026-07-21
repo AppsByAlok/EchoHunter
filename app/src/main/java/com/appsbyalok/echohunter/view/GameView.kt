@@ -272,7 +272,7 @@ class GameView(context: Context) : View(context) {
     }
 
     fun pauseGame() {
-        if (gs.state == 1 || gs.state == 8) {
+        if (gs.state == 1 || gs.state == 8 || gs.state == 9) {
             changeState(2)
             EchoAudioManager.playSound(ToneGenerator.TONE_PROP_BEEP, 100)
         }

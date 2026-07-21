@@ -171,7 +171,7 @@ class GameState {
         set(value) {
             if (value && !field) {
                 winDelayTimer = 1.5f // Delay victory screen to let the player see the final moment
-                slowMoTimer = 2.0f   // Add cinematic slow-mo effect
+                if (gameMode != 1) slowMoTimer = 2.0f // Cinematic slow-mo for non-story modes
                 whiteFlash = 0.5f    // Screen flash on win
                 sectorFlash = 0.6f   // Greenish system success flash
                 chromaticIntensity = 1.2f 
@@ -549,7 +549,7 @@ class GameState {
         if (cooldownTimer > 0f) cooldownTimer -= dt
         if (empFlashTimer > 0f) empFlashTimer -= dt
         if (slowMoTimer > 0f) slowMoTimer -= dt
-        if (whiteFlash > 0f) whiteFlash = max(0f, whiteFlash - dt)
+        if (whiteFlash > 0f && state != 9) whiteFlash = max(0f, whiteFlash - dt)
         if (bossDeathTimer > 0f) bossDeathTimer -= dt
         if (bossLockTimer > 0f) bossLockTimer -= dt
         if (attackCooldown > 0f) attackCooldown -= dt

@@ -129,6 +129,7 @@ class GameEngine(
             } else {
                 if (gs.gameMode == 2) {
                     // Training Mode Completion: Redirect to Mainframe
+                    gs.isLevelCleared = false
                     onChangeState?.invoke(15)
                     return
                 }
