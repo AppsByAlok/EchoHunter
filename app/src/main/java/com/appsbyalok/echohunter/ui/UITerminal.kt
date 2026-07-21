@@ -987,6 +987,11 @@ class UITerminal {
         val promptStr = activeSubSession?.getPrompt() ?: ">"
         addLines("$promptStr $cmd", OutputMode.INSTANT)
         
+        // Mark terminal as used once any command is processed
+        if (!SaveManager.isFirstTerminalUsed && cmd.trim().isNotEmpty()) {
+            SaveManager.setFirstTerminalUsed(true)
+        }
+
         // Logical splitting: & (and/then)
         if (cmd.contains(" & ")) {
             cmd.split(" & ").forEach { processCommand(it.trim(), gs, androidContext, onExit) }

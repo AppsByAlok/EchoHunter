@@ -259,24 +259,27 @@ class UISettings {
             MotionEvent.ACTION_DOWN -> {
                 hitOnDown = -1
                 
-                // Adjust for scroll when checking hits
-                val adjustedVy = vy - scroller.viewport.top - scroller.scrollY
-                val adjustedVx = vx - scroller.viewport.left
-                for (i in options.indices) {
-                    if (optionRects[i].contains(adjustedVx, adjustedVy)) {
-                        hitOnDown = i
-                        break
+                if (backButton.contains(vx, vy)) {
+                    hitOnDown = 10
+                } else {
+                    // Adjust for scroll when checking hits
+                    val adjustedVy = vy - scroller.viewport.top - scroller.scrollY
+                    val adjustedVx = vx - scroller.viewport.left
+                    for (i in options.indices) {
+                        if (optionRects[i].contains(adjustedVx, adjustedVy)) {
+                            hitOnDown = i
+                            break
+                        }
                     }
                 }
-                if (backButton.contains(vx, vy)) hitOnDown = 10
             }
             MotionEvent.ACTION_UP -> {
                 if (!scroller.isDragging && !scroller.isDraggingScrollbar && hitOnDown != -1) {
-                    if (backButton.contains(vx, vy) && hitOnDown == 10) {
+                    if (hitOnDown == 10 && backButton.contains(vx, vy)) {
                         EchoAudioManager.playSound(ToneGenerator.TONE_PROP_ACK, 100)
                         onClose()
                     } else if (hitOnDown < options.size) {
-                         // Check with adjusted coordinates for items
+                        // Check with adjusted coordinates for items
                         val adjustedVy = vy - scroller.viewport.top - scroller.scrollY
                         val adjustedVx = vx - scroller.viewport.left
                         if (optionRects[hitOnDown].contains(adjustedVx, adjustedVy)) {

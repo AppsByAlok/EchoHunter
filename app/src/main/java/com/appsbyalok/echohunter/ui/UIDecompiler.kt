@@ -39,6 +39,20 @@ class UIDecompiler {
     private var listTop = 0f
     private var listBottom = 0f
 
+    fun hasAffordableAction(): Boolean {
+        if (UpgradeSystem.catalog.isEmpty()) return false
+        branches.forEach { branch ->
+            branch.third.forEach { type ->
+                val config = UpgradeSystem.catalog[type] ?: return@forEach
+                val cost = UpgradeSystem.getNextLevelCost(type)
+                if (UpgradeSystem.getLevel(type) < config.maxLevel && SaveManager.dataCoinsKB >= cost) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
     private val branches = listOf(
         Triple(
             "--- [ ARCHITECT ] ---", "CORE LOGIC & SYSTEM DATA", listOf(
@@ -231,6 +245,18 @@ class UIDecompiler {
                     itemRect.right - scale * 0.02f,
                     itemRect.top + btnH + scale * 0.02f
                 )
+
+                // Highlight first software upgrade
+                if (!SaveManager.isFirstSoftwareUpgradeDone && canAfford && !isMaxed) {
+                    p.style = Paint.Style.STROKE
+                    p.strokeWidth = scale * 0.012f
+                    p.color = GameColors.HP
+                    val pulse = (System.currentTimeMillis() % 1000) / 1000f
+                    p.alpha = (255 * (1f - pulse)).toInt()
+                    val pad = scale * 0.01f + pulse * scale * 0.02f
+                    c.drawRoundRect(btnRect.left - pad, btnRect.top - pad, btnRect.right + pad, btnRect.bottom + pad, scale * 0.01f, scale * 0.01f, p)
+                    p.alpha = 255
+                }
 
                 // Only register click for button if not maxed
                 if (!isMaxed) buyButtons[type] = btnRect
@@ -502,6 +528,7 @@ class UIDecompiler {
                     } else if (upType != 0 && upType == hitOnDown && hitTypeOnUp == hitTypeOnDown) {
                         if (upType == 2) {
                             if (UpgradeSystem.purchaseUpgrade(hitTypeOnUp!!)) {
+                                SaveManager.setFirstSoftwareUpgradeDone(true)
                                 EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 150)
                                 gs.showGlobalMessage("SCRIPT INJECTED.\nFIRMWARE OVERRIDDEN.", 2f)
                             } else {

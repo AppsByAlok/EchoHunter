@@ -357,6 +357,12 @@ object SaveManager {
     // --- TUTORIAL SETTINGS ---
     var isUiTutorialSeen: Boolean = false
         private set
+    var isFirstSoftwareUpgradeDone: Boolean = false
+        private set
+    var isFirstHardwareUpgradeDone: Boolean = false
+        private set
+    var isFirstTerminalUsed: Boolean = false
+        private set
     var isGameTutorialCompleted: Boolean = false
         private set
     var tutorialStep: Int = 0 // For tracking specific steps in game tutorial
@@ -366,6 +372,21 @@ object SaveManager {
         prefs.edit().putBoolean("isUiTutorialSeen", seen).apply()
     }
 
+    fun setFirstSoftwareUpgradeDone(done: Boolean) {
+        isFirstSoftwareUpgradeDone = done
+        prefs.edit().putBoolean("isFirstSoftwareUpgradeDone", done).apply()
+    }
+
+    fun setFirstHardwareUpgradeDone(done: Boolean) {
+        isFirstHardwareUpgradeDone = done
+        prefs.edit().putBoolean("isFirstHardwareUpgradeDone", done).apply()
+    }
+
+    fun setFirstTerminalUsed(done: Boolean) {
+        isFirstTerminalUsed = done
+        prefs.edit().putBoolean("isFirstTerminalUsed", done).apply()
+    }
+
     fun setGameTutorialCompleted(completed: Boolean) {
         isGameTutorialCompleted = completed
         prefs.edit().putBoolean("isGameTutorialCompleted", completed).apply()
@@ -373,10 +394,16 @@ object SaveManager {
 
     fun resetTutorials() {
         isUiTutorialSeen = false
+        isFirstSoftwareUpgradeDone = false
+        isFirstHardwareUpgradeDone = false
+        isFirstTerminalUsed = false
         isGameTutorialCompleted = false
         tutorialStep = 0
         prefs.edit()
             .putBoolean("isUiTutorialSeen", false)
+            .putBoolean("isFirstSoftwareUpgradeDone", false)
+            .putBoolean("isFirstHardwareUpgradeDone", false)
+            .putBoolean("isFirstTerminalUsed", false)
             .putBoolean("isGameTutorialCompleted", false)
             .putInt("tutorialStep", 0)
             .apply()
@@ -405,6 +432,9 @@ object SaveManager {
 
         // Load Tutorials
         isUiTutorialSeen = prefs.getBoolean("isUiTutorialSeen", false)
+        isFirstSoftwareUpgradeDone = prefs.getBoolean("isFirstSoftwareUpgradeDone", false)
+        isFirstHardwareUpgradeDone = prefs.getBoolean("isFirstHardwareUpgradeDone", false)
+        isFirstTerminalUsed = prefs.getBoolean("isFirstTerminalUsed", false)
         isGameTutorialCompleted = prefs.getBoolean("isGameTutorialCompleted", false)
         tutorialStep = prefs.getInt("tutorialStep", 0)
 
@@ -650,6 +680,10 @@ object SaveManager {
         totalData = 0L
         maxCampaignLevel = 1
         isAutoNextLevelEnabled = false
+        isSoundEnabled = true
+        isVibrationEnabled = true
+        isEffectsEnabled = true
+        screenOrientation = 3
         activeAttackMode = 0 // Directional
         activeWeapon = 0 // Blaster
         activeTrap = 1   // Decoy
@@ -661,6 +695,14 @@ object SaveManager {
         highScore = 0L
         previousScore = 0L
         
+        // --- Wipe Tutorials & Flags ---
+        isUiTutorialSeen = false
+        isFirstSoftwareUpgradeDone = false
+        isFirstHardwareUpgradeDone = false
+        isFirstTerminalUsed = false
+        isGameTutorialCompleted = false
+        tutorialStep = 0
+
         // --- Wipe Hardware Evolution Data ---
         unlockedNodes.clear()
         unlockedNodes.add("core") 
@@ -671,14 +713,31 @@ object SaveManager {
 
         prefs.edit().clear().apply()
         
-        // Save defaults back to prefs after clear
+        // Save defaults back to prefs after clear (Ensure keys match init())
         prefs.edit()
             .putLong("dataCoinsKB", dataCoinsKB)
             .putLong("totalData", totalData)
             .putInt("maxCampaignLevel", maxCampaignLevel)
+            .putBoolean("isAutoNextLevelEnabled", isAutoNextLevelEnabled)
+            .putBoolean("isSoundEnabled", isSoundEnabled)
+            .putBoolean("isVibrationEnabled", isVibrationEnabled)
+            .putBoolean("isEffectsEnabled", isEffectsEnabled)
+            .putInt("screenOrientation", screenOrientation)
             .putInt("attackMode", activeAttackMode)
             .putInt("activeWeapon", activeWeapon)
             .putInt("activeTrap", activeTrap)
+            .putBoolean("isUiTutorialSeen", isUiTutorialSeen)
+            .putBoolean("isFirstSoftwareUpgradeDone", isFirstSoftwareUpgradeDone)
+            .putBoolean("isFirstHardwareUpgradeDone", isFirstHardwareUpgradeDone)
+            .putBoolean("isFirstTerminalUsed", isFirstTerminalUsed)
+            .putBoolean("isGameTutorialCompleted", isGameTutorialCompleted)
+            .putInt("tutorialStep", tutorialStep)
+            .putInt("currStory", currentStoryStreak)
+            .putInt("unlockStory", unlockedStoryStreak)
+            .putInt("currHard", currentHardStreak)
+            .putInt("unlockHard", unlockedHardStreak)
+            .putLong("highScore", highScore)
+            .putLong("previousScore", previousScore)
             .apply()
 
         UpgradeSystem.clearAllData()

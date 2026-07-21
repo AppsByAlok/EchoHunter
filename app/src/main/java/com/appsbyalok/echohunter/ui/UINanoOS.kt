@@ -108,7 +108,6 @@ class UINanoOS {
 
             for (i in 0..4) {
                 cardRects[i].set(startX, currY, startX + cardW, currY + cardH)
-                drawCard(c, cardRects[i], i, scale)
                 currY += cardH + gap
             }
         } else {
@@ -134,8 +133,25 @@ class UINanoOS {
                 val rx = row2StartX + (i - 3) * (cardW + gap)
                 cardRects[i].set(rx, row2Y, rx + cardW, row2Y + cardH)
             }
+        }
 
-            for (i in 0..4) drawCard(c, cardRects[i], i, scale)
+        // Draw all cards with contextual highlights
+        for (i in 0..4) {
+            val isSoftwareHighlight = !SaveManager.isFirstSoftwareUpgradeDone && i == 0
+            val isHardwareHighlight = !SaveManager.isFirstHardwareUpgradeDone && i == 1
+            val isTerminalHighlight = !SaveManager.isFirstTerminalUsed && i == 3
+
+            if (isSoftwareHighlight || isHardwareHighlight || isTerminalHighlight) {
+                // Draw pulsing glow behind the guided card
+                p.style = Paint.Style.STROKE
+                p.strokeWidth = scale * 0.02f
+                p.color = if (isTerminalHighlight) GameColors.PULSE else GameColors.HP
+                p.alpha = (100 + 155 * (sin(time * 4f) * 0.5f + 0.5f)).toInt()
+                c.drawRoundRect(cardRects[i], scale * 0.03f, scale * 0.03f, p)
+                p.alpha = 255
+            }
+
+            drawCard(c, cardRects[i], i, scale)
         }
 
         // --- 3. BOTTOM FOOTER (DISCONNECT) ---

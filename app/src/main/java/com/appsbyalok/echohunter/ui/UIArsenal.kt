@@ -170,11 +170,24 @@ class UIArsenal {
                     val r = RectF(btnX, ty - upH * 0.7f, btnX + upW, ty + upH * 0.3f)
                     statButtons[stat.id] = r
                     
+                    val canAfford = SaveManager.dataCoinsKB >= stat.getCost()
+                    
                     p.color = if (hitOnDown == "UP_${stat.id}") Color.WHITE else 0xFF003300.toInt()
                     p.style = Paint.Style.FILL
                     c.drawRect(r, p)
                     p.style = Paint.Style.STROKE; p.color = GameColors.PULSE; p.strokeWidth = 2f
                     c.drawRect(r, p)
+                    
+                    // Highlight first hardware upgrade
+                    if (!SaveManager.isFirstHardwareUpgradeDone && canAfford) {
+                        p.color = GameColors.HP
+                        p.strokeWidth = scale * 0.006f
+                        val pulse = (System.currentTimeMillis() % 1000) / 1000f
+                        p.alpha = (255 * (1f - pulse)).toInt()
+                        val pad = scale * 0.005f + pulse * scale * 0.01f
+                        c.drawRect(r.left - pad, r.top - pad, r.right + pad, r.bottom + pad, p)
+                        p.alpha = 255
+                    }
                     
                     pText.textAlign = Paint.Align.CENTER
                     pText.color = GameColors.PULSE; pText.textSize = scale * 0.018f
@@ -291,6 +304,7 @@ class UIArsenal {
                             val cost = stat.getCost()
                             if (SaveManager.spendData(cost.toLong())) {
                                 stat.level++
+                                SaveManager.setFirstHardwareUpgradeDone(true)
                                 SaveManager.setStatLevel(selected.id, stat.id, stat.level)
                                 EchoAudioManager.playSound(ToneGenerator.TONE_SUP_CONFIRM, 100)
                                 gs.showGlobalMessage("${stat.name} UPGRADED TO LVL ${stat.level}.", 1.2f)

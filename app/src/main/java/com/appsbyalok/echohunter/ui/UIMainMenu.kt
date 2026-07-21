@@ -48,7 +48,8 @@ class UIMainMenu(private val context: Context) {
     private var animatingToPort = -1
     private var isSwitchOn = false
     private var idleTime = 0f
-    private var hasUpgradeAvailable = false
+    private var hasSoftUpgradeAvailable = false
+    private var hasHardUpgradeAvailable = false
     private var guidanceTime = 0f
     private var guidancePort = -1
 
@@ -114,9 +115,11 @@ class UIMainMenu(private val context: Context) {
         effectSys: EffectSystem,
         gs: GameState,
         onRouteConnection: (Int) -> Unit,
-        upgradesAvailable: Boolean,
+        softUpgrades: Boolean,
+        hardUpgrades: Boolean,
     ) {
-        hasUpgradeAvailable = upgradesAvailable
+        hasSoftUpgradeAvailable = softUpgrades
+        hasHardUpgradeAvailable = hardUpgrades
         if (connectedMode == -1 && !isDraggingPlug) idleTime += dt
         else idleTime = 0f
 
@@ -285,13 +288,17 @@ class UIMainMenu(private val context: Context) {
             when {
                 !SaveManager.isUiTutorialSeen ->
                     drawPlugGuidance(c, scale, targetW, targetH, 1, getCachedString(R.string.ui_hint_tutorial_drag), GameColors.YELLOW)
-                hasUpgradeAvailable ->
+                !SaveManager.isFirstSoftwareUpgradeDone && hasSoftUpgradeAvailable ->
                     drawPlugGuidance(c, scale, targetW, targetH, 2, "UPGRADES AVAILABLE // OPEN NANO-OS", GameColors.HP)
+                !SaveManager.isFirstHardwareUpgradeDone && hasHardUpgradeAvailable ->
+                    drawPlugGuidance(c, scale, targetW, targetH, 2, "HARDWARE EVOLUTION READY // OPEN NANO-OS", GameColors.HP)
+                !SaveManager.isFirstTerminalUsed && SaveManager.maxCampaignLevel >= 2 ->
+                    drawPlugGuidance(c, scale, targetW, targetH, 2, "SYSTEM TERMINAL DETECTED // ACCESS NANO-OS", GameColors.PULSE)
                 idleTime >= 8f ->
                     drawPlugGuidance(c, scale, targetW, targetH, 1, "NEED A ROUTE? // CONNECT TO MAINFRAME", GameColors.PULSE)
                 else -> {
-                pText.color = GameColors.YELLOW
-                c.drawText(getCachedString(R.string.ui_hint_connect), targetW / 2f, hintY, pText)
+                    pText.color = GameColors.YELLOW
+                    c.drawText(getCachedString(R.string.ui_hint_connect), targetW / 2f, hintY, pText)
                 }
             }
         } else {
@@ -522,43 +529,61 @@ class UIMainMenu(private val context: Context) {
 
     private fun guidedPort(): Int? = when {
         connectedMode != -1 -> null
-        !SaveManager.isUiTutorialSeen -> 1
-        hasUpgradeAvailable -> 2
-        idleTime >= 8f -> 1
+        !SaveManager.isUiTutorialSeen -> 1 // Mainframe (Start)
+        !SaveManager.isFirstSoftwareUpgradeDone && hasSoftUpgradeAvailable -> 2 // Nano-OS
+        !SaveManager.isFirstHardwareUpgradeDone && hasHardUpgradeAvailable -> 2 // Nano-OS
+        !SaveManager.isFirstTerminalUsed && SaveManager.maxCampaignLevel >= 2 -> 2 // Nano-OS (Terminal discovery)
+        idleTime >= 12f -> 1 // Idle nudge to Mainframe
         else -> null
     }
 
     private fun guidanceColor(): Int = when {
         !SaveManager.isUiTutorialSeen -> GameColors.YELLOW
-        hasUpgradeAvailable -> GameColors.HP
+        (!SaveManager.isFirstSoftwareUpgradeDone && hasSoftUpgradeAvailable) ||
+        (!SaveManager.isFirstHardwareUpgradeDone && hasHardUpgradeAvailable) -> GameColors.HP
+        !SaveManager.isFirstTerminalUsed -> GameColors.PULSE
         else -> GameColors.PULSE
     }
 
     private fun drawPlugGuidance(c: Canvas, scale: Float, targetW: Float, targetH: Float, targetPort: Int, text: String, color: Int) {
+        val isFirstTime = !SaveManager.isUiTutorialSeen ||
+                         (!SaveManager.isFirstSoftwareUpgradeDone && hasSoftUpgradeAvailable) ||
+                         (!SaveManager.isFirstHardwareUpgradeDone && hasHardUpgradeAvailable) ||
+                         (!SaveManager.isFirstTerminalUsed && SaveManager.maxCampaignLevel >= 2)
+
         pText.color = color
         pText.textSize = scale * 0.035f
         pText.textAlign = Paint.Align.CENTER
         val hintY = if (targetW < targetH) targetH * 0.46f else targetH * 0.48f
-        c.drawText(text, targetW / 2f, hintY, pText)
+        
+        if (isFirstTime || idleTime >= 15f) {
+            c.drawText(text, targetW / 2f, hintY, pText)
+        }
 
         val t = (System.currentTimeMillis() % 1200L) / 1200f
         val arrowX = plugRestX + (portX[targetPort] - plugRestX) * t
         val arrowY = plugRestY + (portY[targetPort] - plugRestY) * t
         val angle = atan2(portY[targetPort] - plugRestY, portX[targetPort] - plugRestX)
 
-        val showArrow = SaveManager.isEffectsEnabled && guidanceTime >= 10f
-        if (SaveManager.isEffectsEnabled) {
+        val showFullGuidance = isFirstTime && guidanceTime >= 3f
+        
+        if (showFullGuidance && SaveManager.isEffectsEnabled) {
             p.style = Paint.Style.STROKE
             p.strokeWidth = scale * 0.006f
             p.color = color
             c.drawLine(plugRestX, plugRestY, arrowX, arrowY, p)
         }
+        
         p.style = Paint.Style.FILL
         p.color = color
-        if (!showArrow) {
-            val dotSize = if (SaveManager.isEffectsEnabled) scale * 0.01f else scale * 0.006f
+        
+        if (!showFullGuidance) {
+            // Minimal dots logic
+            val pulse = if (SaveManager.isEffectsEnabled) (System.currentTimeMillis() % 1000L) / 1000f else 0f
+            val dotSize = scale * (0.006f + pulse * 0.004f)
             c.drawCircle(arrowX, arrowY, dotSize, p)
         } else {
+            // High highlight arrow
             c.save()
             c.rotate(Math.toDegrees(angle.toDouble()).toFloat(), arrowX, arrowY)
             val head = scale * 0.025f
